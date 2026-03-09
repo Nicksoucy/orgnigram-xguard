@@ -191,6 +191,14 @@ header p{color:var(--td);margin-top:3px;font-size:13px;}
 .tk-empty{font-size:10px;color:var(--td);font-style:italic;padding:2px 0;}
 .tk-inline-input{width:100%;font-family:'DM Sans',sans-serif;font-size:11px;padding:5px 8px;border-radius:5px;
   border:1px solid var(--a);background:var(--bg);color:var(--t);outline:none;margin-top:4px;box-sizing:border-box;}
+.tk-expected{background:rgba(251,191,36,0.06);border:1px solid rgba(251,191,36,0.2);border-radius:6px;padding:6px 10px;
+  margin-bottom:5px;font-size:11px;line-height:1.5;display:flex;align-items:flex-start;gap:7px;cursor:pointer;}
+.tk-expected .tk-o-icon{color:var(--y);flex-shrink:0;font-size:11px;margin-top:1px;}
+.tk-expected .tk-o-text{flex:1;word-break:break-word;}
+.tk-expected .tk-del{color:var(--td);font-size:13px;cursor:pointer;opacity:0;transition:opacity 0.15s;flex-shrink:0;}
+.tk-expected:hover .tk-del{opacity:1;}
+.tk-expected .tk-del:hover{color:var(--r);}
+.tk-section-divider{border:none;border-top:1px solid var(--b);margin:10px 0;}
 .tasks-progress{display:flex;align-items:center;gap:10px;margin-bottom:16px;padding:10px 14px;
   background:var(--s);border:1px solid var(--b);border-radius:8px;font-size:11px;}
 .tasks-progress .tp-bar{flex:1;height:6px;background:var(--b);border-radius:3px;overflow:hidden;}
@@ -359,6 +367,18 @@ let tasksData = {
     outcomes:[
       {id:'o_l1a',text:'Zero admin backlog on certificates & registrations'},
       {id:'o_l1b',text:'VP never handles logistics directly'}
+    ],
+    expectedOutcomes:[
+      {id:'e_l1a',text:'Trainer onboarding handled end-to-end without VP'},
+      {id:'e_l1b',text:'Monthly enrollment report delivered autonomously'}
+    ]
+  },
+  'L2': {
+    tasks:[],
+    outcomes:[],
+    expectedOutcomes:[
+      {id:'e_l2a',text:'CV program runs on a predictable published schedule'},
+      {id:'e_l2b',text:'Trainer availability communicated proactively'}
     ]
   },
   'L3': {
@@ -369,6 +389,18 @@ let tasksData = {
     outcomes:[
       {id:'o_l3a',text:'Student satisfaction score maintained above target'},
       {id:'o_l3b',text:'All SAC tickets resolved within 24h'}
+    ],
+    expectedOutcomes:[
+      {id:'e_l3a',text:'SAC team operates fully independently from VP'},
+      {id:'e_l3b',text:'Weekly SAC summary sent to VP every Monday'}
+    ]
+  },
+  'm1': {
+    tasks:[],
+    outcomes:[],
+    expectedOutcomes:[
+      {id:'e_m1a',text:'Monthly marketing report with leads & conversion data'},
+      {id:'e_m1b',text:'Campaign calendar planned 4 weeks in advance'}
     ]
   }
 };
@@ -585,7 +617,7 @@ function renderFuture(ct,cl){
 // ==================== TASKS & OUTCOMES ====================
 let _tkFilter='', _tkDept='all';
 
-function tkData(id){ if(!tasksData[id]) tasksData[id]={tasks:[],outcomes:[]}; return tasksData[id]; }
+function tkData(id){ if(!tasksData[id]) tasksData[id]={tasks:[],outcomes:[],expectedOutcomes:[]}; if(!tasksData[id].expectedOutcomes) tasksData[id].expectedOutcomes=[]; return tasksData[id]; }
 function gTaskId(){ return 'tk_'+Math.random().toString(36).substr(2,7); }
 
 function renderTasks(ct,cl){
@@ -647,7 +679,17 @@ function renderTasks(ct,cl){
           <span class="tk-o-text" onclick="tkEditItem('${p.id}','${o.id}','outcome')">${esc(o.text)}</span>
           <span class="tk-del" onclick="tkDelItem('${p.id}','${o.id}','outcome')">×</span>
         </div>`).join('')
-      : `<div class="tk-empty">No outcomes defined</div>`;
+      : `<div class="tk-empty">None defined yet</div>`;
+
+    // Expected by VP — only shown on non-VP cards
+    const expHTML= p.id!=='vp' ? (d.expectedOutcomes.length
+      ? d.expectedOutcomes.map(o=>`
+        <div class="tk-expected">
+          <span class="tk-o-icon">◇</span>
+          <span class="tk-o-text" onclick="tkEditItem('${p.id}','${o.id}','expected')">${esc(o.text)}</span>
+          <span class="tk-del" onclick="tkDelItem('${p.id}','${o.id}','expected')">×</span>
+        </div>`).join('')
+      : `<div class="tk-empty">Nothing set yet</div>`) : null;
 
     html+=`<div class="tk-card ${cls}" id="tkc-${p.id}">
       <div class="tk-head">
@@ -667,12 +709,21 @@ function renderTasks(ct,cl){
           <div id="tkinput-${p.id}-task"></div>
         </div>
         <div class="tk-section">
-          <div class="tk-label">Owned Outcomes
+          <div class="tk-label" style="color:var(--g);">◆ Their Outcomes
             <span class="tk-add" onclick="tkAddInline('${p.id}','outcome')" title="Add outcome">＋</span>
           </div>
           <div id="tklist-${p.id}-out">${outcomesHTML}</div>
           <div id="tkinput-${p.id}-outcome"></div>
         </div>
+        ${expHTML!==null?`
+        <hr class="tk-section-divider"/>
+        <div class="tk-section">
+          <div class="tk-label" style="color:var(--y);">◇ Expected by VP
+            <span class="tk-add" onclick="tkAddInline('${p.id}','expected')" title="Add expectation">＋</span>
+          </div>
+          <div id="tklist-${p.id}-exp">${expHTML}</div>
+          <div id="tkinput-${p.id}-expected"></div>
+        </div>`:''}
       </div>
     </div>`;
   });
@@ -695,13 +746,15 @@ function tkAddInline(pid,kind){
   if(!slot||slot.querySelector('input')) return;
   const inp=document.createElement('input');
   inp.className='tk-inline-input';
-  inp.placeholder=kind==='task'?'New task…':'New outcome…';
+  const ph={task:'New task…',outcome:'Their outcome…',expected:'Expected by VP…'};
+  inp.placeholder=ph[kind]||'New item…';
   inp.onkeydown=e=>{
     if(e.key==='Enter'&&inp.value.trim()){
       const d=tkData(pid);
       const newItem={id:gTaskId(),text:inp.value.trim()};
-      if(kind==='task') { newItem.done=false; d.tasks.push(newItem); }
-      else d.outcomes.push(newItem);
+      if(kind==='task'){newItem.done=false;d.tasks.push(newItem);}
+      else if(kind==='outcome') d.outcomes.push(newItem);
+      else d.expectedOutcomes.push(newItem);
       renderTasks(document.getElementById('content'),document.getElementById('controls'));
     }
     if(e.key==='Escape') slot.innerHTML='';
@@ -713,15 +766,13 @@ function tkAddInline(pid,kind){
 
 function tkEditItem(pid,iid,kind){
   const d=tkData(pid);
-  const arr=kind==='task'?d.tasks:d.outcomes;
+  const arr=kind==='task'?d.tasks:kind==='outcome'?d.outcomes:d.expectedOutcomes;
   const item=arr.find(x=>x.id===iid);
   if(!item) return;
-  const listId=kind==='task'?`tklist-${pid}`:`tklist-${pid}-out`;
+  const listId=kind==='task'?`tklist-${pid}`:kind==='outcome'?`tklist-${pid}-out`:`tklist-${pid}-exp`;
   const list=document.getElementById(listId);
   if(!list) return;
-  const el=kind==='task'
-    ? list.querySelector(`.tk-item-text[onclick*="${iid}"]`)
-    : list.querySelector(`.tk-o-text[onclick*="${iid}"]`);
+  const el=list.querySelector(`.tk-item-text[onclick*="${iid}"], .tk-o-text[onclick*="${iid}"]`);
   if(!el||el.querySelector('input')) return;
   const orig=item.text;
   const inp=document.createElement('input');
@@ -743,7 +794,8 @@ function tkEditItem(pid,iid,kind){
 function tkDelItem(pid,iid,kind){
   const d=tkData(pid);
   if(kind==='task') d.tasks=d.tasks.filter(x=>x.id!==iid);
-  else d.outcomes=d.outcomes.filter(x=>x.id!==iid);
+  else if(kind==='outcome') d.outcomes=d.outcomes.filter(x=>x.id!==iid);
+  else d.expectedOutcomes=d.expectedOutcomes.filter(x=>x.id!==iid);
   renderTasks(document.getElementById('content'),document.getElementById('controls'));
 }
 
