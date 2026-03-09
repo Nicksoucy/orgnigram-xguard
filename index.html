@@ -149,6 +149,24 @@ header p{color:var(--td);margin-top:3px;font-size:13px;}
 .empty{text-align:center;padding:24px;color:var(--td);font-size:12px;}
 
 @media(max-width:768px){.future-container{grid-template-columns:1fr;}}
+
+/* === VIEW 4: CANVAS TREE === */
+#canvas-wrap{position:relative;width:100%;overflow:scroll;background:var(--bg);cursor:grab;user-select:none;}
+#canvas-wrap.dragging{cursor:grabbing;}
+#canvas-stage{position:relative;transform-origin:0 0;will-change:transform;}
+#canvas-svg{position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;overflow:visible;}
+.cn{position:absolute;width:160px;background:var(--s);border:1px solid var(--b);border-radius:10px;
+  padding:10px 12px;cursor:pointer;transition:border-color 0.2s,box-shadow 0.2s;box-sizing:border-box;}
+.cn:hover{border-color:var(--ba);box-shadow:0 4px 20px rgba(0,0,0,0.4);}
+.cn.cn-vp{border-color:var(--a);box-shadow:0 0 24px var(--ag);}
+.cn.cn-lead{border-color:var(--g);box-shadow:0 0 14px rgba(52,211,153,0.12);}
+.cn .cn-avatar{width:36px;height:36px;border-radius:50%;display:flex;align-items:center;justify-content:center;
+  font-size:14px;font-weight:700;margin:0 auto 7px;color:#fff;flex-shrink:0;}
+.cn .cn-name{font-size:11px;font-weight:700;text-align:center;line-height:1.3;margin-bottom:2px;}
+.cn .cn-role{font-size:9px;color:var(--td);text-align:center;line-height:1.4;margin-bottom:5px;}
+.cn .cn-badges{display:flex;flex-wrap:wrap;gap:3px;justify-content:center;}
+.cn .cn-di{text-align:center;font-size:11px;margin-top:4px;}
+.cn-zoom{display:flex;gap:5px;margin-left:auto;}
 </style>
 </head>
 <body>
@@ -163,6 +181,7 @@ header p{color:var(--td);margin-top:3px;font-size:13px;}
   <button class="vtab active" onclick="switchView('dept',this)"><span class="tab-icon">📊</span>By Department</button>
   <button class="vtab" onclick="switchView('tree',this)"><span class="tab-icon">🌳</span>Reporting Hierarchy</button>
   <button class="vtab" onclick="switchView('future',this)"><span class="tab-icon">🚀</span>Future State</button>
+  <button class="vtab" onclick="switchView('canvas',this)"><span class="tab-icon">🗺️</span>Canvas View</button>
 </div>
 
 <div class="controls" id="controls"></div>
@@ -294,6 +313,7 @@ function render(){
 
   if(currentView==='dept') renderDept(ct,cl);
   else if(currentView==='tree') renderTree(ct,cl);
+  else if(currentView==='canvas') renderCanvas(ct,cl);
   else renderFuture(ct,cl);
 
   renderSummary();
@@ -470,6 +490,162 @@ function renderFuture(ct,cl){
     </div>
   </div>`;
 }
+
+// ==================== CANVAS VIEW ====================
+let _cvZoom=0.55, _cvPan={x:0,y:0}, _cvDrag=null, _cvInited=false;
+
+function avatarColor(id){
+  const colors=['#ff6b35','#34d399','#60a5fa','#a78bfa','#fbbf24','#f472b6','#22d3ee','#f87171','#86efac','#fdba74'];
+  let h=0; for(let i=0;i<id.length;i++) h=(h*31+id.charCodeAt(i))&0xffff;
+  return colors[h%colors.length];
+}
+function initials(name){
+  const p=name.trim().split(/\s+/);
+  return (p[0]?.[0]||'')+(p[1]?.[0]||'');
+}
+
+function renderCanvas(ct,cl){
+  cl.innerHTML=`<button class="btn primary" onclick="openAdd()">+ Add Person</button>
+    <span style="flex:1"></span>
+    <div class="cn-zoom">
+      <button class="btn" onclick="cvZoom(0.15)">＋</button>
+      <button class="btn" onclick="cvZoom(-0.15)">－</button>
+      <button class="btn" onclick="cvReset()">Reset</button>
+    </div>`;
+
+  // ---- layout algorithm ----
+  const NODE_W=164, NODE_H=118, GAP_X=20, GAP_Y=80;
+
+  // compute subtree width (leaf count * NODE_W + gaps)
+  function subtreeW(id){
+    const ch=getChildren(id);
+    if(!ch.length) return NODE_W;
+    const total=ch.reduce((s,c)=>s+subtreeW(c.id),0);
+    return total + GAP_X*(ch.length-1);
+  }
+
+  const positions={};
+  function layout(id,x,y){
+    const ch=getChildren(id);
+    positions[id]={x,y};
+    if(!ch.length) return;
+    const totalW=ch.reduce((s,c)=>s+subtreeW(c.id),0)+GAP_X*(ch.length-1);
+    let cx=x+(NODE_W/2)-(totalW/2);
+    ch.forEach(c=>{
+      const sw=subtreeW(c.id);
+      layout(c.id, cx+(sw-NODE_W)/2, y+NODE_H+GAP_Y);
+      cx+=sw+GAP_X;
+    });
+  }
+
+  layout('vp',0,0);
+
+  // canvas size
+  const xs=Object.values(positions).map(p=>p.x);
+  const ys=Object.values(positions).map(p=>p.y);
+  const minX=Math.min(...xs), maxX=Math.max(...xs)+NODE_W;
+  const minY=Math.min(...ys), maxY=Math.max(...ys)+NODE_H;
+  const W=maxX-minX+80, H=maxY-minY+80;
+  const ox=-minX+40, oy=-minY+40;
+
+  // build HTML nodes
+  let nodesHTML='';
+  const allP=[VP,...data];
+  allP.forEach(p=>{
+    const pos=positions[p.id];
+    if(!pos) return;
+    const px=pos.x+ox, py=pos.y+oy;
+    const cls=p.id==='vp'?'cn-vp':p.type==='lead'?'cn-lead':'';
+    const col=avatarColor(p.id);
+    const tags=p.programs?p.programs.slice(0,2).map(pr=>`<span class="tp ${TC[pr]||''}" style="font-size:7px;">${pr}</span>`).join(''):'';
+    const onclick=p.id==='vp'?'':`onclick="openEdit('${p.id}')"`;
+    nodesHTML+=`<div class="cn ${cls}" id="cn-${p.id}" style="left:${px}px;top:${py}px;" ${onclick}>
+      <div class="cn-avatar" style="background:${col};">${initials(p.name)}</div>
+      <div class="cn-name">${esc(p.name)}</div>
+      <div class="cn-role">${esc(p.role||'')}</div>
+      <div class="cn-badges">${tags}</div>
+      <div class="cn-di">${di(p.delegatable||'unknown')}</div>
+    </div>`;
+  });
+
+  // SVG connector lines (cubic bezier)
+  let svgLines='';
+  allP.forEach(p=>{
+    if(!p.reportsTo) return;
+    const pp=positions[p.reportsTo], cp=positions[p.id];
+    if(!pp||!cp) return;
+    const x1=pp.x+ox+NODE_W/2, y1=pp.y+oy+NODE_H;
+    const x2=cp.x+ox+NODE_W/2, y2=cp.y+oy;
+    const my=(y1+y2)/2;
+    svgLines+=`<path d="M${x1},${y1} C${x1},${my} ${x2},${my} ${x2},${y2}"
+      fill="none" stroke="var(--ba)" stroke-width="1.5" stroke-opacity="0.7"/>`;
+  });
+
+  const wrapH=Math.max(H+200, window.innerHeight-180);
+  ct.innerHTML=`<div id="canvas-wrap" style="height:${wrapH}px;">
+    <div style="width:${Math.ceil(W*_cvZoom)}px;height:${Math.ceil(H*_cvZoom)}px;position:relative;flex-shrink:0;">
+      <div id="canvas-stage" style="width:${W}px;height:${H}px;position:absolute;top:0;left:0;">
+        <svg id="canvas-svg" viewBox="0 0 ${W} ${H}" style="width:${W}px;height:${H}px;">${svgLines}</svg>
+        ${nodesHTML}
+      </div>
+    </div>
+  </div>`;
+
+  _applyCV();
+
+  // center on first open by scrolling
+  const wrap=document.getElementById('canvas-wrap');
+  if(!_cvInited){
+    _cvInited=true;
+    requestAnimationFrame(()=>{
+      const ww=wrap.offsetWidth;
+      wrap.scrollLeft=Math.max(0,(W*_cvZoom-ww)/2);
+      wrap.scrollTop=0;
+    });
+  }
+
+  // drag-to-pan (updates scrollLeft/Top)
+  wrap.addEventListener('mousedown',e=>{
+    if(e.target.closest('.cn')) return;
+    _cvDrag={sx:e.clientX,sy:e.clientY,px:wrap.scrollLeft,py:wrap.scrollTop};
+    wrap.classList.add('dragging');
+  });
+  window.addEventListener('mousemove',e=>{
+    if(!_cvDrag) return;
+    wrap.scrollLeft=_cvDrag.px-(e.clientX-_cvDrag.sx);
+    wrap.scrollTop=_cvDrag.py-(e.clientY-_cvDrag.sy);
+  });
+  window.addEventListener('mouseup',()=>{ _cvDrag=null; document.getElementById('canvas-wrap')?.classList.remove('dragging'); });
+
+  // wheel zoom (pivot at cursor)
+  wrap.addEventListener('wheel',e=>{
+    e.preventDefault();
+    const delta=e.deltaY>0?-0.08:0.08;
+    const rect=wrap.getBoundingClientRect();
+    const mx=e.clientX-rect.left+wrap.scrollLeft;
+    const my=e.clientY-rect.top+wrap.scrollTop;
+    const oldZ=_cvZoom;
+    _cvZoom=Math.max(0.3,Math.min(2,_cvZoom+delta));
+    _applyCV();
+    wrap.scrollLeft=mx*(_cvZoom/oldZ)-(e.clientX-rect.left);
+    wrap.scrollTop=my*(_cvZoom/oldZ)-(e.clientY-rect.top);
+  },{passive:false});
+}
+
+function _applyCV(){
+  const stage=document.getElementById('canvas-stage');
+  if(stage) stage.style.transform=`scale(${_cvZoom})`;
+}
+function cvZoom(d){
+  const wrap=document.getElementById('canvas-wrap');
+  const cx=wrap?(wrap.scrollLeft+wrap.offsetWidth/2):0;
+  const cy=wrap?(wrap.scrollTop+wrap.offsetHeight/2):0;
+  const oldZ=_cvZoom;
+  _cvZoom=Math.max(0.3,Math.min(2,_cvZoom+d));
+  _applyCV();
+  if(wrap){ wrap.scrollLeft=cx*(_cvZoom/oldZ)-wrap.offsetWidth/2; wrap.scrollTop=cy*(_cvZoom/oldZ)-wrap.offsetHeight/2; }
+}
+function cvReset(){ _cvZoom=0.55; _cvInited=false; renderCanvas(document.getElementById('content'),document.getElementById('controls')); }
 
 // ==================== SUMMARY ====================
 function renderSummary(){
