@@ -1,0 +1,628 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>XGuard — Org Chart + Future Planner</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg:#0c0c0f;--s:#16161a;--sh:#1e1e24;--b:#2a2a32;--ba:#3d3d48;
+  --t:#e8e6e3;--td:#8b8a87;--a:#ff6b35;--ag:rgba(255,107,53,0.15);
+  --g:#34d399;--bl:#60a5fa;--p:#a78bfa;--y:#fbbf24;--r:#f87171;--cy:#22d3ee;--pk:#f472b6;
+}
+*{margin:0;padding:0;box-sizing:border-box;}
+body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--t);min-height:100vh;padding-bottom:70px;}
+.grain{position:fixed;inset:0;pointer-events:none;z-index:999;opacity:0.4;
+  background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.04'/%3E%3C/svg%3E");}
+
+header{padding:28px 32px 14px;border-bottom:1px solid var(--b);}
+header .tag{font-family:'Space Mono',monospace;font-size:10px;text-transform:uppercase;letter-spacing:3px;color:var(--a);margin-bottom:5px;}
+header h1{font-size:26px;font-weight:700;}
+header p{color:var(--td);margin-top:3px;font-size:13px;}
+
+/* View Tabs */
+.view-tabs{padding:12px 32px;border-bottom:1px solid var(--b);display:flex;gap:4px;}
+.vtab{font-family:'DM Sans',sans-serif;font-size:13px;font-weight:500;padding:8px 20px;border-radius:8px 8px 0 0;
+  border:1px solid transparent;border-bottom:none;background:transparent;color:var(--td);cursor:pointer;transition:all 0.2s;position:relative;bottom:-1px;}
+.vtab:hover{color:var(--t);}
+.vtab.active{background:var(--s);border-color:var(--b);color:var(--a);border-bottom:1px solid var(--s);}
+.vtab .tab-icon{margin-right:6px;}
+
+.controls{padding:12px 32px;display:flex;gap:8px;flex-wrap:wrap;}
+.btn{font-family:'DM Sans',sans-serif;font-size:12px;font-weight:500;padding:7px 16px;border-radius:6px;
+  border:1px solid var(--b);background:var(--s);color:var(--t);cursor:pointer;transition:all 0.2s;}
+.btn:hover{background:var(--sh);border-color:var(--ba);}
+.btn.primary{background:var(--a);border-color:var(--a);color:#fff;}
+.btn.primary:hover{opacity:0.85;}
+.btn.danger{border-color:var(--r);color:var(--r);}
+.btn.future-btn{border-color:var(--cy);color:var(--cy);}
+.btn.future-btn:hover{background:rgba(34,211,238,0.1);}
+
+.content{padding:24px 32px 40px;}
+
+/* === VIEW 1: DEPARTMENTS === */
+.dept-grid{display:flex;flex-direction:column;gap:20px;}
+.dept{background:var(--s);border:1px solid var(--b);border-radius:12px;overflow:hidden;}
+.dept-h{padding:12px 18px;display:flex;align-items:center;gap:10px;border-bottom:1px solid var(--b);cursor:pointer;user-select:none;}
+.dept-h:hover{background:var(--sh);}
+.dept-dot{width:9px;height:9px;border-radius:50%;flex-shrink:0;}
+.dept-h h3{font-size:14px;font-weight:600;flex:1;}
+.dept-h .cnt{font-family:'Space Mono',monospace;font-size:10px;color:var(--td);background:var(--bg);padding:2px 10px;border-radius:10px;}
+.dept-h .chev{color:var(--td);transition:transform 0.2s;font-size:13px;}
+.dept.collapsed .chev{transform:rotate(-90deg);}
+.dept.collapsed .dept-body{display:none;}
+.dept-body{padding:14px;display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:10px;}
+
+/* === VIEW 2: HIERARCHY TREE === */
+.tree{padding:0;}
+.tree-node{margin-left:0;}
+.tree-children{margin-left:32px;border-left:2px solid var(--b);padding-left:0;}
+.tree-item{display:flex;align-items:stretch;margin-bottom:4px;}
+.tree-branch{width:24px;flex-shrink:0;position:relative;}
+.tree-branch::before{content:'';position:absolute;top:50%;left:0;width:24px;height:2px;background:var(--b);}
+.tree-card{flex:1;background:var(--s);border:1px solid var(--b);border-radius:8px;padding:10px 14px;
+  cursor:pointer;transition:all 0.2s;display:flex;align-items:center;gap:12px;}
+.tree-card:hover{border-color:var(--ba);background:var(--sh);}
+.tree-card.is-vp{border-color:var(--a);box-shadow:0 0 20px var(--ag);}
+.tree-card.is-lead{border-color:var(--g);box-shadow:0 0 12px rgba(52,211,153,0.08);}
+.tree-card .tc-info{flex:1;}
+.tree-card .tc-name{font-size:13px;font-weight:600;}
+.tree-card .tc-role{font-size:10px;color:var(--td);}
+.tree-card .tc-tags{margin-top:3px;}
+.tree-card .tc-count{font-family:'Space Mono',monospace;font-size:10px;color:var(--td);
+  background:var(--bg);padding:2px 8px;border-radius:8px;}
+.tree-root>.tree-card{margin-bottom:8px;}
+
+/* === VIEW 3: FUTURE STATE === */
+.future-container{display:grid;grid-template-columns:1fr 1fr;gap:24px;}
+.future-col{background:var(--s);border:1px solid var(--b);border-radius:12px;overflow:hidden;}
+.future-col-header{padding:14px 18px;border-bottom:1px solid var(--b);display:flex;align-items:center;gap:10px;}
+.future-col-header h3{font-size:14px;font-weight:600;flex:1;}
+.future-col-header .state-badge{font-family:'Space Mono',monospace;font-size:9px;text-transform:uppercase;
+  letter-spacing:2px;padding:3px 10px;border-radius:4px;}
+.state-current{background:rgba(96,165,250,0.15);color:var(--bl);}
+.state-future{background:rgba(34,211,238,0.15);color:var(--cy);}
+.future-col-body{padding:14px;min-height:200px;}
+.future-person{background:var(--bg);border:1px solid var(--b);border-radius:8px;padding:10px 14px;
+  margin-bottom:8px;cursor:pointer;transition:all 0.2s;display:flex;align-items:center;gap:10px;}
+.future-person:hover{border-color:var(--ba);}
+.future-person .fp-name{font-size:12px;font-weight:600;flex:1;}
+.future-person .fp-role{font-size:10px;color:var(--td);}
+.future-person .fp-arrow{font-size:14px;color:var(--td);}
+.future-change{background:var(--bg);border:1px solid var(--cy);border-radius:8px;padding:12px 14px;margin-bottom:8px;}
+.future-change .fc-label{font-size:10px;font-family:'Space Mono',monospace;text-transform:uppercase;letter-spacing:1px;color:var(--cy);margin-bottom:4px;}
+.future-change .fc-from{font-size:11px;color:var(--r);text-decoration:line-through;margin-bottom:2px;}
+.future-change .fc-to{font-size:11px;color:var(--g);}
+.future-change .fc-name{font-size:13px;font-weight:600;margin-bottom:4px;}
+
+/* CARDS (shared) */
+.card{background:var(--bg);border:1px solid var(--b);border-radius:8px;padding:12px 14px;cursor:pointer;transition:all 0.2s;}
+.card:hover{border-color:var(--ba);transform:translateY(-1px);box-shadow:0 4px 16px rgba(0,0,0,0.3);}
+.card .name{font-size:13px;font-weight:600;}
+.card .role-line{font-size:10px;color:var(--td);margin-top:1px;}
+.card .meta{font-size:10px;color:var(--td);line-height:1.5;margin-top:3px;}
+.badge{font-family:'Space Mono',monospace;font-size:8px;text-transform:uppercase;letter-spacing:1.5px;
+  padding:2px 6px;border-radius:3px;display:inline-block;}
+.b-exec{background:rgba(255,107,53,0.15);color:var(--a);}
+.b-lead{background:rgba(52,211,153,0.15);color:var(--g);}
+.b-emp{background:rgba(96,165,250,0.15);color:var(--bl);}
+.b-con{background:rgba(167,139,250,0.15);color:var(--p);}
+.tp{font-size:8px;font-family:'Space Mono',monospace;text-transform:uppercase;letter-spacing:1px;
+  padding:1px 6px;border-radius:3px;display:inline-block;margin-right:3px;margin-bottom:2px;}
+.t-bsp{background:rgba(96,165,250,0.12);color:var(--bl);}
+.t-rcr{background:rgba(52,211,153,0.12);color:var(--g);}
+.t-elite{background:rgba(251,191,36,0.12);color:var(--y);}
+.t-cv{background:rgba(167,139,250,0.12);color:var(--p);}
+.t-drone{background:rgba(34,211,238,0.12);color:var(--cy);}
+.t-sac{background:rgba(244,114,182,0.12);color:var(--pk);}
+.t-mkt{background:rgba(255,107,53,0.12);color:var(--a);}
+.t-sales{background:rgba(251,191,36,0.12);color:var(--y);}
+.note-line{font-size:10px;color:var(--td);border-top:1px solid var(--b);padding-top:5px;margin-top:5px;font-style:italic;}
+
+/* Summary */
+.summary-bar{position:fixed;bottom:0;left:0;right:0;background:var(--s);border-top:1px solid var(--b);
+  padding:10px 32px;display:flex;gap:24px;font-size:11px;z-index:100;}
+.stat{display:flex;align-items:center;gap:5px;}
+.stat .d{width:6px;height:6px;border-radius:50%;}
+
+/* Modal */
+.mo{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:1000;
+  align-items:center;justify-content:center;backdrop-filter:blur(4px);}
+.mo.active{display:flex;}
+.modal{background:var(--s);border:1px solid var(--b);border-radius:12px;padding:22px;
+  width:460px;max-width:92vw;max-height:85vh;overflow-y:auto;}
+.modal h2{font-size:16px;margin-bottom:14px;}
+.modal label{display:block;font-size:10px;font-weight:500;color:var(--td);text-transform:uppercase;
+  letter-spacing:1px;margin-bottom:4px;margin-top:10px;}
+.modal label:first-of-type{margin-top:0;}
+.modal input,.modal select,.modal textarea{width:100%;padding:8px 10px;border-radius:6px;
+  border:1px solid var(--b);background:var(--bg);color:var(--t);font-family:'DM Sans',sans-serif;font-size:13px;outline:none;}
+.modal input:focus,.modal select:focus,.modal textarea:focus{border-color:var(--a);}
+.modal textarea{resize:vertical;min-height:45px;}
+.cg{display:flex;flex-wrap:wrap;gap:6px;margin-top:5px;}
+.cg label{font-size:11px;text-transform:none;letter-spacing:0;display:flex;align-items:center;gap:5px;
+  cursor:pointer;color:var(--t);margin:0;padding:3px 9px;border:1px solid var(--b);border-radius:6px;}
+.cg label:hover{border-color:var(--ba);}
+.cg input[type="checkbox"]{width:auto;accent-color:var(--a);}
+.mbtn{display:flex;gap:8px;justify-content:flex-end;margin-top:18px;}
+.empty{text-align:center;padding:24px;color:var(--td);font-size:12px;}
+
+@media(max-width:768px){.future-container{grid-template-columns:1fr;}}
+</style>
+</head>
+<body>
+<div class="grain"></div>
+<header>
+  <div class="tag">Training Division — Org Chart</div>
+  <h1>XGuard</h1>
+  <p>22 team members. Three views: by department, by reporting hierarchy, and a future-state planner.</p>
+</header>
+
+<div class="view-tabs">
+  <button class="vtab active" onclick="switchView('dept',this)"><span class="tab-icon">📊</span>By Department</button>
+  <button class="vtab" onclick="switchView('tree',this)"><span class="tab-icon">🌳</span>Reporting Hierarchy</button>
+  <button class="vtab" onclick="switchView('future',this)"><span class="tab-icon">🚀</span>Future State</button>
+</div>
+
+<div class="controls" id="controls"></div>
+<div class="content" id="content"></div>
+<div class="summary-bar" id="sum"></div>
+
+<!-- Edit Modal -->
+<div class="mo" id="mo">
+  <div class="modal">
+    <h2 id="mTitle">Edit</h2>
+    <label>Name</label><input id="fName"/>
+    <label>Email</label><input id="fEmail"/>
+    <label>Title / Role</label><input id="fRole"/>
+    <label>Type</label>
+    <select id="fType"><option value="contractor">Contractor</option><option value="employee">Employee</option><option value="lead">Lead</option></select>
+    <label>Department</label>
+    <select id="fDept"><option value="training">Training</option><option value="sac">Service clientèle</option><option value="marketing">Marketing</option><option value="sales">Sales</option></select>
+    <label>Reports To</label>
+    <select id="fReports"></select>
+    <label>Programs</label>
+    <div class="cg" id="fProg">
+      <label><input type="checkbox" value="BSP"/>BSP</label><label><input type="checkbox" value="RCR"/>RCR</label>
+      <label><input type="checkbox" value="Élite"/>Élite</label><label><input type="checkbox" value="CV"/>CV</label>
+      <label><input type="checkbox" value="Drone"/>Drone</label><label><input type="checkbox" value="SAC"/>Svc Client</label>
+      <label><input type="checkbox" value="MKT"/>Marketing</label><label><input type="checkbox" value="Sales"/>Sales</label>
+    </div>
+    <label>Location(s)</label>
+    <div class="cg" id="fLoc">
+      <label><input type="checkbox" value="Montréal"/>Montréal</label>
+      <label><input type="checkbox" value="Ligne"/>En ligne</label>
+      <label><input type="checkbox" value="Québec"/>Québec</label>
+    </div>
+    <label>Schedule</label><input id="fSched"/>
+    <label>Notes</label><textarea id="fNotes"></textarea>
+    <label>Delegation Capacity</label>
+    <select id="fDel"><option value="unknown">Not assessed</option><option value="yes">🟢 Can take more</option>
+      <option value="partial">🟡 Partial</option><option value="no">🔴 Maxed out</option></select>
+    <div class="mbtn">
+      <button class="btn" onclick="closeM()">Cancel</button>
+      <button class="btn danger" id="bDel" onclick="delP()" style="display:none;">Delete</button>
+      <button class="btn primary" onclick="saveP()">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- Future Edit Modal -->
+<div class="mo" id="fmo">
+  <div class="modal">
+    <h2 id="fmTitle">Plan Future Change</h2>
+    <label>Person</label>
+    <select id="ffPerson"></select>
+    <label>Future Reports To</label>
+    <select id="ffReports"></select>
+    <label>Future Role / Title</label>
+    <input id="ffRole"/>
+    <label>Future Type</label>
+    <select id="ffType"><option value="contractor">Contractor</option><option value="employee">Employee</option><option value="lead">Lead</option></select>
+    <label>Notes / Rationale</label>
+    <textarea id="ffNotes" placeholder="Why this change? What outcome does it enable?"></textarea>
+    <div class="mbtn">
+      <button class="btn" onclick="closeFM()">Cancel</button>
+      <button class="btn danger" id="bFDel" onclick="delFChange()" style="display:none;">Remove Change</button>
+      <button class="btn future-btn" onclick="saveFChange()">Save Change</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ==================== DATA ====================
+const VP = {id:'vp',name:'You',role:'VP of Training',type:'exec',dept:'all',programs:[],locations:['Montréal','Ligne','Québec'],schedule:'',notes:'',delegatable:'no',reportsTo:null};
+
+let data = [
+  {id:'L1',name:'Jessica Clermont',email:'',role:'Coordonnatrice à la formation',type:'lead',dept:'training',programs:['BSP','RCR','Élite','CV'],locations:['Montréal'],schedule:'Lun-Ven, jour',notes:'Bras droit admin — certificats, classes, inscriptions, paiements',delegatable:'partial',reportsTo:'vp'},
+  {id:'L2',name:'Mitchell Skelton',email:'mitchell.skelton@xguard.ca',role:'Employee + Trainer CV',type:'lead',dept:'training',programs:['CV'],locations:['Montréal'],schedule:'Lun-Ven 8h-16h30 (employee) + CV cours (contractor)',notes:'Full-time employee, contractor pour cours CV',delegatable:'partial',reportsTo:'vp'},
+  {id:'L3',name:'Hamza Maghraoui',email:'hmaghraoui65@gmail.com',role:'Directeur service à la clientèle',type:'lead',dept:'sac',programs:['SAC'],locations:['Montréal'],schedule:'Lun-Ven',notes:'Dirige équipe service client. Could take on more.',delegatable:'yes',reportsTo:'vp'},
+
+  {id:'t1',name:'Jean Bonnet Lundy',email:'ljbonnet3@gmail.com',role:'Trainer BSP',type:'contractor',dept:'training',programs:['BSP'],locations:['Montréal'],schedule:'Soir, Week-end',notes:'',delegatable:'unknown',reportsTo:'vp'},
+  {id:'t2',name:'Arnaud Deffert',email:'gastondef1664@gmail.com',role:'Trainer BSP',type:'employee',dept:'training',programs:['BSP'],locations:['Ligne'],schedule:'Jour',notes:'Employee (not contractor)',delegatable:'unknown',reportsTo:'vp'},
+  {id:'t3',name:'Marc Éric Deschambault',email:'medsecurinfo@gmail.com',role:'Trainer BSP/RCR/Élite',type:'contractor',dept:'training',programs:['BSP','RCR','Élite'],locations:['Ligne','Montréal'],schedule:'Jour, Soir',notes:'Multi-program — 3 programs. Potential delegation target.',delegatable:'yes',reportsTo:'vp'},
+  {id:'t4',name:'Khaled Deramoune',email:'univers101@yahoo.com',role:'Trainer RCR',type:'contractor',dept:'training',programs:['RCR'],locations:['Montréal'],schedule:'Jour',notes:'',delegatable:'unknown',reportsTo:'vp'},
+  {id:'t5',name:'Monia Baraka',email:'moniabandak@yahoo.ca',role:'Trainer RCR',type:'contractor',dept:'training',programs:['RCR'],locations:['Montréal'],schedule:'Jour',notes:'',delegatable:'unknown',reportsTo:'vp'},
+  {id:'t7',name:'Mélina Bédard',email:'b.bedard80@outlook.com',role:'Trainer RCR',type:'contractor',dept:'training',programs:['RCR'],locations:['Québec'],schedule:'Jour',notes:'',delegatable:'unknown',reportsTo:'vp'},
+  {id:'t8',name:'Patrick Bourque',email:'xguardpatrick@gmail.com',role:'Trainer BSP',type:'contractor',dept:'training',programs:['BSP'],locations:['Québec'],schedule:'Soir',notes:'',delegatable:'unknown',reportsTo:'vp'},
+  {id:'t9',name:'Mohamed Maghraoui',email:'maghraouimohamed1@outlook.fr',role:'Trainer BSP',type:'contractor',dept:'training',programs:['BSP'],locations:['Ligne'],schedule:'Week-end',notes:'',delegatable:'unknown',reportsTo:'vp'},
+  {id:'t10',name:'Bertrand Lauture',email:'bertrandlauture@hotmail.com',role:'Trainer BSP',type:'contractor',dept:'training',programs:['BSP'],locations:['Montréal','Ligne'],schedule:'Soir, Jour',notes:'Alt: bertrandlauture99@gmail.com',delegatable:'unknown',reportsTo:'vp'},
+  {id:'t11',name:'Domingos Oliveira',email:'oliveira@secudrone.ca',role:'Trainer BSP/Élite',type:'contractor',dept:'training',programs:['BSP','Élite'],locations:['Ligne'],schedule:'Soir, Week-end',notes:'secudrone.ca — possibly linked to drone ops',delegatable:'unknown',reportsTo:'vp'},
+  {id:'t12',name:'Noureddine Fatnassy',email:'nfatnassy@gmail.com',role:'Trainer BSP',type:'contractor',dept:'training',programs:['BSP'],locations:['Québec'],schedule:'Jour',notes:'',delegatable:'unknown',reportsTo:'vp'},
+  {id:'t13',name:'Romann Chapelain',email:'romannchapelain@gmail.com',role:'Trainer BSP',type:'contractor',dept:'training',programs:['BSP'],locations:['Ligne'],schedule:'Soir',notes:'',delegatable:'unknown',reportsTo:'vp'},
+  {id:'t14',name:'Marie-Claude Gosselin',email:'mcgosselin@videotron.ca',role:'Trainer RCR/BSP',type:'contractor',dept:'training',programs:['RCR','BSP'],locations:['Montréal'],schedule:'Jour, Week-end',notes:'Potential delegation target.',delegatable:'yes',reportsTo:'vp'},
+
+  {id:'s2',name:'Lilia Hassen',email:'lilia.hassen.cheour@gmail.com',role:'Service à la clientèle',type:'employee',dept:'sac',programs:['SAC'],locations:['Montréal'],schedule:'Lun-Ven, soir',notes:'Reporte à Hamza uniquement — jamais le VP',delegatable:'unknown',reportsTo:'L3'},
+  {id:'s3',name:'Sekou Isaint',email:'mightycent950@gmail.com',role:'Service à la clientèle',type:'employee',dept:'sac',programs:['SAC'],locations:['Montréal'],schedule:'Sam-Dim',notes:'Reporte à Hamza uniquement — jamais le VP. Weekend.',delegatable:'unknown',reportsTo:'L3'},
+
+  {id:'m1',name:'Alexandre Butterfield',email:'alex@darkhorseads.com',role:'Directeur Marketing',type:'employee',dept:'marketing',programs:['MKT'],locations:['Montréal'],schedule:'Always on',notes:'Co-fondateur Dark Horse Ads',delegatable:'no',reportsTo:'vp'},
+  {id:'m2',name:'Hatem Dhaouadi',email:'hatemdhaouadiii@gmail.com',role:'Automation & Web Builder',type:'contractor',dept:'marketing',programs:['MKT'],locations:['Ligne'],schedule:'When needed',notes:'',delegatable:'unknown',reportsTo:'vp'},
+
+  {id:'v1',name:'Heidys Garcia',email:'garheidys@gmail.com',role:'Vendeuse',type:'employee',dept:'sales',programs:['Sales'],locations:['Montréal'],schedule:'20h/semaine',notes:'Part-time',delegatable:'unknown',reportsTo:'vp'},
+];
+
+// Future changes: array of {personId, futureReportsTo, futureRole, futureType, notes}
+let futureChanges = [];
+
+let editId=null, fEditIdx=null, currentView='dept';
+
+// ==================== UTILS ====================
+const TC={'BSP':'t-bsp','RCR':'t-rcr','Élite':'t-elite','CV':'t-cv','Drone':'t-drone','SAC':'t-sac','MKT':'t-mkt','Sales':'t-sales'};
+const DM={training:{l:'Training — Trainers',d:'#60a5fa'},sac:{l:'Service à la clientèle',d:'#f472b6'},marketing:{l:'Marketing',d:'#ff6b35'},sales:{l:'Sales',d:'#fbbf24'}};
+function esc(s){const d=document.createElement('div');d.textContent=s||'';return d.innerHTML;}
+function gid(){return 'p_'+Math.random().toString(36).substr(2,9);}
+function bc(t){return t==='lead'?'b-lead':t==='employee'?'b-emp':t==='exec'?'b-exec':'b-con';}
+function bl(t){return t==='lead'?'Lead':t==='employee'?'Employee':t==='exec'?'VP':'Contractor';}
+function di(d){return d==='yes'?'🟢':d==='partial'?'🟡':d==='no'?'🔴':'⚪';}
+function getChildren(pid){return data.filter(p=>p.reportsTo===pid);}
+function getById(id){return id==='vp'?VP:data.find(p=>p.id===id);}
+function allPeople(){return [VP,...data];}
+
+// ==================== VIEW SWITCHING ====================
+function switchView(v,btn){
+  currentView=v;
+  document.querySelectorAll('.vtab').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  render();
+}
+
+// ==================== RENDER ====================
+function render(){
+  const ct=document.getElementById('content');
+  const cl=document.getElementById('controls');
+
+  if(currentView==='dept') renderDept(ct,cl);
+  else if(currentView==='tree') renderTree(ct,cl);
+  else renderFuture(ct,cl);
+
+  renderSummary();
+}
+
+function cardHTML(p){
+  const tags=p.programs.map(pr=>`<span class="tp ${TC[pr]||'t-bsp'}">${pr}</span>`).join('');
+  return `<div class="card" onclick="openEdit('${p.id}')">
+    <span class="badge ${bc(p.type)}">${bl(p.type)}</span>
+    <div class="name" style="margin-top:3px;">${esc(p.name)}</div>
+    <div class="role-line">${esc(p.role)}</div>
+    <div class="meta"><div style="margin-bottom:2px;">${tags}</div>
+    <span>🕐 ${esc(p.schedule)}</span> <span>${di(p.delegatable)}</span></div>
+    ${p.notes?`<div class="note-line">📝 ${esc(p.notes)}</div>`:''}
+  </div>`;
+}
+
+// --- DEPT VIEW ---
+function renderDept(ct,cl){
+  cl.innerHTML=`<button class="btn primary" onclick="openAdd()">+ Add Person</button>
+    <button class="btn" onclick="eAll()">Expand All</button>
+    <button class="btn" onclick="cAll()">Collapse All</button>
+    <span style="flex:1"></span>
+    <button class="btn" onclick="expJSON()">Export JSON</button>`;
+
+  // VP + Leads at top
+  const leads=data.filter(p=>p.type==='lead');
+  let h=`<div style="display:flex;justify-content:center;margin-bottom:8px;">
+    <div class="card" style="border-color:var(--a);box-shadow:0 0 30px var(--ag);text-align:center;padding:16px 32px;">
+      <span class="badge b-exec">VP of Training</span>
+      <div class="name" style="margin-top:4px;">You</div>
+      <div class="role-line">XGuard — MTL / QC / En ligne</div>
+    </div></div>`;
+  h+=`<div style="display:flex;justify-content:center;height:28px;"><div style="width:2px;height:100%;background:var(--ba);"></div></div>`;
+  if(leads.length){
+    h+=`<div style="display:flex;justify-content:center;gap:16px;flex-wrap:wrap;margin-bottom:8px;">`;
+    leads.forEach(l=>{
+      h+=`<div class="card" onclick="openEdit('${l.id}')" style="border-color:var(--g);box-shadow:0 0 12px rgba(52,211,153,0.08);text-align:center;min-width:200px;">
+        <span class="badge b-lead">Lead</span>
+        <div class="name" style="margin-top:3px;">${esc(l.name)}</div>
+        <div class="role-line">${esc(l.role)}</div>
+        <div style="font-size:10px;color:var(--g);margin-top:4px;">${getChildren(l.id).length} direct reports</div>
+      </div>`;
+    });
+    h+=`</div>`;
+    h+=`<div style="display:flex;justify-content:center;height:28px;"><div style="width:2px;height:100%;background:var(--ba);"></div></div>`;
+  }
+
+  // Departments
+  h+=`<div class="dept-grid">`;
+  ['training','sac','marketing','sales'].forEach(dk=>{
+    const dm=DM[dk];
+    const members=data.filter(p=>p.dept===dk&&p.type!=='lead');
+    h+=`<div class="dept" id="dept-${dk}">
+      <div class="dept-h" onclick="document.getElementById('dept-${dk}').classList.toggle('collapsed')">
+        <div class="dept-dot" style="background:${dm.d};"></div><h3>${dm.l}</h3>
+        <span class="cnt">${members.length}</span><span class="chev">▼</span>
+      </div>
+      <div class="dept-body">${members.length?members.map(cardHTML).join(''):'<div class="empty">Empty</div>'}</div>
+    </div>`;
+  });
+  h+=`</div>`;
+  ct.innerHTML=h;
+}
+
+function eAll(){document.querySelectorAll('.dept').forEach(d=>d.classList.remove('collapsed'));}
+function cAll(){document.querySelectorAll('.dept').forEach(d=>d.classList.add('collapsed'));}
+
+// --- TREE VIEW ---
+function renderTree(ct,cl){
+  cl.innerHTML=`<button class="btn primary" onclick="openAdd()">+ Add Person</button>
+    <span style="flex:1"></span><button class="btn" onclick="expJSON()">Export JSON</button>`;
+
+  function buildNode(person,isRoot){
+    const children=getChildren(person.id);
+    const cls=person.id==='vp'?'is-vp':person.type==='lead'?'is-lead':'';
+    const childCount=children.length?`<span class="tc-count">${children.length} report${children.length>1?'s':''}</span>`:'';
+    const tags=person.programs?person.programs.map(pr=>`<span class="tp ${TC[pr]||''}">${pr}</span>`).join(''):'';
+    const onclick=person.id==='vp'?'':`onclick="openEdit('${person.id}')"`;
+
+    let h=`<div class="${isRoot?'tree-root':'tree-item'}">`;
+    if(!isRoot) h+=`<div class="tree-branch"></div>`;
+    h+=`<div class="tree-card ${cls}" ${onclick}>
+      <div class="tc-info">
+        <span class="badge ${bc(person.type)}">${bl(person.type)}</span>
+        <div class="tc-name" style="margin-top:2px;">${esc(person.name)}</div>
+        <div class="tc-role">${esc(person.role||'')}</div>
+        ${tags?`<div class="tc-tags">${tags}</div>`:''}
+      </div>
+      ${childCount} <span>${di(person.delegatable||'no')}</span>
+    </div></div>`;
+
+    if(children.length){
+      h+=`<div class="tree-children">`;
+      children.forEach(c=>{ h+=buildNode(c,false); });
+      h+=`</div>`;
+    }
+    return h;
+  }
+
+  ct.innerHTML=`<div class="tree">${buildNode(VP,true)}</div>`;
+}
+
+// --- FUTURE VIEW ---
+function renderFuture(ct,cl){
+  cl.innerHTML=`<button class="btn future-btn" onclick="openFM()">+ Plan a Change</button>
+    <span style="flex:1"></span><button class="btn" onclick="expFutureJSON()">Export Future Plan</button>`;
+
+  // Current hierarchy (left)
+  function miniTree(pid,depth){
+    const children=getChildren(pid);
+    const p=getById(pid);
+    let h='';
+    children.forEach(c=>{
+      const fc=futureChanges.find(f=>f.personId===c.id);
+      const changed=fc?'border-color:var(--cy);':'';
+      h+=`<div style="margin-left:${depth*20}px;margin-bottom:6px;">
+        <div class="future-person" style="${changed}" onclick="openEdit('${c.id}')">
+          <span class="badge ${bc(c.type)}" style="flex-shrink:0;">${bl(c.type)}</span>
+          <div style="flex:1;"><div class="fp-name">${esc(c.name)}</div><div class="fp-role">${esc(c.role)}</div></div>
+          <span>${di(c.delegatable)}</span>
+        </div>
+        ${miniTree(c.id,depth+1)}
+      </div>`;
+    });
+    return h;
+  }
+
+  // Future changes list (right)
+  let changesHTML='';
+  if(futureChanges.length===0){
+    changesHTML=`<div class="empty">No changes planned yet.<br><br>Click "+ Plan a Change" to start building your future org structure.<br><br>
+      Think about:<br>• Who should trainers report to instead of you?<br>• Can Marc Éric or Marie-Claude become leads?<br>• What outcomes can Hamza own?</div>`;
+  } else {
+    futureChanges.forEach((fc,i)=>{
+      const p=getById(fc.personId);
+      const curManager=getById(p.reportsTo)||VP;
+      const futManager=getById(fc.futureReportsTo)||VP;
+      changesHTML+=`<div class="future-change" onclick="editFChange(${i})" style="cursor:pointer;">
+        <div class="fc-name">${esc(p.name)}</div>
+        ${fc.futureReportsTo!==p.reportsTo?`<div class="fc-label">Reports To</div>
+          <div class="fc-from">Currently: ${esc(curManager.name)}</div>
+          <div class="fc-to">→ Future: ${esc(futManager.name)}</div>`:''}
+        ${fc.futureRole&&fc.futureRole!==p.role?`<div class="fc-label" style="margin-top:6px;">Role</div>
+          <div class="fc-from">Currently: ${esc(p.role)}</div>
+          <div class="fc-to">→ Future: ${esc(fc.futureRole)}</div>`:''}
+        ${fc.futureType&&fc.futureType!==p.type?`<div class="fc-label" style="margin-top:6px;">Type</div>
+          <div class="fc-from">Currently: ${bl(p.type)}</div>
+          <div class="fc-to">→ Future: ${bl(fc.futureType)}</div>`:''}
+        ${fc.notes?`<div style="margin-top:6px;font-size:10px;color:var(--td);font-style:italic;">💡 ${esc(fc.notes)}</div>`:''}
+      </div>`;
+    });
+  }
+
+  ct.innerHTML=`<div class="future-container">
+    <div class="future-col">
+      <div class="future-col-header">
+        <h3>Current State</h3><span class="state-badge state-current">Now</span>
+      </div>
+      <div class="future-col-body">
+        <div class="future-person" style="border-color:var(--a);">
+          <span class="badge b-exec">VP</span>
+          <div style="flex:1;"><div class="fp-name">You</div><div class="fp-role">VP of Training</div></div>
+          <span class="tc-count">${getChildren('vp').length} direct</span>
+        </div>
+        ${miniTree('vp',1)}
+      </div>
+    </div>
+    <div class="future-col">
+      <div class="future-col-header">
+        <h3>Planned Changes</h3><span class="state-badge state-future">${futureChanges.length} change${futureChanges.length!==1?'s':''}</span>
+      </div>
+      <div class="future-col-body">${changesHTML}</div>
+    </div>
+  </div>`;
+}
+
+// ==================== SUMMARY ====================
+function renderSummary(){
+  const t=data.length;
+  const directToVP=data.filter(p=>p.reportsTo==='vp').length;
+  document.getElementById('sum').innerHTML=`
+    <div class="stat"><div class="d" style="background:var(--a)"></div><b>${t+1}</b><span style="color:var(--td)">Total</span></div>
+    <div class="stat"><div class="d" style="background:var(--g)"></div><b>${data.filter(p=>p.type==='lead').length}</b><span style="color:var(--td)">Leads</span></div>
+    <div class="stat"><div class="d" style="background:var(--bl)"></div><b>${data.filter(p=>p.type==='employee').length}</b><span style="color:var(--td)">Employees</span></div>
+    <div class="stat"><div class="d" style="background:var(--p)"></div><b>${data.filter(p=>p.type==='contractor').length}</b><span style="color:var(--td)">Contractors</span></div>
+    <div class="stat" style="margin-left:auto;"><div class="d" style="background:var(--r)"></div><b>${directToVP}</b><span style="color:var(--td)">Report to YOU directly</span></div>
+  `;
+}
+
+// ==================== EDIT MODAL ====================
+function gChk(id){return [...document.querySelectorAll(`#${id} input:checked`)].map(c=>c.value);}
+function sChk(id,v){document.querySelectorAll(`#${id} input`).forEach(c=>{c.checked=v.includes(c.value);});}
+
+function popReports(excludeId){
+  const sel=document.getElementById('fReports');
+  sel.innerHTML=`<option value="vp">You (VP)</option>`;
+  data.forEach(p=>{
+    if(p.id===excludeId) return;
+    sel.innerHTML+=`<option value="${p.id}">${esc(p.name)} — ${esc(p.role)}</option>`;
+  });
+}
+
+function openAdd(){
+  editId=null;
+  document.getElementById('mTitle').textContent='Add Person';
+  ['fName','fEmail','fRole','fSched','fNotes'].forEach(f=>document.getElementById(f).value='');
+  document.getElementById('fType').value='contractor';
+  document.getElementById('fDept').value='training';
+  document.getElementById('fDel').value='unknown';
+  sChk('fProg',[]);sChk('fLoc',[]);
+  popReports(null);
+  document.getElementById('fReports').value='vp';
+  document.getElementById('bDel').style.display='none';
+  document.getElementById('mo').classList.add('active');
+  document.getElementById('fName').focus();
+}
+
+function openEdit(id){
+  const p=data.find(x=>x.id===id);
+  if(!p) return;
+  editId=id;
+  document.getElementById('mTitle').textContent='Edit — '+p.name;
+  document.getElementById('fName').value=p.name;
+  document.getElementById('fEmail').value=p.email||'';
+  document.getElementById('fRole').value=p.role||'';
+  document.getElementById('fType').value=p.type;
+  document.getElementById('fDept').value=p.dept;
+  document.getElementById('fSched').value=p.schedule||'';
+  document.getElementById('fNotes').value=p.notes||'';
+  document.getElementById('fDel').value=p.delegatable||'unknown';
+  sChk('fProg',p.programs);sChk('fLoc',p.locations);
+  popReports(id);
+  document.getElementById('fReports').value=p.reportsTo||'vp';
+  document.getElementById('bDel').style.display='inline-block';
+  document.getElementById('mo').classList.add('active');
+}
+
+function closeM(){document.getElementById('mo').classList.remove('active');editId=null;}
+
+function saveP(){
+  const name=document.getElementById('fName').value.trim();
+  if(!name){alert('Name required');return;}
+  const obj={name,email:document.getElementById('fEmail').value.trim(),role:document.getElementById('fRole').value.trim(),
+    type:document.getElementById('fType').value,dept:document.getElementById('fDept').value,
+    programs:gChk('fProg'),locations:gChk('fLoc'),schedule:document.getElementById('fSched').value.trim(),
+    notes:document.getElementById('fNotes').value.trim(),delegatable:document.getElementById('fDel').value,
+    reportsTo:document.getElementById('fReports').value};
+  if(editId){Object.assign(data.find(x=>x.id===editId),obj);}
+  else{data.push({id:gid(),...obj});}
+  closeM();render();
+}
+
+function delP(){
+  if(!editId||!confirm('Remove this person?'))return;
+  data.filter(p=>p.reportsTo===editId).forEach(p=>{p.reportsTo='vp';});
+  data=data.filter(p=>p.id!==editId);
+  closeM();render();
+}
+
+// ==================== FUTURE MODAL ====================
+function openFM(){
+  fEditIdx=null;
+  document.getElementById('fmTitle').textContent='Plan a Change';
+  const pSel=document.getElementById('ffPerson');
+  pSel.innerHTML='';
+  data.forEach(p=>{pSel.innerHTML+=`<option value="${p.id}">${esc(p.name)}</option>`;});
+  const rSel=document.getElementById('ffReports');
+  rSel.innerHTML=`<option value="vp">You (VP)</option>`;
+  data.forEach(p=>{rSel.innerHTML+=`<option value="${p.id}">${esc(p.name)}</option>`;});
+  document.getElementById('ffRole').value='';
+  document.getElementById('ffType').value='contractor';
+  document.getElementById('ffNotes').value='';
+  document.getElementById('bFDel').style.display='none';
+  document.getElementById('fmo').classList.add('active');
+}
+
+function editFChange(idx){
+  const fc=futureChanges[idx];
+  fEditIdx=idx;
+  document.getElementById('fmTitle').textContent='Edit Change';
+  const pSel=document.getElementById('ffPerson');
+  pSel.innerHTML='';
+  data.forEach(p=>{pSel.innerHTML+=`<option value="${p.id}">${esc(p.name)}</option>`;});
+  pSel.value=fc.personId;
+  const rSel=document.getElementById('ffReports');
+  rSel.innerHTML=`<option value="vp">You (VP)</option>`;
+  data.forEach(p=>{rSel.innerHTML+=`<option value="${p.id}">${esc(p.name)}</option>`;});
+  rSel.value=fc.futureReportsTo;
+  document.getElementById('ffRole').value=fc.futureRole||'';
+  document.getElementById('ffType').value=fc.futureType||'contractor';
+  document.getElementById('ffNotes').value=fc.notes||'';
+  document.getElementById('bFDel').style.display='inline-block';
+  document.getElementById('fmo').classList.add('active');
+}
+
+function closeFM(){document.getElementById('fmo').classList.remove('active');fEditIdx=null;}
+
+function saveFChange(){
+  const personId=document.getElementById('ffPerson').value;
+  const obj={personId,futureReportsTo:document.getElementById('ffReports').value,
+    futureRole:document.getElementById('ffRole').value.trim(),
+    futureType:document.getElementById('ffType').value,
+    notes:document.getElementById('ffNotes').value.trim()};
+  if(fEditIdx!==null){futureChanges[fEditIdx]=obj;}
+  else{futureChanges.push(obj);}
+  closeFM();render();
+}
+
+function delFChange(){
+  if(fEditIdx===null)return;
+  futureChanges.splice(fEditIdx,1);
+  closeFM();render();
+}
+
+// ==================== EXPORT ====================
+function expJSON(){
+  const b=new Blob([JSON.stringify({vp:VP,team:data,futureChanges},null,2)],{type:'application/json'});
+  const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download='xguard-org-chart.json';a.click();
+}
+function expFutureJSON(){
+  const b=new Blob([JSON.stringify({currentTeam:data,futureChanges},null,2)],{type:'application/json'});
+  const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download='xguard-future-plan.json';a.click();
+}
+
+// ==================== INIT ====================
+document.querySelectorAll('.mo').forEach(m=>{m.addEventListener('click',function(e){if(e.target===this){closeM();closeFM();}});});
+document.addEventListener('keydown',e=>{if(e.key==='Escape'){closeM();closeFM();}});
+render();
+</script>
+</body>
+</html>
