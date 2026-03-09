@@ -150,6 +150,53 @@ header p{color:var(--td);margin-top:3px;font-size:13px;}
 
 @media(max-width:768px){.future-container{grid-template-columns:1fr;}}
 
+/* === VIEW 5: TASKS & OUTCOMES === */
+.tasks-filters{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:18px;}
+.tasks-filters input{font-family:'DM Sans',sans-serif;font-size:12px;padding:7px 12px;border-radius:6px;
+  border:1px solid var(--b);background:var(--s);color:var(--t);outline:none;width:200px;}
+.tasks-filters input:focus{border-color:var(--a);}
+.tasks-filters select{font-family:'DM Sans',sans-serif;font-size:12px;padding:7px 10px;border-radius:6px;
+  border:1px solid var(--b);background:var(--s);color:var(--t);outline:none;cursor:pointer;}
+.tasks-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:14px;}
+.tk-card{background:var(--s);border:1px solid var(--b);border-radius:10px;overflow:hidden;}
+.tk-card.tk-vp{border-color:var(--a);}
+.tk-card.tk-lead{border-color:var(--g);}
+.tk-head{padding:12px 14px;display:flex;align-items:center;gap:10px;border-bottom:1px solid var(--b);}
+.tk-avatar{width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;
+  font-size:11px;font-weight:700;color:#fff;flex-shrink:0;}
+.tk-head-info{flex:1;min-width:0;}
+.tk-head-name{font-size:12px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.tk-head-role{font-size:10px;color:var(--td);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.tk-body{padding:12px 14px;}
+.tk-section{margin-bottom:10px;}
+.tk-section:last-child{margin-bottom:0;}
+.tk-label{font-family:'Space Mono',monospace;font-size:9px;text-transform:uppercase;letter-spacing:1.5px;
+  color:var(--td);margin-bottom:6px;display:flex;align-items:center;justify-content:space-between;}
+.tk-label .tk-add{cursor:pointer;color:var(--a);font-size:14px;line-height:1;padding:0 2px;}
+.tk-label .tk-add:hover{opacity:0.7;}
+.tk-item{display:flex;align-items:flex-start;gap:7px;margin-bottom:5px;group:true;}
+.tk-item input[type="checkbox"]{margin-top:2px;accent-color:var(--a);flex-shrink:0;cursor:pointer;}
+.tk-item-text{font-size:11px;line-height:1.5;flex:1;cursor:pointer;word-break:break-word;}
+.tk-item-text.done{text-decoration:line-through;color:var(--td);}
+.tk-item .tk-del{color:var(--td);font-size:13px;cursor:pointer;opacity:0;transition:opacity 0.15s;flex-shrink:0;padding:0 2px;}
+.tk-item:hover .tk-del{opacity:1;}
+.tk-item .tk-del:hover{color:var(--r);}
+.tk-outcome{background:var(--bg);border:1px solid var(--b);border-radius:6px;padding:6px 10px;
+  margin-bottom:5px;font-size:11px;line-height:1.5;display:flex;align-items:flex-start;gap:7px;cursor:pointer;}
+.tk-outcome .tk-o-icon{color:var(--cy);flex-shrink:0;font-size:12px;margin-top:1px;}
+.tk-outcome .tk-o-text{flex:1;word-break:break-word;}
+.tk-outcome .tk-del{color:var(--td);font-size:13px;cursor:pointer;opacity:0;transition:opacity 0.15s;flex-shrink:0;}
+.tk-outcome:hover .tk-del{opacity:1;}
+.tk-outcome .tk-del:hover{color:var(--r);}
+.tk-empty{font-size:10px;color:var(--td);font-style:italic;padding:2px 0;}
+.tk-inline-input{width:100%;font-family:'DM Sans',sans-serif;font-size:11px;padding:5px 8px;border-radius:5px;
+  border:1px solid var(--a);background:var(--bg);color:var(--t);outline:none;margin-top:4px;box-sizing:border-box;}
+.tasks-progress{display:flex;align-items:center;gap:10px;margin-bottom:16px;padding:10px 14px;
+  background:var(--s);border:1px solid var(--b);border-radius:8px;font-size:11px;}
+.tasks-progress .tp-bar{flex:1;height:6px;background:var(--b);border-radius:3px;overflow:hidden;}
+.tasks-progress .tp-fill{height:100%;background:var(--a);border-radius:3px;transition:width 0.3s;}
+.tasks-progress .tp-label{color:var(--td);white-space:nowrap;}
+
 /* === VIEW 4: CANVAS TREE === */
 #canvas-wrap{position:relative;width:100%;overflow:scroll;background:var(--bg);cursor:grab;user-select:none;}
 #canvas-wrap.dragging{cursor:grabbing;}
@@ -182,6 +229,7 @@ header p{color:var(--td);margin-top:3px;font-size:13px;}
   <button class="vtab" onclick="switchView('tree',this)"><span class="tab-icon">🌳</span>Reporting Hierarchy</button>
   <button class="vtab" onclick="switchView('future',this)"><span class="tab-icon">🚀</span>Future State</button>
   <button class="vtab" onclick="switchView('canvas',this)"><span class="tab-icon">🗺️</span>Canvas View</button>
+  <button class="vtab" onclick="switchView('tasks',this)"><span class="tab-icon">✅</span>Tasks & Outcomes</button>
 </div>
 
 <div class="controls" id="controls"></div>
@@ -284,6 +332,42 @@ let data = [
 // Future changes: array of {personId, futureReportsTo, futureRole, futureType, notes}
 let futureChanges = [];
 
+// Tasks & Outcomes: { personId: { tasks:[{id,text,done}], outcomes:[{id,text}] } }
+let tasksData = {
+  'vp': {
+    tasks:[
+      {id:'t_vp1',text:'Review weekly class schedule',done:false},
+      {id:'t_vp2',text:'Follow up on trainer certifications',done:false},
+      {id:'t_vp3',text:'Approve new BSP cohort registrations',done:false}
+    ],
+    outcomes:[
+      {id:'o_vp1',text:'Training division runs without daily VP intervention'},
+      {id:'o_vp2',text:'All programs consistently meet capacity targets'}
+    ]
+  },
+  'L1': {
+    tasks:[
+      {id:'t_l1a',text:'Issue certificates for last cohort',done:false},
+      {id:'t_l1b',text:'Update class schedule in portal',done:false},
+      {id:'t_l1c',text:'Process pending payments',done:false}
+    ],
+    outcomes:[
+      {id:'o_l1a',text:'Zero admin backlog on certificates & registrations'},
+      {id:'o_l1b',text:'VP never handles logistics directly'}
+    ]
+  },
+  'L3': {
+    tasks:[
+      {id:'t_l3a',text:'Weekly check-in with Lilia & Sekou',done:false},
+      {id:'t_l3b',text:'Handle escalated student inquiries',done:false}
+    ],
+    outcomes:[
+      {id:'o_l3a',text:'Student satisfaction score maintained above target'},
+      {id:'o_l3b',text:'All SAC tickets resolved within 24h'}
+    ]
+  }
+};
+
 let editId=null, fEditIdx=null, currentView='dept';
 
 // ==================== UTILS ====================
@@ -314,6 +398,7 @@ function render(){
   if(currentView==='dept') renderDept(ct,cl);
   else if(currentView==='tree') renderTree(ct,cl);
   else if(currentView==='canvas') renderCanvas(ct,cl);
+  else if(currentView==='tasks') renderTasks(ct,cl);
   else renderFuture(ct,cl);
 
   renderSummary();
@@ -489,6 +574,176 @@ function renderFuture(ct,cl){
       <div class="future-col-body">${changesHTML}</div>
     </div>
   </div>`;
+}
+
+// ==================== TASKS & OUTCOMES ====================
+let _tkFilter='', _tkDept='all';
+
+function tkData(id){ if(!tasksData[id]) tasksData[id]={tasks:[],outcomes:[]}; return tasksData[id]; }
+function gTaskId(){ return 'tk_'+Math.random().toString(36).substr(2,7); }
+
+function renderTasks(ct,cl){
+  cl.innerHTML=`
+    <div class="tasks-filters">
+      <input id="tk-search" placeholder="Search people…" oninput="tkSetFilter(this.value)" value="${esc(_tkFilter)}"/>
+      <select onchange="tkSetDept(this.value)">
+        <option value="all" ${_tkDept==='all'?'selected':''}>All Departments</option>
+        <option value="training" ${_tkDept==='training'?'selected':''}>Training</option>
+        <option value="sac" ${_tkDept==='sac'?'selected':''}>Service à la clientèle</option>
+        <option value="marketing" ${_tkDept==='marketing'?'selected':''}>Marketing</option>
+        <option value="sales" ${_tkDept==='sales'?'selected':''}>Sales</option>
+      </select>
+      <span style="flex:1"></span>
+      <button class="btn" onclick="expTasksJSON()">Export JSON</button>
+    </div>`;
+
+  const all=[VP,...data];
+  const filtered=all.filter(p=>{
+    const matchName=p.name.toLowerCase().includes(_tkFilter.toLowerCase())||p.role.toLowerCase().includes(_tkFilter.toLowerCase());
+    const matchDept=_tkDept==='all'||p.dept===_tkDept||(_tkDept==='training'&&p.id==='vp');
+    return matchName&&matchDept;
+  });
+
+  // progress bar across all tasks
+  const allTasks=Object.values(tasksData).flatMap(d=>d.tasks||[]);
+  const done=allTasks.filter(t=>t.done).length;
+  const total=allTasks.length;
+  const pct=total?Math.round(done/total*100):0;
+
+  let html=`<div class="tasks-progress">
+    <span style="color:var(--td);">Overall tasks</span>
+    <div class="tp-bar"><div class="tp-fill" style="width:${pct}%"></div></div>
+    <span class="tp-label">${done}/${total} done (${pct}%)</span>
+  </div>
+  <div class="tasks-grid">`;
+
+  filtered.forEach(p=>{
+    const d=tkData(p.id);
+    const col=avatarColor(p.id);
+    const cls=p.id==='vp'?'tk-vp':p.type==='lead'?'tk-lead':'';
+    const doneCnt=d.tasks.filter(t=>t.done).length;
+    const totalCnt=d.tasks.length;
+    const pctP=totalCnt?Math.round(doneCnt/totalCnt*100):0;
+
+    const tasksHTML=d.tasks.length
+      ? d.tasks.map(t=>`
+        <div class="tk-item">
+          <input type="checkbox" ${t.done?'checked':''} onchange="tkToggle('${p.id}','${t.id}',this.checked)"/>
+          <span class="tk-item-text${t.done?' done':''}" onclick="tkEditItem('${p.id}','${t.id}','task')">${esc(t.text)}</span>
+          <span class="tk-del" onclick="tkDelItem('${p.id}','${t.id}','task')">×</span>
+        </div>`).join('')
+      : `<div class="tk-empty">No tasks yet</div>`;
+
+    const outcomesHTML=d.outcomes.length
+      ? d.outcomes.map(o=>`
+        <div class="tk-outcome">
+          <span class="tk-o-icon">◆</span>
+          <span class="tk-o-text" onclick="tkEditItem('${p.id}','${o.id}','outcome')">${esc(o.text)}</span>
+          <span class="tk-del" onclick="tkDelItem('${p.id}','${o.id}','outcome')">×</span>
+        </div>`).join('')
+      : `<div class="tk-empty">No outcomes defined</div>`;
+
+    html+=`<div class="tk-card ${cls}" id="tkc-${p.id}">
+      <div class="tk-head">
+        <div class="tk-avatar" style="background:${col};">${initials(p.name)}</div>
+        <div class="tk-head-info">
+          <div class="tk-head-name">${esc(p.name)}</div>
+          <div class="tk-head-role">${esc(p.role)}</div>
+        </div>
+        ${totalCnt?`<span style="font-family:'Space Mono',monospace;font-size:9px;color:${pctP===100?'var(--g)':'var(--td)'};">${pctP}%</span>`:''}
+      </div>
+      <div class="tk-body">
+        <div class="tk-section">
+          <div class="tk-label">Tasks
+            <span class="tk-add" onclick="tkAddInline('${p.id}','task')" title="Add task">＋</span>
+          </div>
+          <div id="tklist-${p.id}">${tasksHTML}</div>
+          <div id="tkinput-${p.id}-task"></div>
+        </div>
+        <div class="tk-section">
+          <div class="tk-label">Owned Outcomes
+            <span class="tk-add" onclick="tkAddInline('${p.id}','outcome')" title="Add outcome">＋</span>
+          </div>
+          <div id="tklist-${p.id}-out">${outcomesHTML}</div>
+          <div id="tkinput-${p.id}-outcome"></div>
+        </div>
+      </div>
+    </div>`;
+  });
+
+  html+=`</div>`;
+  ct.innerHTML=html;
+}
+
+function tkSetFilter(v){ _tkFilter=v; renderTasks(document.getElementById('content'),document.getElementById('controls')); }
+function tkSetDept(v){ _tkDept=v; renderTasks(document.getElementById('content'),document.getElementById('controls')); }
+
+function tkToggle(pid,tid,checked){
+  const t=tkData(pid).tasks.find(x=>x.id===tid);
+  if(t){ t.done=checked; renderTasks(document.getElementById('content'),document.getElementById('controls')); }
+}
+
+function tkAddInline(pid,kind){
+  const slotId=`tkinput-${pid}-${kind}`;
+  const slot=document.getElementById(slotId);
+  if(!slot||slot.querySelector('input')) return;
+  const inp=document.createElement('input');
+  inp.className='tk-inline-input';
+  inp.placeholder=kind==='task'?'New task…':'New outcome…';
+  inp.onkeydown=e=>{
+    if(e.key==='Enter'&&inp.value.trim()){
+      const d=tkData(pid);
+      const newItem={id:gTaskId(),text:inp.value.trim()};
+      if(kind==='task') { newItem.done=false; d.tasks.push(newItem); }
+      else d.outcomes.push(newItem);
+      renderTasks(document.getElementById('content'),document.getElementById('controls'));
+    }
+    if(e.key==='Escape') slot.innerHTML='';
+  };
+  inp.onblur=()=>{ setTimeout(()=>{ if(slot) slot.innerHTML=''; },200); };
+  slot.appendChild(inp);
+  inp.focus();
+}
+
+function tkEditItem(pid,iid,kind){
+  const d=tkData(pid);
+  const arr=kind==='task'?d.tasks:d.outcomes;
+  const item=arr.find(x=>x.id===iid);
+  if(!item) return;
+  const listId=kind==='task'?`tklist-${pid}`:`tklist-${pid}-out`;
+  const list=document.getElementById(listId);
+  if(!list) return;
+  const el=kind==='task'
+    ? list.querySelector(`.tk-item-text[onclick*="${iid}"]`)
+    : list.querySelector(`.tk-o-text[onclick*="${iid}"]`);
+  if(!el||el.querySelector('input')) return;
+  const orig=item.text;
+  const inp=document.createElement('input');
+  inp.className='tk-inline-input';
+  inp.value=orig;
+  inp.style.marginTop='0';
+  el.replaceWith(inp);
+  inp.focus(); inp.select();
+  inp.onkeydown=e=>{
+    if(e.key==='Enter'){
+      item.text=inp.value.trim()||orig;
+      renderTasks(document.getElementById('content'),document.getElementById('controls'));
+    }
+    if(e.key==='Escape') renderTasks(document.getElementById('content'),document.getElementById('controls'));
+  };
+  inp.onblur=()=>{ item.text=inp.value.trim()||orig; renderTasks(document.getElementById('content'),document.getElementById('controls')); };
+}
+
+function tkDelItem(pid,iid,kind){
+  const d=tkData(pid);
+  if(kind==='task') d.tasks=d.tasks.filter(x=>x.id!==iid);
+  else d.outcomes=d.outcomes.filter(x=>x.id!==iid);
+  renderTasks(document.getElementById('content'),document.getElementById('controls'));
+}
+
+function expTasksJSON(){
+  const b=new Blob([JSON.stringify(tasksData,null,2)],{type:'application/json'});
+  const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download='xguard-tasks.json';a.click();
 }
 
 // ==================== CANVAS VIEW ====================
