@@ -323,7 +323,7 @@ let data = [
   {id:'s2',name:'Lilia Hassen',email:'lilia.hassen.cheour@gmail.com',role:'Service à la clientèle',type:'employee',dept:'sac',programs:['SAC'],locations:['Montréal'],schedule:'Lun-Ven, soir',notes:'Reporte à Hamza uniquement — jamais le VP',delegatable:'unknown',reportsTo:'L3'},
   {id:'s3',name:'Sekou Isaint',email:'mightycent950@gmail.com',role:'Service à la clientèle',type:'employee',dept:'sac',programs:['SAC'],locations:['Montréal'],schedule:'Sam-Dim',notes:'Reporte à Hamza uniquement — jamais le VP. Weekend.',delegatable:'unknown',reportsTo:'L3'},
 
-  {id:'m1',name:'Alexandre Butterfield',email:'alex@darkhorseads.com',role:'Directeur Marketing',type:'employee',dept:'marketing',programs:['MKT'],locations:['Montréal'],schedule:'Always on',notes:'Co-fondateur Dark Horse Ads',delegatable:'no',reportsTo:'vp'},
+  {id:'m1',name:'Alexandre Butterfield',email:'alex@darkhorseads.com',role:'Directeur Marketing',type:'lead',dept:'marketing',programs:['MKT'],locations:['Montréal'],schedule:'Always on',notes:'Co-fondateur Dark Horse Ads',delegatable:'no',reportsTo:'vp'},
   {id:'m2',name:'Hatem Dhaouadi',email:'hatemdhaouadiii@gmail.com',role:'Automation & Web Builder',type:'contractor',dept:'marketing',programs:['MKT'],locations:['Ligne'],schedule:'When needed',notes:'',delegatable:'unknown',reportsTo:'vp'},
 
   {id:'v1',name:'Heidys Garcia',email:'garheidys@gmail.com',role:'Vendeuse',type:'employee',dept:'sales',programs:['Sales'],locations:['Montréal'],schedule:'20h/semaine',notes:'Part-time',delegatable:'unknown',reportsTo:'vp'},
@@ -438,6 +438,7 @@ function renderDept(ct,cl){
     leads.forEach(l=>{
       h+=`<div class="card" onclick="openEdit('${l.id}')" style="border-color:var(--g);box-shadow:0 0 12px rgba(52,211,153,0.08);text-align:center;min-width:200px;">
         <span class="badge b-lead">Lead</span>
+        <span style="font-size:9px;color:var(--td);margin-left:5px;font-family:'Space Mono',monospace;text-transform:uppercase;letter-spacing:1px;">${DM[l.dept]?DM[l.dept].l:l.dept}</span>
         <div class="name" style="margin-top:3px;">${esc(l.name)}</div>
         <div class="role-line">${esc(l.role)}</div>
         <div style="font-size:10px;color:var(--g);margin-top:4px;">${getChildren(l.id).length} direct reports</div>
