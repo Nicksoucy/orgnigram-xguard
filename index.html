@@ -227,6 +227,15 @@ header p{color:var(--td);margin-top:3px;font-size:13px;}
 .cn-arr{font-size:10px;padding:1px 5px;border-radius:4px;background:var(--b);color:var(--t);cursor:pointer;transition:background 0.15s;user-select:none;}
 .cn-arr:hover{background:var(--a);color:#fff;}
 .cn-arr.disabled{opacity:0.2;cursor:default;pointer-events:none;}
+/* Division nodes */
+.cn-div{position:absolute;height:52px;border:1px solid;border-radius:8px;
+  padding:0 14px;display:flex;align-items:center;justify-content:space-between;
+  box-sizing:border-box;cursor:default;}
+.cn-div .cn-div-label{font-size:12px;font-weight:700;letter-spacing:0.3px;}
+.cn-div .cn-div-count{font-family:'Space Mono',monospace;font-size:10px;opacity:0.7;
+  background:rgba(0,0,0,0.25);padding:2px 8px;border-radius:10px;margin-left:auto;margin-right:8px;}
+.cn-div .cn-arrows{margin-top:0;opacity:0;transition:opacity 0.15s;}
+.cn-div:hover .cn-arrows{opacity:1;}
 </style>
 </head>
 <body>
@@ -1064,10 +1073,22 @@ function expTasksJSON(){
 
 // ==================== CANVAS VIEW ====================
 let _cvZoom=0.55, _cvPan={x:0,y:0}, _cvDrag=null, _cvInited=false;
+
+// Division nodes — virtual group headers shown only in Canvas View
+const CV_DIVS=[
+  {id:'div_formation',  label:'Formation',           color:'#60a5fa', members:['L1','L2','t1','t2','t3','t4','t5','t7','t8','t9','t10','t11','t12','t13','t14']},
+  {id:'div_sac',        label:'Service à la clientèle', color:'#f472b6', members:['L3']},
+  {id:'div_marketing',  label:'Marketing',           color:'#ff6b35', members:['m1']},
+  {id:'div_ventes',     label:'Ventes',              color:'#fbbf24', members:['v1']},
+];
+// Map: personId → divId
+const CV_DIV_MAP={};
+CV_DIVS.forEach(d=>d.members.forEach(m=>{CV_DIV_MAP[m]=d.id;}));
+
 // cvOrder: { parentId: [childId, childId, ...] } — persists manual reordering
-// Default: leads first under VP (Jessica, Mitchell, Hamza, Alexandre, then the rest)
 let cvOrder={
-  'vp':['L1','L2','L3','m1','t1','t2','t3','t4','t5','t7','t8','t9','t10','t11','t12','t13','t14','m2','v1']
+  'vp':['div_formation','div_sac','div_marketing','div_ventes'],
+  'div_formation':['L1','L2','t1','t2','t3','t4','t5','t7','t8','t9','t10','t11','t12','t13','t14'],
 };
 
 function avatarColor(id){
@@ -1080,8 +1101,33 @@ function initials(name){
   return (p[0]?.[0]||'')+(p[1]?.[0]||'');
 }
 
-// get children in custom order (falls back to data order)
+// get the canvas parent of a node (div node or vp)
+function cvParent(id){
+  const divId=CV_DIV_MAP[id];
+  if(divId) return divId;
+  // div nodes report to vp
+  if(CV_DIVS.find(d=>d.id===id)) return 'vp';
+  const p=getById(id);
+  return p?.reportsTo||'vp';
+}
+
+// get children in custom order — supports division nodes
 function cvChildren(pid){
+  // vp's children = the division nodes
+  if(pid==='vp'){
+    const order=cvOrder['vp']||CV_DIVS.map(d=>d.id);
+    return order.map(id=>CV_DIVS.find(d=>d.id===id)).filter(Boolean).map(d=>({id:d.id,_isDiv:true}));
+  }
+  // division node's children = its members
+  const div=CV_DIVS.find(d=>d.id===pid);
+  if(div){
+    const memberObjs=div.members.map(m=>getById(m)).filter(Boolean);
+    if(!cvOrder[pid]) return memberObjs;
+    const ordered=cvOrder[pid].map(id=>memberObjs.find(c=>c.id===id)).filter(Boolean);
+    const rest=memberObjs.filter(c=>!cvOrder[pid].includes(c.id));
+    return [...ordered,...rest];
+  }
+  // regular person — children from data (e.g. L3 → s2,s3; m1 → m2)
   const ch=getChildren(pid);
   if(!cvOrder[pid]) return ch;
   const ordered=cvOrder[pid].map(id=>ch.find(c=>c.id===id)).filter(Boolean);
@@ -1091,8 +1137,7 @@ function cvChildren(pid){
 
 // move a node left or right among its siblings
 function cvMove(id,dir){
-  const p=getById(id); if(!p) return;
-  const pid=p.reportsTo||'vp';
+  const pid=cvParent(id);
   const siblings=cvChildren(pid);
   const order=siblings.map(s=>s.id);
   const i=order.indexOf(id); if(i===-1) return;
@@ -1100,7 +1145,7 @@ function cvMove(id,dir){
   if(ni<0||ni>=order.length) return;
   [order[i],order[ni]]=[order[ni],order[i]];
   cvOrder[pid]=order;
-  _cvInited=true; // keep scroll position
+  _cvInited=true;
   renderCanvas(document.getElementById('content'),document.getElementById('controls'));
 }
 
@@ -1114,13 +1159,19 @@ function renderCanvas(ct,cl){
     </div>`;
 
   // ---- layout algorithm ----
+  // Division nodes are taller/wider than regular nodes
   const NODE_W=164, NODE_H=128, GAP_X=20, GAP_Y=80;
+  const DIV_W=180, DIV_H=52;
+
+  // Get width/height for any node id
+  function nw(id){ return CV_DIVS.find(d=>d.id===id)?DIV_W:NODE_W; }
+  function nh(id){ return CV_DIVS.find(d=>d.id===id)?DIV_H:NODE_H; }
 
   function subtreeW(id){
     const ch=cvChildren(id);
-    if(!ch.length) return NODE_W;
+    if(!ch.length) return nw(id);
     const total=ch.reduce((s,c)=>s+subtreeW(c.id),0);
-    return total + GAP_X*(ch.length-1);
+    return Math.max(nw(id), total + GAP_X*(ch.length-1));
   }
 
   const positions={};
@@ -1129,10 +1180,10 @@ function renderCanvas(ct,cl){
     positions[id]={x,y};
     if(!ch.length) return;
     const totalW=ch.reduce((s,c)=>s+subtreeW(c.id),0)+GAP_X*(ch.length-1);
-    let cx=x+(NODE_W/2)-(totalW/2);
+    let cx=x+(nw(id)/2)-(totalW/2);
     ch.forEach(c=>{
       const sw=subtreeW(c.id);
-      layout(c.id, cx+(sw-NODE_W)/2, y+NODE_H+GAP_Y);
+      layout(c.id, cx+(sw-nw(c.id))/2, y+nh(id)+GAP_Y);
       cx+=sw+GAP_X;
     });
   }
@@ -1148,6 +1199,28 @@ function renderCanvas(ct,cl){
 
   // build HTML nodes
   let nodesHTML='';
+
+  // Render division nodes
+  CV_DIVS.forEach(div=>{
+    const pos=positions[div.id];
+    if(!pos) return;
+    const px=pos.x+ox, py=pos.y+oy;
+    const memberCount=div.members.filter(m=>getById(m)).length;
+    const siblings=cvChildren('vp');
+    const idx=siblings.findIndex(s=>s.id===div.id);
+    const canL=idx>0, canR=idx<siblings.length-1;
+    const arrows=`<div class="cn-arrows" onclick="event.stopPropagation()">
+      <span class="cn-arr${canL?'':' disabled'}" onclick="${canL?`cvMove('${div.id}',-1)`:''}" title="Move left">◀</span>
+      <span class="cn-arr${canR?'':' disabled'}" onclick="${canR?`cvMove('${div.id}',1)`:''}" title="Move right">▶</span>
+    </div>`;
+    nodesHTML+=`<div class="cn-div" id="cn-${div.id}" style="left:${px}px;top:${py}px;width:${DIV_W}px;border-color:${div.color}20;background:${div.color}12;">
+      <div class="cn-div-label" style="color:${div.color};">${div.label}</div>
+      <div class="cn-div-count" style="color:${div.color};">${memberCount}</div>
+      ${arrows}
+    </div>`;
+  });
+
+  // Render person nodes
   const allP=[VP,...data];
   allP.forEach(p=>{
     const pos=positions[p.id];
@@ -1158,10 +1231,10 @@ function renderCanvas(ct,cl){
     const tags=p.programs?p.programs.slice(0,2).map(pr=>`<span class="tp ${TC[pr]||''}" style="font-size:7px;">${pr}</span>`).join(''):'';
     const editClick=p.id==='vp'?'':`onclick="openEdit('${p.id}')"`;
 
-    // sibling arrows — show for everyone except VP
+    // sibling arrows
     let arrows='';
     if(p.id!=='vp'){
-      const pid=p.reportsTo||'vp';
+      const pid=cvParent(p.id);
       const siblings=cvChildren(pid);
       const idx=siblings.findIndex(s=>s.id===p.id);
       const canL=idx>0, canR=idx<siblings.length-1;
@@ -1183,15 +1256,34 @@ function renderCanvas(ct,cl){
 
   // SVG connector lines
   let svgLines='';
-  allP.forEach(p=>{
-    if(!p.reportsTo) return;
-    const pp=positions[p.reportsTo], cp=positions[p.id];
+
+  // VP → division nodes
+  CV_DIVS.forEach(div=>{
+    const pp=positions['vp'], cp=positions[div.id];
     if(!pp||!cp) return;
+    const divColor=div.color;
     const x1=pp.x+ox+NODE_W/2, y1=pp.y+oy+NODE_H;
+    const x2=cp.x+ox+DIV_W/2, y2=cp.y+oy;
+    const my=(y1+y2)/2;
+    svgLines+=`<path d="M${x1},${y1} C${x1},${my} ${x2},${my} ${x2},${y2}"
+      fill="none" stroke="${divColor}" stroke-width="1.5" stroke-opacity="0.4"/>`;
+  });
+
+  // Division → member lines + regular person→person lines
+  allP.forEach(p=>{
+    if(p.id==='vp') return;
+    const pid=cvParent(p.id);
+    const pp=positions[pid], cp=positions[p.id];
+    if(!pp||!cp) return;
+    const isDiv=CV_DIVS.find(d=>d.id===pid);
+    const strokeColor=isDiv?isDiv.color:'var(--ba)';
+    const strokeOpacity=isDiv?'0.3':'0.7';
+    const pw=isDiv?DIV_W:NODE_W, ph=isDiv?DIV_H:NODE_H;
+    const x1=pp.x+ox+pw/2, y1=pp.y+oy+ph;
     const x2=cp.x+ox+NODE_W/2, y2=cp.y+oy;
     const my=(y1+y2)/2;
     svgLines+=`<path d="M${x1},${y1} C${x1},${my} ${x2},${my} ${x2},${y2}"
-      fill="none" stroke="var(--ba)" stroke-width="1.5" stroke-opacity="0.7"/>`;
+      fill="none" stroke="${strokeColor}" stroke-width="1.5" stroke-opacity="${strokeOpacity}"/>`;
   });
 
   const wrapH=Math.max(H+200, window.innerHeight-180);
