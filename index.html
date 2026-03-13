@@ -1074,6 +1074,19 @@ function expTasksJSON(){
 // ==================== CANVAS VIEW ====================
 let _cvZoom=0.55, _cvPan={x:0,y:0}, _cvDrag=null, _cvInited=false;
 
+// Global pan listeners — attached once to avoid accumulation across re-renders
+window.addEventListener('mousemove',e=>{
+  if(!_cvDrag) return;
+  const wrap=document.getElementById('canvas-wrap');
+  if(!wrap) return;
+  wrap.scrollLeft=_cvDrag.px-(e.clientX-_cvDrag.sx);
+  wrap.scrollTop=_cvDrag.py-(e.clientY-_cvDrag.sy);
+});
+window.addEventListener('mouseup',()=>{
+  _cvDrag=null;
+  document.getElementById('canvas-wrap')?.classList.remove('dragging');
+});
+
 // Division nodes — virtual group headers shown only in Canvas View
 const CV_DIVS=[
   {id:'div_employes',   label:'Employés',            color:'#a78bfa', members:['L1','L2','t2']},
@@ -1160,51 +1173,67 @@ function renderCanvas(ct,cl){
       <button class="btn" onclick="cvReset()">Reset</button>
     </div>`;
 
-  // ---- LAYOUT: VP top → divisions spread horizontally → members single column below ----
-  const NODE_W=154, NODE_H=110, GAP_Y=14;
+  // ---- LAYOUT: VP top → divisions spread horizontally → members in columns below ----
+  const NODE_W=154, NODE_H=110, GAP_X=14, GAP_Y=14;
   const DIV_H=48;
-  const COL_W=174;      // fixed column width (all columns same)
-  const COL_GAP=40;     // gap between columns
-  const VP_DIV_GAP=70;  // gap between VP bottom and division row
-  const DIV_MEM_GAP=36; // gap between division bottom and first member
-  const SUB_INDENT=16;  // sub-children indented slightly right
-  const SUB_GAP=10;     // tighter vertical gap for sub-children
+  const SUBCOL_WRAP=6;  // wrap into 2 sub-columns if > this many members
+  const COL_GAP=40;     // gap between division columns
+  const VP_DIV_GAP=70;
+  const DIV_MEM_GAP=36;
 
   const divOrder=(cvOrder['vp']||CV_DIVS.map(d=>d.id))
     .map(id=>CV_DIVS.find(d=>d.id===id)).filter(Boolean);
 
-  const totalW=divOrder.length*COL_W+(divOrder.length-1)*COL_GAP;
+  // Compute each division's rendered width based on sub-column count
+  function divSubCols(div){
+    return cvChildren(div.id).length > SUBCOL_WRAP ? 2 : 1;
+  }
+  function divRenderW(div){
+    const sc=divSubCols(div);
+    return sc===1 ? NODE_W : NODE_W*2+GAP_X;
+  }
+
+  // Sequential column x positions
+  const colXs=[], colWs=[];
+  let cx=0;
+  divOrder.forEach(div=>{
+    colXs.push(cx);
+    const w=divRenderW(div);
+    colWs.push(w);
+    cx+=w+COL_GAP;
+  });
+  const totalW=cx-COL_GAP;
 
   const positions={};
-
-  // VP centered above all divisions
   positions['vp']={x: totalW/2 - NODE_W/2, y: 0};
 
   const divY=NODE_H+VP_DIV_GAP;
 
-  // Place each division and its members — sub-children stack below parent in same column
   const divColData=[];
   divOrder.forEach((div,di)=>{
-    const colX=di*(COL_W+COL_GAP);
-    const nodeX=colX+(COL_W-NODE_W)/2; // center node in column
+    const colX=colXs[di];
+    const colW=colWs[di];
+    const nSubCols=divSubCols(div);
     const members=cvChildren(div.id);
 
-    // Compute y positions: each member slot may be taller if it has sub-children
-    let curY=divY+DIV_H+DIV_MEM_GAP;
-    members.forEach(m=>{
-      const subCh=cvChildren(m.id);
-      positions[m.id]={x: nodeX, y: curY};
-      curY+=NODE_H+GAP_Y;
-      // Sub-children stack directly below parent, slightly indented
-      subCh.forEach(sc=>{
-        positions[sc.id]={x: nodeX+SUB_INDENT, y: curY};
-        curY+=NODE_H+SUB_GAP;
+    // Lay members in nSubCols sub-columns
+    const memStartY=divY+DIV_H+DIV_MEM_GAP;
+    members.forEach((m,i)=>{
+      const sc=i%nSubCols;  // which sub-column
+      const row=Math.floor(i/nSubCols);
+      const mx=colX+sc*(NODE_W+GAP_X);
+      const my=memStartY+row*(NODE_H+GAP_Y);
+      positions[m.id]={x:mx, y:my};
+      // sub-children of m (e.g. Hatem under Alex) — stack below in same sub-column
+      cvChildren(m.id).forEach((child,j)=>{
+        // place below the last row of this sub-col
+        const lastRow=Math.floor((members.length-1)/nSubCols);
+        positions[child.id]={x:mx, y:memStartY+(lastRow+1+j)*(NODE_H+GAP_Y)};
       });
-      if(subCh.length) curY+=GAP_Y; // extra gap after a group with sub-children
     });
 
-    positions[div.id]={x: colX, y: divY, w: COL_W};
-    divColData.push({div, colX, colW: COL_W, members});
+    positions[div.id]={x:colX, y:divY, w:colW};
+    divColData.push({div, colX, colW, members});
   });
 
   const allP=[VP,...data];
@@ -1335,18 +1364,12 @@ function renderCanvas(ct,cl){
     });
   }
 
-  // drag-to-pan (updates scrollLeft/Top)
+  // drag-to-pan — re-attach to new wrap element each render
   wrap.addEventListener('mousedown',e=>{
-    if(e.target.closest('.cn')) return;
+    if(e.target.closest('.cn')||e.target.closest('.cn-div')) return;
     _cvDrag={sx:e.clientX,sy:e.clientY,px:wrap.scrollLeft,py:wrap.scrollTop};
     wrap.classList.add('dragging');
   });
-  window.addEventListener('mousemove',e=>{
-    if(!_cvDrag) return;
-    wrap.scrollLeft=_cvDrag.px-(e.clientX-_cvDrag.sx);
-    wrap.scrollTop=_cvDrag.py-(e.clientY-_cvDrag.sy);
-  });
-  window.addEventListener('mouseup',()=>{ _cvDrag=null; document.getElementById('canvas-wrap')?.classList.remove('dragging'); });
 
   // wheel zoom (pivot at cursor)
   wrap.addEventListener('wheel',e=>{
