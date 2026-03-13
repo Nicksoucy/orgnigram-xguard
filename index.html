@@ -1161,18 +1161,18 @@ function renderCanvas(ct,cl){
     </div>`;
 
   // ---- LAYOUT: VP top → divisions spread horizontally → members single column below ----
-  const NODE_W=154, NODE_H=110, GAP_X=20, GAP_Y=14;
+  const NODE_W=154, NODE_H=110, GAP_Y=14;
   const DIV_H=48;
-  const VP_DIV_GAP=60;  // gap between VP bottom and division row
-  const DIV_MEM_GAP=30; // gap between division bottom and first member
+  const COL_W=174;      // fixed column width (all columns same)
+  const COL_GAP=40;     // gap between columns
+  const VP_DIV_GAP=70;  // gap between VP bottom and division row
+  const DIV_MEM_GAP=36; // gap between division bottom and first member
+  const SUB_INDENT=16;  // sub-children indented slightly right
+  const SUB_GAP=10;     // tighter vertical gap for sub-children
 
   const divOrder=(cvOrder['vp']||CV_DIVS.map(d=>d.id))
     .map(id=>CV_DIVS.find(d=>d.id===id)).filter(Boolean);
 
-  // Column width and division label width
-  const COL_W=NODE_W+20; // a bit wider than node for breathing room
-  const DIV_W=COL_W;     // division header spans full column width
-  const COL_GAP=GAP_X;
   const totalW=divOrder.length*COL_W+(divOrder.length-1)*COL_GAP;
 
   const positions={};
@@ -1181,26 +1181,30 @@ function renderCanvas(ct,cl){
   positions['vp']={x: totalW/2 - NODE_W/2, y: 0};
 
   const divY=NODE_H+VP_DIV_GAP;
-  const memStartY=divY+DIV_H+DIV_MEM_GAP;
-  const memOffX=(COL_W-NODE_W)/2; // center node within column
 
-  // Place each division and its members
+  // Place each division and its members — sub-children stack below parent in same column
   const divColData=[];
   divOrder.forEach((div,di)=>{
     const colX=di*(COL_W+COL_GAP);
+    const nodeX=colX+(COL_W-NODE_W)/2; // center node in column
     const members=cvChildren(div.id);
-    // Division spans full column width
-    positions[div.id]={x: colX, y: divY};
-    // Members stacked vertically, centered in column
-    members.forEach((m,i)=>{
+
+    // Compute y positions: each member slot may be taller if it has sub-children
+    let curY=divY+DIV_H+DIV_MEM_GAP;
+    members.forEach(m=>{
       const subCh=cvChildren(m.id);
-      positions[m.id]={x: colX+memOffX, y: memStartY+i*(NODE_H+GAP_Y)};
-      // Sub-children (e.g. Hatem under Alex, Lilia/Sekou under Hamza) — same row, shifted right
-      subCh.forEach((sc,j)=>{
-        positions[sc.id]={x: colX+memOffX+(NODE_W+GAP_X)*(j+1), y: memStartY+i*(NODE_H+GAP_Y)};
+      positions[m.id]={x: nodeX, y: curY};
+      curY+=NODE_H+GAP_Y;
+      // Sub-children stack directly below parent, slightly indented
+      subCh.forEach(sc=>{
+        positions[sc.id]={x: nodeX+SUB_INDENT, y: curY};
+        curY+=NODE_H+SUB_GAP;
       });
+      if(subCh.length) curY+=GAP_Y; // extra gap after a group with sub-children
     });
-    divColData.push({div, colX, members});
+
+    positions[div.id]={x: colX, y: divY, w: COL_W};
+    divColData.push({div, colX, colW: COL_W, members});
   });
 
   const allP=[VP,...data];
@@ -1227,7 +1231,7 @@ function renderCanvas(ct,cl){
       <span class="cn-arr${canU?'':' disabled'}" onclick="${canU?`cvMove('${div.id}',-1)`:''}" title="Move left">◀</span>
       <span class="cn-arr${canD?'':' disabled'}" onclick="${canD?`cvMove('${div.id}',1)`:''}" title="Move right">▶</span>
     </div>`;
-    nodesHTML+=`<div class="cn-div" id="cn-${div.id}" style="left:${px}px;top:${py}px;width:${DIV_W}px;border-color:${div.color}30;background:${div.color}10;">
+    nodesHTML+=`<div class="cn-div" id="cn-${div.id}" style="left:${px}px;top:${py}px;width:${pos.w}px;border-color:${div.color}30;background:${div.color}10;">
       <div class="cn-div-label" style="color:${div.color};">${div.label}</div>
       <div class="cn-div-count" style="color:${div.color};">${memberCount}</div>
       ${arrows}
@@ -1277,17 +1281,17 @@ function renderCanvas(ct,cl){
   divOrder.forEach(div=>{
     const cp=positions[div.id];
     if(!cp) return;
-    const x2=cp.x+ox+DIV_W/2, y2=cp.y+oy;
+    const x2=cp.x+ox+cp.w/2, y2=cp.y+oy;
     const my=(vpBy+y2)/2;
     svgLines+=`<path d="M${vpCx},${vpBy} C${vpCx},${my} ${x2},${my} ${x2},${y2}"
       fill="none" stroke="${div.color}" stroke-width="1.5" stroke-opacity="0.5"/>`;
   });
 
   // Division → members: vertical line from div bottom to each member top
-  divColData.forEach(({div,members})=>{
+  divColData.forEach(({div,colW,members})=>{
     const dp=positions[div.id];
     if(!dp) return;
-    const dx=dp.x+ox+DIV_W/2, dy=dp.y+oy+DIV_H;
+    const dx=dp.x+ox+colW/2, dy=dp.y+oy+DIV_H;
     members.forEach(m=>{
       const mp=positions[m.id];
       if(!mp) return;
@@ -1295,15 +1299,15 @@ function renderCanvas(ct,cl){
       svgLines+=`<path d="M${dx},${dy} L${dx},${y2} L${x2},${y2}"
         fill="none" stroke="${div.color}" stroke-width="1" stroke-opacity="0.3"/>`;
 
-      // Member → sub-children (horizontal)
+      // Member → sub-children (vertical, stacked below)
       const subCh=cvChildren(m.id);
       subCh.forEach(sc=>{
         const sp=positions[sc.id];
         if(!sp) return;
-        const sx1=mp.x+ox+NODE_W, sy1=mp.y+oy+NODE_H/2;
-        const sx2=sp.x+ox, sy2=sp.y+oy+NODE_H/2;
-        svgLines+=`<path d="M${sx1},${sy1} L${sx2},${sy2}"
-          fill="none" stroke="var(--ba)" stroke-width="1.5" stroke-opacity="0.5"/>`;
+        const sx=mp.x+ox+NODE_W/2, sy=mp.y+oy+NODE_H;
+        const tx=sp.x+ox+NODE_W/2, ty=sp.y+oy;
+        svgLines+=`<path d="M${sx},${sy} L${sx},${(sy+ty)/2} L${tx},${(sy+ty)/2} L${tx},${ty}"
+          fill="none" stroke="var(--ba)" stroke-width="1.5" stroke-opacity="0.4"/>`;
       });
     });
   });
