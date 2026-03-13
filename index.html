@@ -1072,7 +1072,7 @@ function expTasksJSON(){
 }
 
 // ==================== CANVAS VIEW ====================
-let _cvZoom=0.55, _cvPan={x:0,y:0}, _cvDrag=null, _cvInited=false;
+let _cvZoom=0.72, _cvPan={x:0,y:0}, _cvDrag=null, _cvInited=false;
 
 // Global pan listeners — attached once to avoid accumulation across re-renders
 window.addEventListener('mousemove',e=>{
@@ -1174,12 +1174,12 @@ function renderCanvas(ct,cl){
     </div>`;
 
   // ---- LAYOUT: VP top → divisions spread horizontally → members in columns below ----
-  const NODE_W=154, NODE_H=110, GAP_X=14, GAP_Y=14;
+  const NODE_W=154, NODE_H=110, GAP_X=20, GAP_Y=24;
   const DIV_H=48;
   const SUBCOL_WRAP=6;  // wrap into 2 sub-columns if > this many members
-  const COL_GAP=40;     // gap between division columns
-  const VP_DIV_GAP=70;
-  const DIV_MEM_GAP=36;
+  const COL_GAP=60;     // gap between division columns
+  const VP_DIV_GAP=80;
+  const DIV_MEM_GAP=44;
 
   const divOrder=(cvOrder['vp']||CV_DIVS.map(d=>d.id))
     .map(id=>CV_DIVS.find(d=>d.id===id)).filter(Boolean);
@@ -1313,7 +1313,7 @@ function renderCanvas(ct,cl){
     const x2=cp.x+ox+cp.w/2, y2=cp.y+oy;
     const my=(vpBy+y2)/2;
     svgLines+=`<path d="M${vpCx},${vpBy} C${vpCx},${my} ${x2},${my} ${x2},${y2}"
-      fill="none" stroke="${div.color}" stroke-width="1.5" stroke-opacity="0.5"/>`;
+      fill="none" stroke="${div.color}" stroke-width="2" stroke-opacity="0.6"/>`;
   });
 
   // Division → members: vertical line from div bottom to each member top
@@ -1326,7 +1326,7 @@ function renderCanvas(ct,cl){
       if(!mp) return;
       const x2=mp.x+ox+NODE_W/2, y2=mp.y+oy;
       svgLines+=`<path d="M${dx},${dy} L${dx},${y2} L${x2},${y2}"
-        fill="none" stroke="${div.color}" stroke-width="1" stroke-opacity="0.3"/>`;
+        fill="none" stroke="${div.color}" stroke-width="1.5" stroke-opacity="0.45"/>`;
 
       // Member → sub-children (vertical, stacked below)
       const subCh=cvChildren(m.id);
@@ -1343,7 +1343,7 @@ function renderCanvas(ct,cl){
 
   const wrapH=Math.max(H+200, window.innerHeight-180);
   ct.innerHTML=`<div id="canvas-wrap" style="height:${wrapH}px;">
-    <div style="width:${Math.ceil(W*_cvZoom)}px;height:${Math.ceil(H*_cvZoom)}px;position:relative;flex-shrink:0;">
+    <div id="canvas-sizer" data-base-w="${W}" data-base-h="${H}" style="width:${Math.ceil(W*_cvZoom)}px;height:${Math.ceil(H*_cvZoom)}px;position:relative;flex-shrink:0;">
       <div id="canvas-stage" style="width:${W}px;height:${H}px;position:absolute;top:0;left:0;">
         <svg id="canvas-svg" viewBox="0 0 ${W} ${H}" style="width:${W}px;height:${H}px;">${svgLines}</svg>
         ${nodesHTML}
@@ -1388,7 +1388,14 @@ function renderCanvas(ct,cl){
 
 function _applyCV(){
   const stage=document.getElementById('canvas-stage');
+  const sizer=document.getElementById('canvas-sizer');
   if(stage) stage.style.transform=`scale(${_cvZoom})`;
+  if(sizer){
+    const bw=+sizer.dataset.baseW||1200;
+    const bh=+sizer.dataset.baseH||1200;
+    sizer.style.width=Math.ceil(bw*_cvZoom)+'px';
+    sizer.style.height=Math.ceil(bh*_cvZoom)+'px';
+  }
 }
 function cvZoom(d){
   const wrap=document.getElementById('canvas-wrap');
@@ -1399,7 +1406,7 @@ function cvZoom(d){
   _applyCV();
   if(wrap){ wrap.scrollLeft=cx*(_cvZoom/oldZ)-wrap.offsetWidth/2; wrap.scrollTop=cy*(_cvZoom/oldZ)-wrap.offsetHeight/2; }
 }
-function cvReset(){ _cvZoom=0.55; _cvInited=false; cvOrder={}; renderCanvas(document.getElementById('content'),document.getElementById('controls')); }
+function cvReset(){ _cvZoom=0.72; _cvInited=false; cvOrder={}; renderCanvas(document.getElementById('content'),document.getElementById('controls')); }
 
 // ==================== SUMMARY ====================
 function renderSummary(){
