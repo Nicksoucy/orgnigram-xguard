@@ -206,9 +206,9 @@ header p{color:var(--td);margin-top:3px;font-size:13px;}
 .tasks-progress .tp-label{color:var(--td);white-space:nowrap;}
 
 /* === VIEW 4: CANVAS TREE === */
-#canvas-wrap{position:relative;width:100%;overflow:scroll;background:var(--bg);cursor:grab;user-select:none;}
+#canvas-wrap{position:relative;width:100%;overflow:hidden;background:var(--bg);cursor:grab;user-select:none;}
 #canvas-wrap.dragging{cursor:grabbing;}
-#canvas-stage{position:relative;transform-origin:0 0;will-change:transform;}
+#canvas-stage{position:absolute;top:0;left:0;transform-origin:0 0;will-change:transform;}
 #canvas-svg{position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;overflow:visible;}
 .cn{position:absolute;width:160px;background:var(--s);border:1px solid var(--b);border-radius:10px;
   padding:10px 12px;cursor:pointer;transition:border-color 0.2s,box-shadow 0.2s;box-sizing:border-box;}
@@ -1072,15 +1072,14 @@ function expTasksJSON(){
 }
 
 // ==================== CANVAS VIEW ====================
-let _cvZoom=0.72, _cvPan={x:0,y:0}, _cvDrag=null, _cvInited=false;
+let _cvZoom=0.72, _cvPanX=0, _cvPanY=0, _cvDrag=null, _cvInited=false, _cvBaseW=0, _cvBaseH=0;
 
-// Global pan listeners — attached once to avoid accumulation across re-renders
+// Global pan listeners — attached once
 window.addEventListener('mousemove',e=>{
   if(!_cvDrag) return;
-  const wrap=document.getElementById('canvas-wrap');
-  if(!wrap) return;
-  wrap.scrollLeft=_cvDrag.px-(e.clientX-_cvDrag.sx);
-  wrap.scrollTop=_cvDrag.py-(e.clientY-_cvDrag.sy);
+  _cvPanX=_cvDrag.px+(e.clientX-_cvDrag.sx);
+  _cvPanY=_cvDrag.py+(e.clientY-_cvDrag.sy);
+  _applyCV();
 });
 window.addEventListener('mouseup',()=>{
   _cvDrag=null;
@@ -1174,7 +1173,7 @@ function renderCanvas(ct,cl){
     </div>`;
 
   // ---- LAYOUT: VP top → divisions spread horizontally → members in columns below ----
-  const NODE_W=154, NODE_H=110, GAP_X=20, GAP_Y=24;
+  const NODE_W=160, NODE_H=185, GAP_X=24, GAP_Y=20;
   const DIV_H=48;
   const SUBCOL_WRAP=6;  // wrap into 2 sub-columns if > this many members
   const COL_GAP=60;     // gap between division columns
@@ -1341,33 +1340,33 @@ function renderCanvas(ct,cl){
     });
   });
 
-  const wrapH=Math.max(H+200, window.innerHeight-180);
+  _cvBaseW=W; _cvBaseH=H;
+  const wrapH=Math.max(600, window.innerHeight-180);
   ct.innerHTML=`<div id="canvas-wrap" style="height:${wrapH}px;">
-    <div id="canvas-sizer" data-base-w="${W}" data-base-h="${H}" style="width:${Math.ceil(W*_cvZoom)}px;height:${Math.ceil(H*_cvZoom)}px;position:relative;flex-shrink:0;">
-      <div id="canvas-stage" style="width:${W}px;height:${H}px;position:absolute;top:0;left:0;">
-        <svg id="canvas-svg" viewBox="0 0 ${W} ${H}" style="width:${W}px;height:${H}px;">${svgLines}</svg>
-        ${nodesHTML}
-      </div>
+    <div id="canvas-stage" style="width:${W}px;height:${H}px;">
+      <svg id="canvas-svg" viewBox="0 0 ${W} ${H}" style="width:${W}px;height:${H}px;">${svgLines}</svg>
+      ${nodesHTML}
     </div>
   </div>`;
 
-  _applyCV();
-
-  // center on first open by scrolling
+  // Center on first open
   const wrap=document.getElementById('canvas-wrap');
   if(!_cvInited){
     _cvInited=true;
     requestAnimationFrame(()=>{
-      const ww=wrap.offsetWidth;
-      wrap.scrollLeft=Math.max(0,(W*_cvZoom-ww)/2);
-      wrap.scrollTop=0;
+      const ww=wrap.offsetWidth, wh=wrap.offsetHeight;
+      _cvPanX=(ww - W*_cvZoom)/2;
+      _cvPanY=20;
+      _applyCV();
     });
+  } else {
+    _applyCV();
   }
 
-  // drag-to-pan — re-attach to new wrap element each render
+  // drag-to-pan
   wrap.addEventListener('mousedown',e=>{
     if(e.target.closest('.cn')||e.target.closest('.cn-div')) return;
-    _cvDrag={sx:e.clientX,sy:e.clientY,px:wrap.scrollLeft,py:wrap.scrollTop};
+    _cvDrag={sx:e.clientX,sy:e.clientY,px:_cvPanX,py:_cvPanY};
     wrap.classList.add('dragging');
   });
 
@@ -1376,37 +1375,32 @@ function renderCanvas(ct,cl){
     e.preventDefault();
     const delta=e.deltaY>0?-0.08:0.08;
     const rect=wrap.getBoundingClientRect();
-    const mx=e.clientX-rect.left+wrap.scrollLeft;
-    const my=e.clientY-rect.top+wrap.scrollTop;
+    const mx=e.clientX-rect.left;
+    const my=e.clientY-rect.top;
     const oldZ=_cvZoom;
-    _cvZoom=Math.max(0.3,Math.min(2,_cvZoom+delta));
+    _cvZoom=Math.max(0.15,Math.min(2.5,_cvZoom+delta));
+    // keep point under cursor fixed
+    _cvPanX=mx-(mx-_cvPanX)*(_cvZoom/oldZ);
+    _cvPanY=my-(my-_cvPanY)*(_cvZoom/oldZ);
     _applyCV();
-    wrap.scrollLeft=mx*(_cvZoom/oldZ)-(e.clientX-rect.left);
-    wrap.scrollTop=my*(_cvZoom/oldZ)-(e.clientY-rect.top);
   },{passive:false});
 }
 
 function _applyCV(){
   const stage=document.getElementById('canvas-stage');
-  const sizer=document.getElementById('canvas-sizer');
-  if(stage) stage.style.transform=`scale(${_cvZoom})`;
-  if(sizer){
-    const bw=+sizer.dataset.baseW||1200;
-    const bh=+sizer.dataset.baseH||1200;
-    sizer.style.width=Math.ceil(bw*_cvZoom)+'px';
-    sizer.style.height=Math.ceil(bh*_cvZoom)+'px';
-  }
+  if(stage) stage.style.transform=`translate(${_cvPanX}px,${_cvPanY}px) scale(${_cvZoom})`;
 }
 function cvZoom(d){
   const wrap=document.getElementById('canvas-wrap');
-  const cx=wrap?(wrap.scrollLeft+wrap.offsetWidth/2):0;
-  const cy=wrap?(wrap.scrollTop+wrap.offsetHeight/2):0;
+  if(!wrap) return;
+  const ww=wrap.offsetWidth/2, wh=wrap.offsetHeight/2;
   const oldZ=_cvZoom;
-  _cvZoom=Math.max(0.3,Math.min(2,_cvZoom+d));
+  _cvZoom=Math.max(0.15,Math.min(2.5,_cvZoom+d));
+  _cvPanX=ww-(ww-_cvPanX)*(_cvZoom/oldZ);
+  _cvPanY=wh-(wh-_cvPanY)*(_cvZoom/oldZ);
   _applyCV();
-  if(wrap){ wrap.scrollLeft=cx*(_cvZoom/oldZ)-wrap.offsetWidth/2; wrap.scrollTop=cy*(_cvZoom/oldZ)-wrap.offsetHeight/2; }
 }
-function cvReset(){ _cvZoom=0.72; _cvInited=false; cvOrder={}; renderCanvas(document.getElementById('content'),document.getElementById('controls')); }
+function cvReset(){ _cvZoom=0.72; _cvPanX=0; _cvPanY=20; _cvInited=false; cvOrder={}; renderCanvas(document.getElementById('content'),document.getElementById('controls')); }
 
 // ==================== SUMMARY ====================
 function renderSummary(){
