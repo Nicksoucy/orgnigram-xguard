@@ -362,7 +362,7 @@ input[name="fdColor"]:checked+.color-swatch{border-color:#fff;transform:scale(1.
 const SUPABASE_URL = 'https://ctjsdpfegpsfpwjgusyi.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImN0anNkcGZlZ3BzZnB3amd1c3lpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM2MDU2NDQsImV4cCI6MjA4OTE4MTY0NH0.Uv2pbxbmvcbXhyDa7Y_M0HqkLuV7uJaNxl1N01q5wMo';
 const { createClient } = window.supabase;
-const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+const db = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 // ==================== DATA ====================
 let VP = {id:'vp',name:'You',role:'VP of Training',type:'exec',dept:'all',programs:[],locations:['Montréal','Ligne','Québec'],schedule:'',notes:'',delegatable:'no',reportsTo:null};
@@ -1364,19 +1364,19 @@ async function dbSavePerson(person) {
     avatar_initials: person.name.split(' ').map(w=>w[0]).join('').substring(0,2).toUpperCase(),
     sort_order: person.sort_order||99
   };
-  const {error}=await supabase.from('people').upsert(row);
+  const {error}=await db.from('people').upsert(row);
   if(error) console.error('dbSavePerson error:',error);
 }
 
 async function dbDeletePerson(id) {
-  const {error:e1}=await supabase.from('people').delete().eq('id',id);
-  const {error:e2}=await supabase.from('tasks').delete().eq('person_id',id);
+  const {error:e1}=await db.from('people').delete().eq('id',id);
+  const {error:e2}=await db.from('tasks').delete().eq('person_id',id);
   if(e1) console.error('dbDeletePerson error:',e1);
   if(e2) console.error('dbDeleteTasks error:',e2);
 }
 
 async function dbSaveTasks(personId, tasksObj) {
-  const {error}=await supabase.from('tasks').upsert({
+  const {error}=await db.from('tasks').upsert({
     person_id: personId,
     tasks: tasksObj.tasks||[],
     outcomes: tasksObj.outcomes||[],
@@ -1386,17 +1386,17 @@ async function dbSaveTasks(personId, tasksObj) {
 }
 
 async function dbSaveDept(dept) {
-  const {error}=await supabase.from('departments').upsert({id:dept.key||dept.id, label:dept.label, color:dept.color, sort_order:dept.sort_order||99});
+  const {error}=await db.from('departments').upsert({id:dept.key||dept.id, label:dept.label, color:dept.color, sort_order:dept.sort_order||99});
   if(error) console.error('dbSaveDept error:',error);
 }
 
 async function dbDeleteDept(id) {
-  const {error}=await supabase.from('departments').delete().eq('id',id);
+  const {error}=await db.from('departments').delete().eq('id',id);
   if(error) console.error('dbDeleteDept error:',error);
 }
 
 async function dbSaveCanvasOrder(parentId, children) {
-  const {error}=await supabase.from('canvas_order').upsert({id:parentId, children});
+  const {error}=await db.from('canvas_order').upsert({id:parentId, children});
   if(error) console.error('dbSaveCanvasOrder error:',error);
 }
 
@@ -1404,10 +1404,10 @@ async function dbSaveCanvasOrder(parentId, children) {
 async function loadFromSupabase() {
   try {
     const [pRes, dRes, tRes, cvRes] = await Promise.all([
-      supabase.from('people').select('*').order('sort_order'),
-      supabase.from('departments').select('*').order('sort_order'),
-      supabase.from('tasks').select('*'),
-      supabase.from('canvas_order').select('*')
+      db.from('people').select('*').order('sort_order'),
+      db.from('departments').select('*').order('sort_order'),
+      db.from('tasks').select('*'),
+      db.from('canvas_order').select('*')
     ]);
 
     if(pRes.error) throw pRes.error;
@@ -1479,7 +1479,7 @@ document.addEventListener('keydown',e=>{if(e.key==='Escape'){closeM();closeFM();
 
 // Realtime subscription (non-blocking)
 try {
-  supabase.channel('org-changes')
+  db.channel('org-changes')
     .on('postgres_changes',{event:'*',schema:'public',table:'people'},()=>loadFromSupabase().then(renderAll))
     .on('postgres_changes',{event:'*',schema:'public',table:'departments'},()=>loadFromSupabase().then(renderAll))
     .subscribe();
