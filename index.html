@@ -1431,7 +1431,7 @@ async function loadFromSupabase() {
         id:p.id, name:p.name, role:p.role||'', type:p.type||'contractor',
         dept:p.dept||'', programs:p.programs||[], locations:[],
         schedule:p.schedule||'', notes:p.notes||'',
-        delegatable:p.delegate||'no', reportsTo:p.reports_to||'vp',
+        delegatable:p.delegate===true||p.delegate==='yes'||p.delegate==='partial'?'yes':'no', reportsTo:p.reports_to||'vp',
         avatarColor:p.avatar_color, sort_order:p.sort_order||99
       }));
 
