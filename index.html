@@ -1088,15 +1088,25 @@ window.addEventListener('mouseup',()=>{
 
 // Division nodes — virtual group headers shown only in Canvas View
 const CV_DIVS=[
-  {id:'div_employes',   label:'Employés',            color:'#a78bfa', members:['L1','L2','t2']},
-  {id:'div_formation',  label:'Formation',           color:'#60a5fa', members:['t1','t3','t4','t5','t7','t8','t9','t10','t11','t12','t13','t14']},
-  {id:'div_sac',        label:'Service à la clientèle', color:'#f472b6', members:['L3']},
-  {id:'div_marketing',  label:'Marketing',           color:'#ff6b35', members:['m1']},
-  {id:'div_ventes',     label:'Ventes',              color:'#fbbf24', members:['v1']},
+  {id:'div_employes',   label:'Employés',            color:'#a78bfa', match:p=>p.dept==='training'&&(p.type==='lead'||p.type==='employee')},
+  {id:'div_formation',  label:'Formation',           color:'#60a5fa', match:p=>p.dept==='training'&&p.type==='contractor'},
+  {id:'div_sac',        label:'Service à la clientèle', color:'#f472b6', match:p=>p.dept==='sac'},
+  {id:'div_marketing',  label:'Marketing',           color:'#ff6b35', match:p=>p.dept==='marketing'},
+  {id:'div_ventes',     label:'Ventes',              color:'#fbbf24', match:p=>p.dept==='sales'},
 ];
-// Map: personId → divId
-const CV_DIV_MAP={};
-CV_DIVS.forEach(d=>d.members.forEach(m=>{CV_DIV_MAP[m]=d.id;}));
+
+// Dynamically build members list & map from data each time
+function cvBuildMembers(){
+  // Sub-children (report to non-VP) are excluded from top-level division assignment
+  const subChildIds=new Set(data.filter(p=>p.reportsTo&&p.reportsTo!=='vp').map(p=>p.id));
+  CV_DIVS.forEach(d=>{
+    d.members=data.filter(p=>d.match(p)&&!subChildIds.has(p.id)).map(p=>p.id);
+  });
+  const map={};
+  CV_DIVS.forEach(d=>d.members.forEach(m=>{map[m]=d.id;}));
+  return map;
+}
+let CV_DIV_MAP=cvBuildMembers();
 
 // cvOrder: { parentId: [childId, childId, ...] } — persists manual reordering
 let cvOrder={
@@ -1164,6 +1174,7 @@ function cvMove(id,dir){
 }
 
 function renderCanvas(ct,cl){
+  CV_DIV_MAP=cvBuildMembers(); // refresh division memberships from data
   cl.innerHTML=`<button class="btn primary" onclick="openAdd()">+ Add Person</button>
     <span style="flex:1"></span>
     <div class="cn-zoom">
