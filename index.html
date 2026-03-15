@@ -1359,7 +1359,7 @@ async function dbSavePerson(person) {
   const row = {
     id: person.id, name: person.name, role: person.role||'', type: person.type,
     dept: person.dept, reports_to: person.reportsTo||null, programs: person.programs||[],
-    schedule: person.schedule||'', delegate: person.delegatable||'no',
+    schedule: person.schedule||'', delegate: (person.delegatable==='yes'||person.delegatable==='partial'||person.delegatable===true),
     notes: person.notes||'', avatar_color: person.avatarColor||avatarColor(person.id),
     avatar_initials: person.name.split(' ').map(w=>w[0]).join('').substring(0,2).toUpperCase(),
     sort_order: person.sort_order||99
