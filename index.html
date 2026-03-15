@@ -205,6 +205,11 @@ header p{color:var(--td);margin-top:3px;font-size:13px;}
 .tasks-progress .tp-fill{height:100%;background:var(--a);border-radius:3px;transition:width 0.3s;}
 .tasks-progress .tp-label{color:var(--td);white-space:nowrap;}
 
+/* === COLOR SWATCHES === */
+.color-swatch{display:inline-block;width:28px;height:28px;border-radius:50%;border:3px solid transparent;transition:border-color 0.15s,transform 0.15s;}
+input[name="fdColor"]:checked+.color-swatch{border-color:#fff;transform:scale(1.2);}
+.color-swatch:hover{transform:scale(1.15);}
+
 /* === VIEW 4: CANVAS TREE === */
 #canvas-wrap{position:relative;width:100%;overflow:hidden;background:var(--bg);cursor:grab;user-select:none;}
 #canvas-wrap.dragging{cursor:grabbing;}
@@ -268,7 +273,7 @@ header p{color:var(--td);margin-top:3px;font-size:13px;}
     <label>Type</label>
     <select id="fType"><option value="contractor">Contractor</option><option value="employee">Employee</option><option value="lead">Lead</option></select>
     <label>Department</label>
-    <select id="fDept"><option value="training">Training</option><option value="sac">Service clientèle</option><option value="marketing">Marketing</option><option value="sales">Sales</option></select>
+    <select id="fDept"></select>
     <label>Reports To</label>
     <select id="fReports"></select>
     <label>Programs</label>
@@ -315,6 +320,33 @@ header p{color:var(--td);margin-top:3px;font-size:13px;}
       <button class="btn" onclick="closeFM()">Cancel</button>
       <button class="btn danger" id="bFDel" onclick="delFChange()" style="display:none;">Remove Change</button>
       <button class="btn future-btn" onclick="saveFChange()">Save Change</button>
+    </div>
+  </div>
+</div>
+
+<!-- Department Modal -->
+<div class="mo" id="dmo">
+  <div class="modal" style="max-width:400px;">
+    <h2 id="dmTitle">Add Department</h2>
+    <label>Department Name</label>
+    <input id="fdLabel" placeholder="e.g. Recrutement"/>
+    <label>Color</label>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px;" id="fdColors">
+      <label style="cursor:pointer;"><input type="radio" name="fdColor" value="#60a5fa" style="display:none;"/><span class="color-swatch" style="background:#60a5fa;"></span></label>
+      <label style="cursor:pointer;"><input type="radio" name="fdColor" value="#f472b6" style="display:none;"/><span class="color-swatch" style="background:#f472b6;"></span></label>
+      <label style="cursor:pointer;"><input type="radio" name="fdColor" value="#ff6b35" style="display:none;"/><span class="color-swatch" style="background:#ff6b35;"></span></label>
+      <label style="cursor:pointer;"><input type="radio" name="fdColor" value="#fbbf24" style="display:none;"/><span class="color-swatch" style="background:#fbbf24;"></span></label>
+      <label style="cursor:pointer;"><input type="radio" name="fdColor" value="#34d399" style="display:none;"/><span class="color-swatch" style="background:#34d399;"></span></label>
+      <label style="cursor:pointer;"><input type="radio" name="fdColor" value="#a78bfa" style="display:none;"/><span class="color-swatch" style="background:#a78bfa;"></span></label>
+      <label style="cursor:pointer;"><input type="radio" name="fdColor" value="#22d3ee" style="display:none;"/><span class="color-swatch" style="background:#22d3ee;"></span></label>
+      <label style="cursor:pointer;"><input type="radio" name="fdColor" value="#f87171" style="display:none;"/><span class="color-swatch" style="background:#f87171;"></span></label>
+      <label style="cursor:pointer;"><input type="radio" name="fdColor" value="#86efac" style="display:none;"/><span class="color-swatch" style="background:#86efac;"></span></label>
+      <label style="cursor:pointer;"><input type="radio" name="fdColor" value="#fdba74" style="display:none;"/><span class="color-swatch" style="background:#fdba74;"></span></label>
+    </div>
+    <div class="mbtn">
+      <button class="btn" onclick="closeDeptM()">Cancel</button>
+      <button class="btn danger" id="bDeptDel" onclick="delDept()" style="display:none;">Delete Department</button>
+      <button class="btn primary" onclick="saveDept()">Save</button>
     </div>
   </div>
 </div>
@@ -676,7 +708,14 @@ let editId=null, fEditIdx=null, currentView='dept';
 
 // ==================== UTILS ====================
 const TC={'BSP':'t-bsp','RCR':'t-rcr','Élite':'t-elite','CV':'t-cv','Drone':'t-drone','SAC':'t-sac','MKT':'t-mkt','Sales':'t-sales'};
-const DM={training:{l:'Training — Trainers',d:'#60a5fa'},sac:{l:'Service à la clientèle',d:'#f472b6'},marketing:{l:'Marketing',d:'#ff6b35'},sales:{l:'Sales',d:'#fbbf24'}};
+let departments=[
+  {key:'training', label:'Training — Trainers', color:'#60a5fa'},
+  {key:'sac',      label:'Service à la clientèle', color:'#f472b6'},
+  {key:'marketing',label:'Marketing',           color:'#ff6b35'},
+  {key:'sales',    label:'Sales',                color:'#fbbf24'},
+];
+// Legacy DM getter for backward compat
+const DM=new Proxy({},{get:(_,k)=>{const d=departments.find(x=>x.key===k);return d?{l:d.label,d:d.color}:null;}});
 function esc(s){const d=document.createElement('div');d.textContent=s||'';return d.innerHTML;}
 function gid(){return 'p_'+Math.random().toString(36).substr(2,9);}
 function bc(t){return t==='lead'?'b-lead':t==='employee'?'b-emp':t==='exec'?'b-exec':'b-con';}
@@ -723,6 +762,7 @@ function cardHTML(p){
 // --- DEPT VIEW ---
 function renderDept(ct,cl){
   cl.innerHTML=`<button class="btn primary" onclick="openAdd()">+ Add Person</button>
+    <button class="btn" onclick="openAddDept()" style="background:#1e293b;border-color:var(--ba);">+ Add Department</button>
     <button class="btn" onclick="eAll()">Expand All</button>
     <button class="btn" onclick="cAll()">Collapse All</button>
     <span style="flex:1"></span>
@@ -754,13 +794,13 @@ function renderDept(ct,cl){
 
   // Departments
   h+=`<div class="dept-grid">`;
-  ['training','sac','marketing','sales'].forEach(dk=>{
-    const dm=DM[dk];
-    const members=data.filter(p=>p.dept===dk&&p.type!=='lead');
-    h+=`<div class="dept" id="dept-${dk}">
-      <div class="dept-h" onclick="document.getElementById('dept-${dk}').classList.toggle('collapsed')">
-        <div class="dept-dot" style="background:${dm.d};"></div><h3>${dm.l}</h3>
+  departments.forEach(dept=>{
+    const members=data.filter(p=>p.dept===dept.key&&p.type!=='lead');
+    h+=`<div class="dept" id="dept-${dept.key}">
+      <div class="dept-h" onclick="document.getElementById('dept-${dept.key}').classList.toggle('collapsed')">
+        <div class="dept-dot" style="background:${dept.color};"></div><h3>${esc(dept.label)}</h3>
         <span class="cnt">${members.length}</span><span class="chev">▼</span>
+        <button class="btn" style="margin-left:auto;font-size:10px;padding:2px 8px;" onclick="event.stopPropagation();editDept('${dept.key}')">✏️</button>
       </div>
       <div class="dept-body">${members.length?members.map(cardHTML).join(''):'<div class="empty">Empty</div>'}</div>
     </div>`;
@@ -1086,21 +1126,27 @@ window.addEventListener('mouseup',()=>{
   document.getElementById('canvas-wrap')?.classList.remove('dragging');
 });
 
-// Division nodes — virtual group headers shown only in Canvas View
-const CV_DIVS=[
-  {id:'div_employes',   label:'Employés',            color:'#a78bfa', match:p=>p.dept==='training'&&(p.type==='lead'||p.type==='employee')},
-  {id:'div_formation',  label:'Formation',           color:'#60a5fa', match:p=>p.dept==='training'&&p.type==='contractor'},
-  {id:'div_sac',        label:'Service à la clientèle', color:'#f472b6', match:p=>p.dept==='sac'},
-  {id:'div_marketing',  label:'Marketing',           color:'#ff6b35', match:p=>p.dept==='marketing'},
-  {id:'div_ventes',     label:'Ventes',              color:'#fbbf24', match:p=>p.dept==='sales'},
-];
+// Division nodes — dynamically built from departments array
+let CV_DIVS=[];
+
+function cvBuildDivisions(){
+  // Build one canvas division per department
+  CV_DIVS=departments.map(dept=>({
+    id:'div_'+dept.key,
+    label:dept.label,
+    color:dept.color,
+    deptKey:dept.key,
+    members:[]
+  }));
+}
+cvBuildDivisions();
 
 // Dynamically build members list & map from data each time
 function cvBuildMembers(){
-  // Sub-children (report to non-VP) are excluded from top-level division assignment
+  cvBuildDivisions();
   const subChildIds=new Set(data.filter(p=>p.reportsTo&&p.reportsTo!=='vp').map(p=>p.id));
   CV_DIVS.forEach(d=>{
-    d.members=data.filter(p=>d.match(p)&&!subChildIds.has(p.id)).map(p=>p.id);
+    d.members=data.filter(p=>p.dept===d.deptKey&&!subChildIds.has(p.id)).map(p=>p.id);
   });
   const map={};
   CV_DIVS.forEach(d=>d.members.forEach(m=>{map[m]=d.id;}));
@@ -1108,12 +1154,8 @@ function cvBuildMembers(){
 }
 let CV_DIV_MAP=cvBuildMembers();
 
-// cvOrder: { parentId: [childId, childId, ...] } — persists manual reordering
-let cvOrder={
-  'vp':['div_employes','div_formation','div_sac','div_marketing','div_ventes'],
-  'div_employes':['L1','L2','t2'],
-  'div_formation':['t1','t3','t4','t5','t7','t8','t9','t10','t11','t12','t13','t14'],
-};
+// cvOrder: persists manual reordering — rebuilt dynamically
+let cvOrder={};
 
 function avatarColor(id){
   const colors=['#ff6b35','#34d399','#60a5fa','#a78bfa','#fbbf24','#f472b6','#22d3ee','#f87171','#86efac','#fdba74'];
@@ -1430,6 +1472,12 @@ function renderSummary(){
 function gChk(id){return [...document.querySelectorAll(`#${id} input:checked`)].map(c=>c.value);}
 function sChk(id,v){document.querySelectorAll(`#${id} input`).forEach(c=>{c.checked=v.includes(c.value);});}
 
+function popDepts(){
+  const sel=document.getElementById('fDept');
+  sel.innerHTML='';
+  departments.forEach(d=>{sel.innerHTML+=`<option value="${d.key}">${esc(d.label)}</option>`;});
+}
+
 function popReports(excludeId){
   const sel=document.getElementById('fReports');
   sel.innerHTML=`<option value="vp">You (VP)</option>`;
@@ -1444,6 +1492,7 @@ function openAdd(){
   document.getElementById('mTitle').textContent='Add Person';
   ['fName','fEmail','fRole','fSched','fNotes'].forEach(f=>document.getElementById(f).value='');
   document.getElementById('fType').value='contractor';
+  popDepts();
   document.getElementById('fDept').value='training';
   document.getElementById('fDel').value='unknown';
   sChk('fProg',[]);sChk('fLoc',[]);
@@ -1463,6 +1512,7 @@ function openEdit(id){
   document.getElementById('fEmail').value=p.email||'';
   document.getElementById('fRole').value=p.role||'';
   document.getElementById('fType').value=p.type;
+  popDepts();
   document.getElementById('fDept').value=p.dept;
   document.getElementById('fSched').value=p.schedule||'';
   document.getElementById('fNotes').value=p.notes||'';
@@ -1494,6 +1544,69 @@ function delP(){
   data.filter(p=>p.reportsTo===editId).forEach(p=>{p.reportsTo='vp';});
   data=data.filter(p=>p.id!==editId);
   closeM();render();
+}
+
+// ==================== DEPARTMENT MODAL ====================
+let _editDeptKey=null;
+
+function openAddDept(){
+  _editDeptKey=null;
+  document.getElementById('dmTitle').textContent='Add Department';
+  document.getElementById('fdLabel').value='';
+  document.querySelectorAll('input[name="fdColor"]').forEach(r=>r.checked=false);
+  // pick a default color not yet used
+  const usedColors=departments.map(d=>d.color);
+  const allColors=[...document.querySelectorAll('input[name="fdColor"]')].map(r=>r.value);
+  const avail=allColors.find(c=>!usedColors.includes(c))||allColors[0];
+  const radio=document.querySelector(`input[name="fdColor"][value="${avail}"]`);
+  if(radio) radio.checked=true;
+  document.getElementById('bDeptDel').style.display='none';
+  document.getElementById('dmo').classList.add('active');
+  document.getElementById('fdLabel').focus();
+}
+
+function editDept(key){
+  const dept=departments.find(d=>d.key===key);
+  if(!dept) return;
+  _editDeptKey=key;
+  document.getElementById('dmTitle').textContent='Edit Department';
+  document.getElementById('fdLabel').value=dept.label;
+  document.querySelectorAll('input[name="fdColor"]').forEach(r=>r.checked=(r.value===dept.color));
+  const memberCount=data.filter(p=>p.dept===key).length;
+  document.getElementById('bDeptDel').style.display=memberCount===0?'inline-block':'none';
+  document.getElementById('dmo').classList.add('active');
+  document.getElementById('fdLabel').focus();
+}
+
+function closeDeptM(){document.getElementById('dmo').classList.remove('active');_editDeptKey=null;}
+
+function saveDept(){
+  const label=document.getElementById('fdLabel').value.trim();
+  if(!label){alert('Department name required');return;}
+  const colorRadio=document.querySelector('input[name="fdColor"]:checked');
+  const color=colorRadio?colorRadio.value:'#60a5fa';
+  if(_editDeptKey){
+    // editing existing
+    const dept=departments.find(d=>d.key===_editDeptKey);
+    if(dept){dept.label=label;dept.color=color;}
+  } else {
+    // adding new — generate key from label
+    const key=label.toLowerCase().replace(/[^a-z0-9]/g,'_').replace(/_+/g,'_').replace(/^_|_$/g,'')||('dept_'+Date.now());
+    if(departments.find(d=>d.key===key)){alert('A department with a similar name already exists');return;}
+    departments.push({key, label, color});
+  }
+  closeDeptM();
+  render();
+}
+
+function delDept(){
+  if(!_editDeptKey) return;
+  const memberCount=data.filter(p=>p.dept===_editDeptKey).length;
+  if(memberCount>0){alert('Cannot delete — move all members to another department first.');return;}
+  if(!confirm('Delete this department?')) return;
+  departments=departments.filter(d=>d.key!==_editDeptKey);
+  closeDeptM();
+  render();
 }
 
 // ==================== FUTURE MODAL ====================
