@@ -7,17 +7,23 @@ function renderTasks(ct,cl){
       <input id="tk-search" placeholder="Search people…" oninput="tkSetFilter(this.value)" value="${esc(_tkFilter)}"/>
       <select onchange="tkSetDept(this.value)">
         <option value="all" ${_tkDept==='all'?'selected':''}>All Departments</option>
-        <option value="training" ${_tkDept==='training'?'selected':''}>Training</option>
-        <option value="sac" ${_tkDept==='sac'?'selected':''}>Service à la clientèle</option>
-        <option value="marketing" ${_tkDept==='marketing'?'selected':''}>Marketing</option>
-        <option value="sales" ${_tkDept==='sales'?'selected':''}>Sales</option>
+        ${departments.map(d=>`<option value="${d.key}" ${_tkDept===d.key?'selected':''}>${esc(d.label)}</option>`).join('')}
       </select>
       <span style="flex:1"></span>
       <button class="btn" onclick="expTasksJSON()">Export JSON</button>
     </div>`;
 
   const all=[VP,...data];
-  const filtered=all.filter(p=>{
+  // Apply saved card order
+  const sortedAll = _tkCardOrder.length
+    ? [...all].sort((a,b)=>{
+        const ai=_tkCardOrder.indexOf(a.id); const bi=_tkCardOrder.indexOf(b.id);
+        if(ai===-1&&bi===-1) return 0;
+        if(ai===-1) return 1; if(bi===-1) return -1;
+        return ai-bi;
+      })
+    : all;
+  const filtered=sortedAll.filter(p=>{
     const matchName=p.name.toLowerCase().includes(_tkFilter.toLowerCase())||p.role.toLowerCase().includes(_tkFilter.toLowerCase());
     const matchDept=_tkDept==='all'||p.dept===_tkDept||(_tkDept==='training'&&p.id==='vp');
     return matchName&&matchDept;
@@ -72,8 +78,10 @@ function renderTasks(ct,cl){
         </div>`).join('')
       : `<div class="tk-empty">Nothing set yet</div>`) : null;
 
-    html+=`<div class="tk-card ${cls}" id="tkc-${p.id}">
+    html+=`<div class="tk-card ${cls}" id="tkc-${p.id}" draggable="true" data-pid="${p.id}"
+      ondragstart="tkDragStart(event)" ondragover="tkDragOver(event)" ondrop="tkDrop(event)" ondragend="tkDragEnd(event)">
       <div class="tk-head">
+        <div class="tk-drag-handle" title="Drag to reorder">⠿</div>
         <div class="tk-avatar" style="background:${col};">${initials(p.name)}</div>
         <div class="tk-head-info">
           <div class="tk-head-name">${esc(p.name)}</div>
@@ -115,6 +123,40 @@ function renderTasks(ct,cl){
 
 function tkSetFilter(v){ _tkFilter=v; renderTasks(document.getElementById('content'),document.getElementById('controls')); }
 function tkSetDept(v){ _tkDept=v; renderTasks(document.getElementById('content'),document.getElementById('controls')); }
+
+// ---- Drag to reorder task cards ----
+let _tkDragId=null;
+function tkDragStart(e){
+  _tkDragId=e.currentTarget.dataset.pid;
+  e.currentTarget.classList.add('tk-dragging');
+  e.dataTransfer.effectAllowed='move';
+}
+function tkDragOver(e){
+  e.preventDefault();
+  e.dataTransfer.dropEffect='move';
+  const over=e.currentTarget;
+  if(over.dataset.pid!==_tkDragId) over.classList.add('tk-drag-over');
+}
+function tkDrop(e){
+  e.preventDefault();
+  const toId=e.currentTarget.dataset.pid;
+  if(!_tkDragId||_tkDragId===toId) return;
+  // Build current order from DOM
+  const cards=Array.from(document.querySelectorAll('.tk-card[data-pid]'));
+  const ids=cards.map(c=>c.dataset.pid);
+  const fromIdx=ids.indexOf(_tkDragId);
+  const toIdx=ids.indexOf(toId);
+  if(fromIdx===-1||toIdx===-1) return;
+  ids.splice(fromIdx,1);
+  ids.splice(toIdx,0,_tkDragId);
+  _tkCardOrder=ids;
+  localStorage.setItem('tkCardOrder',JSON.stringify(_tkCardOrder));
+  renderTasks(document.getElementById('content'),document.getElementById('controls'));
+}
+function tkDragEnd(e){
+  _tkDragId=null;
+  document.querySelectorAll('.tk-card').forEach(c=>c.classList.remove('tk-dragging','tk-drag-over'));
+}
 
 function tkToggle(pid,tid,checked){
   const d=tkData(pid);

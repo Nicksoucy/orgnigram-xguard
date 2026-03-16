@@ -21,5 +21,8 @@ let cvOrder = {};
 // Tasks view filter state
 let _tkFilter = '', _tkDept = 'all';
 
+// Tasks card order (persisted to localStorage)
+let _tkCardOrder = JSON.parse(localStorage.getItem('tkCardOrder')||'[]');
+
 // Department modal state
 let _editDeptKey = null;
