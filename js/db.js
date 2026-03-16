@@ -84,14 +84,21 @@ async function loadFromSupabase() {
       key:d.id, label:d.label, color:d.color, sort_order:d.sort_order||99
     }));
 
+    // Helper: parse items that may be double-serialized strings
+    const parseItems = arr => (arr||[]).map(item=>{
+      if(typeof item==='string'){try{return JSON.parse(item);}catch(e){return {id:'i_'+Math.random().toString(36).slice(2),text:item};}}
+      if(!item.id) item.id='i_'+Math.random().toString(36).slice(2);
+      return item;
+    });
+
     // Map tasks
     tasksData = {};
     if(tRes.data){
       tRes.data.forEach(row=>{
         tasksData[row.person_id]={
-          tasks: row.tasks||[],
-          outcomes: row.outcomes||[],
-          expectedOutcomes: row.expected_outcomes||[]
+          tasks: parseItems(row.tasks),
+          outcomes: parseItems(row.outcomes),
+          expectedOutcomes: parseItems(row.expected_outcomes)
         };
       });
     }
