@@ -39,6 +39,22 @@ async function dbDeleteDept(id) {
   if(error) console.error('dbDeleteDept error:',error);
 }
 
+async function dbSaveReport(report) {
+  const {error} = await db.from('weekly_reports').insert(report);
+  if(error) console.error('dbSaveReport error:',error);
+  return !error;
+}
+
+async function dbLoadReports(personId) {
+  const {data, error} = await db.from('weekly_reports')
+    .select('*')
+    .eq('person_id', personId)
+    .order('week_start', {ascending: false})
+    .limit(12);
+  if(error) console.error('dbLoadReports error:',error);
+  return data || [];
+}
+
 async function dbSaveCanvasOrder(parentId, children) {
   const {error}=await db.from('canvas_order').upsert({id:parentId, children});
   if(error) console.error('dbSaveCanvasOrder error:',error);

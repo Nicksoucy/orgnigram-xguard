@@ -239,3 +239,15 @@ input[name="fdColor"]:checked+.color-swatch{border-color:#fff;transform:scale(1.
   background:rgba(0,0,0,0.25);padding:2px 8px;border-radius:10px;margin-left:auto;margin-right:8px;}
 .cn-div .cn-arrows{margin-top:0;opacity:0;transition:opacity 0.15s;}
 .cn-div:hover .cn-arrows{opacity:1;}
+
+/* === WEEKLY REPORT MODAL === */
+.rp-section-title{font-size:11px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--a);margin:16px 0 8px;padding-bottom:4px;border-bottom:1px solid var(--b);}
+.rp-table{width:100%;border-collapse:collapse;font-size:12px;margin-bottom:8px;}
+.rp-table th{text-align:left;color:var(--td);padding:4px 8px;font-weight:500;border-bottom:1px solid var(--b);}
+.rp-table td{padding:6px 8px;border-bottom:1px solid var(--b);}
+.rp-num{background:var(--sh);border:1px solid var(--b);color:var(--t);border-radius:6px;padding:5px 8px;font-size:12px;width:80px;text-align:center;}
+.rp-num:focus{outline:none;border-color:var(--a);}
+.rp-textarea{width:100%;background:var(--sh);border:1px solid var(--b);color:var(--t);border-radius:8px;padding:10px 12px;font-size:13px;font-family:'DM Sans',sans-serif;resize:vertical;min-height:80px;box-sizing:border-box;}
+.rp-textarea:focus{outline:none;border-color:var(--a);}
+.btn-primary{background:var(--a);color:#fff;border-color:var(--a);}
+.btn-primary:hover{background:#e85a25;}

@@ -78,6 +78,7 @@ function renderTasks(ct,cl){
         </div>`).join('')
       : `<div class="tk-empty">Nothing set yet</div>`) : null;
 
+    const hasReport = typeof REPORT_PEOPLE !== 'undefined' && REPORT_PEOPLE[p.id];
     html+=`<div class="tk-card ${cls}" id="tkc-${p.id}" draggable="true" data-pid="${p.id}"
       ondragstart="tkDragStart(event)" ondragover="tkDragOver(event)" ondrop="tkDrop(event)" ondragend="tkDragEnd(event)">
       <div class="tk-head">
@@ -87,7 +88,8 @@ function renderTasks(ct,cl){
           <div class="tk-head-name">${esc(p.name)}</div>
           <div class="tk-head-role">${esc(p.role)}</div>
         </div>
-        ${totalCnt?`<span style="font-family:'Space Mono',monospace;font-size:9px;color:${pctP===100?'var(--g)':'var(--td)'};">${pctP}%</span>`:''}
+        ${hasReport?`<button class="btn" style="font-size:10px;padding:3px 8px;margin-left:auto;white-space:nowrap;" onclick="openWeeklyReport('${p.id}')">📋 Rapport</button>`:''}
+        ${totalCnt&&!hasReport?`<span style="font-family:'Space Mono',monospace;font-size:9px;color:${pctP===100?'var(--g)':'var(--td)'};">${pctP}%</span>`:''}
       </div>
       <div class="tk-body">
         <div class="tk-section">
