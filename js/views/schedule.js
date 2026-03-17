@@ -812,6 +812,123 @@ function schedBuildTrainerView() {
 
 // ---- Shift Detail Popup ----
 
+function schedManageSeries(instructorId) {
+  schedClosePopup();
+  const trainer = data.find(p => p.id === instructorId);
+  const trainerName = trainer ? trainer.name : instructorId;
+
+  // Group entries by excel_cell_code
+  const entries = _schedEntries.filter(e => e.instructor_id === instructorId && e.excel_cell_code);
+  const seriesMap = {};
+  entries.forEach(e => {
+    const k = e.excel_cell_code;
+    if (!seriesMap[k]) seriesMap[k] = { code: k, dates: [], min: e.date, max: e.date };
+    seriesMap[k].dates.push(e.date);
+    if (e.date < seriesMap[k].min) seriesMap[k].min = e.date;
+    if (e.date > seriesMap[k].max) seriesMap[k].max = e.date;
+  });
+  const series = Object.values(seriesMap).sort((a,b) => a.min.localeCompare(b.min));
+
+  const existing = document.getElementById('manage-series-overlay');
+  if (existing) existing.remove();
+
+  const overlay = document.createElement('div');
+  overlay.id = 'manage-series-overlay';
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.72);z-index:3000;display:flex;align-items:center;justify-content:center;';
+
+  const rowsHTML = series.length === 0
+    ? '<div style="color:var(--td);font-size:12px;text-align:center;padding:20px;">Aucune série trouvée pour ce formateur.</div>'
+    : series.map(s => `
+      <div style="display:grid;grid-template-columns:1fr auto auto;gap:8px;align-items:center;padding:8px 0;border-bottom:1px solid var(--b);">
+        <div>
+          <input id="rename_${esc(s.code)}" type="text" value="${esc(s.code)}" style="width:100%;padding:5px 8px;border-radius:5px;border:1px solid var(--b);background:var(--bg);color:var(--t);font-size:13px;font-weight:700;outline:none;box-sizing:border-box;" />
+          <div style="font-size:10px;color:var(--td);margin-top:2px;">${s.dates.length} shifts · ${s.min} → ${s.max}</div>
+        </div>
+        <button onclick="schedApplySeriesRename('${esc(instructorId)}','${esc(s.code)}')" class="btn" style="font-size:11px;padding:5px 10px;white-space:nowrap;">✎ Appliquer</button>
+        <button onclick="schedDeleteSeriesFromManager('${esc(instructorId)}','${esc(s.code)}')" class="btn danger" style="font-size:11px;padding:5px 10px;white-space:nowrap;">🗑</button>
+      </div>
+    `).join('');
+
+  overlay.innerHTML = `
+    <div style="background:var(--s);border:1px solid var(--b);border-radius:12px;padding:24px;width:480px;max-height:80vh;overflow-y:auto;font-family:'DM Sans',sans-serif;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+        <div>
+          <div style="font-size:15px;font-weight:700;">Séries de ${esc(trainerName)}</div>
+          <div style="font-size:11px;color:var(--td);">Modifiez les codes ou supprimez des séries en lot</div>
+        </div>
+        <button onclick="document.getElementById('manage-series-overlay').remove()" style="background:none;border:none;color:var(--td);font-size:20px;cursor:pointer;line-height:1;">✕</button>
+      </div>
+      ${rowsHTML}
+      <div style="margin-top:16px;text-align:right;">
+        <button onclick="document.getElementById('manage-series-overlay').remove()" style="padding:8px 20px;border-radius:6px;border:1px solid var(--b);background:transparent;color:var(--t);cursor:pointer;font-size:13px;">Fermer</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+}
+
+async function schedApplySeriesRename(instructorId, oldCode) {
+  const newCode = document.getElementById('rename_' + oldCode)?.value?.trim();
+  if (!newCode || newCode === oldCode) return;
+  const toUpdate = _schedEntries.filter(e => e.instructor_id === instructorId && e.excel_cell_code === oldCode);
+  let updated = 0;
+  for (const e of toUpdate) {
+    const { error } = await db.from('schedule_entries').update({ excel_cell_code: newCode }).eq('id', e.id);
+    if (!error) updated++;
+  }
+  schedFlash(`${updated} shift${updated>1?'s':''} → ${newCode}`);
+  await schedReloadEntries();
+  // Refresh the manager modal
+  document.getElementById('manage-series-overlay')?.remove();
+  schedManageSeries(instructorId);
+}
+
+async function schedDeleteSeriesFromManager(instructorId, code) {
+  const overlay2 = document.createElement('div');
+  overlay2.id = 'del-confirm-overlay';
+  overlay2.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:4000;display:flex;align-items:center;justify-content:center;';
+  overlay2.innerHTML = `
+    <div style="background:var(--s);border:1px solid var(--b);border-radius:10px;padding:24px;width:340px;font-family:'DM Sans',sans-serif;">
+      <div style="font-size:14px;font-weight:700;margin-bottom:8px;">Supprimer la série <span style="color:var(--a);">${esc(code)}</span> ?</div>
+      <div style="font-size:12px;color:var(--td);margin-bottom:16px;">Choisissez ce que vous voulez supprimer :</div>
+      <label style="display:flex;align-items:center;gap:8px;margin-bottom:8px;cursor:pointer;">
+        <input type="radio" name="del2_mode" value="all" checked style="accent-color:var(--a);"> Toute la série
+      </label>
+      <label style="display:flex;align-items:center;gap:8px;margin-bottom:4px;cursor:pointer;">
+        <input type="radio" name="del2_mode" value="from" style="accent-color:var(--a);" onchange="document.getElementById('del2_date_wrap').style.display='block'"> À partir d'une date
+      </label>
+      <div id="del2_date_wrap" style="display:none;margin-bottom:12px;padding-left:20px;">
+        <input type="date" id="del2_from_date" style="padding:6px 10px;border-radius:6px;border:1px solid var(--b);background:var(--bg);color:var(--t);font-size:13px;outline:none;" />
+      </div>
+      <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:12px;">
+        <button onclick="document.getElementById('del-confirm-overlay').remove()" style="padding:8px 16px;border-radius:6px;border:1px solid var(--b);background:transparent;color:var(--t);cursor:pointer;font-size:13px;">Annuler</button>
+        <button onclick="schedExecDeleteFromManager('${esc(instructorId)}','${esc(code)}')" style="padding:8px 16px;border-radius:6px;background:#ef4444;color:#fff;border:none;cursor:pointer;font-size:13px;font-weight:600;">Supprimer</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(overlay2);
+}
+
+async function schedExecDeleteFromManager(instructorId, code) {
+  const mode = document.querySelector('input[name="del2_mode"]:checked')?.value || 'all';
+  const fromDate = document.getElementById('del2_from_date')?.value || null;
+  document.getElementById('del-confirm-overlay')?.remove();
+
+  let toDelete = _schedEntries.filter(e => e.instructor_id === instructorId && e.excel_cell_code === code);
+  if (mode === 'from' && fromDate) toDelete = toDelete.filter(e => e.date >= fromDate);
+
+  const ids = toDelete.map(e => e.id);
+  let deleted = 0;
+  for (let i = 0; i < ids.length; i += 50) {
+    const { error } = await db.from('schedule_entries').delete().in('id', ids.slice(i, i+50));
+    if (!error) deleted += Math.min(50, ids.length - i);
+  }
+  schedFlash(`${deleted} shift${deleted>1?'s':''} supprimé${deleted>1?'s':''}`);
+  await schedReloadEntries();
+  document.getElementById('manage-series-overlay')?.remove();
+  schedManageSeries(instructorId);
+}
+
 async function schedDeleteSeriesPrompt(entryId, code, entryDate) {
   const overlay = document.createElement('div');
   overlay.id = 'delete-series-overlay';
@@ -988,10 +1105,9 @@ function schedOpenPopup(entryId, ev) {
       <button class="btn" style="font-size:11px;padding:5px 10px;flex:1;" onclick="schedEditEntry('${esc(entryId)}')">Modifier</button>
       <button class="btn danger" style="font-size:11px;padding:5px 10px;" onclick="schedDeleteEntry('${esc(entryId)}')">Supprimer</button>
     </div>
-    ${cohort !== '—' ? `<div style="display:flex;gap:6px;margin-top:6px;padding-top:8px;border-top:1px solid var(--b);">
-      <button class="btn" style="font-size:11px;padding:5px 10px;flex:1;background:var(--s2,#1e293b);" onclick="schedRenameSeriesPrompt('${esc(entryId)}','${esc(cohort)}')">✎ Renommer série</button>
-      <button class="btn danger" style="font-size:11px;padding:5px 10px;flex:1;" onclick="schedDeleteSeriesPrompt('${esc(entryId)}','${esc(cohort)}','${esc(entry.date)}')">🗑 Supprimer série</button>
-    </div>` : ''}
+    <div style="margin-top:6px;padding-top:8px;border-top:1px solid var(--b);">
+      <button class="btn" style="font-size:11px;padding:5px 10px;width:100%;background:var(--s2,#1e293b);" onclick="schedManageSeries('${esc(entry.instructor_id)}')">📋 Gérer toutes les séries</button>
+    </div>
     `;
 
   document.body.appendChild(popup);
