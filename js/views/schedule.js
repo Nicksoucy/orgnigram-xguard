@@ -366,8 +366,9 @@ function schedBuildMonthGrid() {
         <div style="width:20px;height:20px;border-radius:50%;background:${col};display:flex;align-items:center;justify-content:center;font-size:8px;font-weight:700;color:#fff;flex-shrink:0;">${esc(ini)}</div>
         <div style="flex:1;min-width:0;">
           <div style="font-size:11px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${esc(trainer.name)}</div>
-          ${label ? `<div class="shift-label" style="color:var(--a);font-size:9px;">[${esc(label)}]</div>` : ''}
+          ${label ? `<div class="shift-label" onclick="schedOpenPatternForRow('${esc(trainer.id)}','${esc(label)}')" title="Cliquer pour créer des cohortes pour ce quart" style="color:var(--a);font-size:9px;cursor:pointer;text-decoration:underline dotted;" onmouseover="this.style.color='var(--t)'" onmouseout="this.style.color='var(--a)'">[${esc(label)}] ✦</div>` : ''}
         </div>
+        ${label ? `<button onclick="schedRemoveRow('${esc(trainer.id)}','${esc(label)}')" title="Retirer cette ligne" style="background:none;border:none;color:var(--td);cursor:pointer;font-size:13px;padding:0 2px;flex-shrink:0;line-height:1;" onmouseover="this.style.color='#ef4444'" onmouseout="this.style.color='var(--td)'">−</button>` : ''}
         <button onclick="schedAddRow('${esc(trainer.id)}')" title="Ajouter une ligne" style="background:none;border:none;color:var(--td);cursor:pointer;font-size:14px;padding:0 2px;flex-shrink:0;" onmouseover="this.style.color='var(--a)'" onmouseout="this.style.color='var(--td)'">+</button>
       </div>
     </td>`;
@@ -491,6 +492,23 @@ function schedDragEnd(event) {
 }
 
 // ---- Multi-select & row management functions ----
+
+
+function schedRemoveRow(trainerId, quart) {
+  if (!window._schedExtraRows) window._schedExtraRows = {};
+  const arr = window._schedExtraRows[trainerId] || [];
+  window._schedExtraRows[trainerId] = arr.filter(q => q !== quart);
+  const ct = document.getElementById('sched-ct');
+  const cl = document.getElementById('sched-cl');
+  schedBuildMonthGrid(ct, cl);
+}
+
+function schedOpenPatternForRow(trainerId, quart) {
+  // Pre-fill pattern modal with trainer + quart
+  const quartMap = { 'soir': 'BSP_SOIR', 'weekend': 'BSP_WEEKEND', 'jour': 'BSP_JOUR' };
+  const patternKey = quartMap[quart] || null;
+  schedOpenPatternModal(trainerId, patternKey, quart);
+}
 
 function schedAddRow(trainerId) {
   if (!window._schedExtraRows) window._schedExtraRows = {};
@@ -1555,7 +1573,7 @@ async function schedSaveRecurring() {
 
 // ==================== PATTERN COHORTE ====================
 
-function schedOpenPatternModal() {
+function schedOpenPatternModal(preTrainerId, prePatternKey, preQuart) {
   const existing = document.getElementById('pattern-modal-overlay');
   if (existing) existing.remove();
 
@@ -1656,6 +1674,26 @@ function schedOpenPatternModal() {
 
   document.body.appendChild(overlay);
   schedPatOnPatternChange();
+  // Apply pre-fills if provided
+  if (preTrainerId) {
+    const ti = document.getElementById('pat_trainer');
+    if (ti) ti.value = preTrainerId;
+  }
+  if (prePatternKey) {
+    const pi = document.getElementById('pat_pattern');
+    if (pi) { pi.value = prePatternKey; schedPatOnPatternChange(); }
+  }
+  if (preQuart) {
+    const timeMap = { soir: {s:'18:00',e:'22:00'}, weekend: {s:'09:00',e:'17:00'}, jour: {s:'09:00',e:'17:00'} };
+    const t = timeMap[preQuart];
+    if (t) {
+      const hs = document.getElementById('pat_start');
+      const he = document.getElementById('pat_end');
+      if (hs) hs.value = t.s;
+      if (he) he.value = t.e;
+    }
+  }
+  schedPatPreview();
 }
 
 function schedPatOnPatternChange() {
