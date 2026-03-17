@@ -1619,6 +1619,15 @@ function schedOpenPatternModal(preTrainerId, prePatternKey, preQuart) {
           </select>
         </div>
 
+
+        <!-- Programme -->
+        <div>
+          <label style="font-family:'Space Mono',monospace;font-size:9px;text-transform:uppercase;letter-spacing:1px;color:var(--td);display:block;margin-bottom:5px;">Programme</label>
+          <select id="pat_program" style="width:100%;padding:8px 10px;border-radius:6px;border:1px solid var(--b);background:var(--bg);color:var(--t);font-size:13px;outline:none;">
+            ${(_schedPrograms.length ? _schedPrograms : Object.entries(SCHED_DEFAULT_PROGRAM_COLORS).map(([id])=>({id,label:id}))).map(p => `<option value="${esc(p.id)}">${esc(p.label||p.id)}</option>`).join('')}
+          </select>
+        </div>
+
         <!-- Heures (modifiables) -->
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
           <div>
@@ -1693,6 +1702,11 @@ function schedOpenPatternModal(preTrainerId, prePatternKey, preQuart) {
       if (he) he.value = t.e;
     }
   }
+  if (preQuart) {
+    const progMap = { soir:'BSP', weekend:'BSP', jour:'BSP' };
+    const pp = document.getElementById('pat_program');
+    if (pp && progMap[preQuart]) pp.value = progMap[preQuart];
+  }
   schedPatPreview();
 }
 
@@ -1719,6 +1733,7 @@ function schedPatBuildAllCohorts() {
   const gap       = parseInt(document.getElementById('pat_gap')?.value   || '4');
   const startTime = document.getElementById('pat_start')?.value || '18:00';
   const endTime   = document.getElementById('pat_end')?.value   || '22:00';
+  const program   = document.getElementById('pat_program')?.value || null;
 
   if (!patKey || !startDate) return [];
   const p = SCHED_COHORT_PATTERNS[patKey];
@@ -1742,7 +1757,7 @@ function schedPatBuildAllCohorts() {
       dates,
       startTime,
       endTime,
-      program:   p.program,
+      program:   program || p.program,
       shiftType: p.shift_type,
     });
     num++;
