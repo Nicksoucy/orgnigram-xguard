@@ -64,7 +64,7 @@ function schedGetHolidaysQC(year) {
   return new Set([
     `${year}-01-01`,                    // Jour de l'An
     fmt(addDays(e, -2)),                // Vendredi Saint
-    fmt(addDays(e,  1)),                // Lundi de Pâques
+    // Lundi de Pâques retiré — XGuard travaille ce jour
     `${year}-05-18`,                    // Journée nationale des patriotes (3e lundi mai ≈ fixe pour 2026)
     `${year}-06-24`,                    // Fête nationale Québec
     `${year}-07-01`,                    // Fête du Canada
