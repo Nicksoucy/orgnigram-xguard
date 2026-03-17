@@ -971,13 +971,24 @@ async function schedManageSeries(instructorId) {
   overlay.id = 'manage-series-overlay';
   overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.72);z-index:3000;display:flex;align-items:center;justify-content:center;';
 
+  // Compute trainer initials for display preview
+  const trainerInitials = trainerName
+    .split(' ')
+    .filter(w => w.length > 0)
+    .map(w => w[0].toUpperCase())
+    .slice(0, 2)
+    .join('');
+
   const rowsHTML = series.length === 0
     ? '<div style="color:var(--td);font-size:12px;text-align:center;padding:20px;">Aucune série trouvée pour ce formateur.</div>'
     : series.map(s => `
       <div style="display:grid;grid-template-columns:1fr auto auto;gap:8px;align-items:center;padding:8px 0;border-bottom:1px solid var(--b);">
         <div>
-          <input id="rename_${esc(s.code)}" type="text" value="${esc(s.code)}" style="width:100%;padding:5px 8px;border-radius:5px;border:1px solid var(--b);background:var(--bg);color:var(--t);font-size:13px;font-weight:700;outline:none;box-sizing:border-box;" />
-          <div style="font-size:10px;color:var(--td);margin-top:2px;">${s.count} shifts · ${s.min} → ${s.max}</div>
+          <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;">
+            <input id="rename_${esc(s.code)}" type="text" value="${esc(s.code)}" style="flex:1;padding:5px 8px;border-radius:5px;border:1px solid var(--b);background:var(--bg);color:var(--t);font-size:13px;font-weight:700;outline:none;" />
+            <span style="font-size:10px;color:var(--td);white-space:nowrap;">→ affiché: <strong style="color:var(--a);">${esc(s.code)}-${trainerInitials}</strong></span>
+          </div>
+          <div style="font-size:10px;color:var(--td);">${s.count} shifts · ${s.min} → ${s.max}</div>
         </div>
         <button onclick="schedApplySeriesRename('${esc(instructorId)}','${esc(s.code)}')" class="btn" style="font-size:11px;padding:5px 10px;white-space:nowrap;">✎ Appliquer</button>
         <button onclick="schedDeleteSeriesFromManager('${esc(instructorId)}','${esc(s.code)}')" class="btn danger" style="font-size:11px;padding:5px 10px;white-space:nowrap;">🗑</button>
