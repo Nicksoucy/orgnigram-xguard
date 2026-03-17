@@ -812,18 +812,26 @@ function schedBuildTrainerView() {
 
 // ---- Shift Detail Popup ----
 
-function schedManageSeries(instructorId) {
+async function schedManageSeries(instructorId) {
   schedClosePopup();
   const trainer = data.find(p => p.id === instructorId);
   const trainerName = trainer ? trainer.name : instructorId;
 
-  // Group entries by excel_cell_code
-  const entries = _schedEntries.filter(e => e.instructor_id === instructorId && e.excel_cell_code);
+  // Fetch ALL entries for this trainer from Supabase (all months/years)
+  const { data: allEntries, error } = await db
+    .from('schedule_entries')
+    .select('id, date, excel_cell_code, program, quart')
+    .eq('instructor_id', instructorId)
+    .not('excel_cell_code', 'is', null)
+    .order('date', { ascending: true });
+
+  const entries = allEntries || [];
   const seriesMap = {};
   entries.forEach(e => {
     const k = e.excel_cell_code;
-    if (!seriesMap[k]) seriesMap[k] = { code: k, dates: [], min: e.date, max: e.date };
-    seriesMap[k].dates.push(e.date);
+    if (!k) return;
+    if (!seriesMap[k]) seriesMap[k] = { code: k, count: 0, min: e.date, max: e.date, program: e.program };
+    seriesMap[k].count++;
     if (e.date < seriesMap[k].min) seriesMap[k].min = e.date;
     if (e.date > seriesMap[k].max) seriesMap[k].max = e.date;
   });
@@ -842,7 +850,7 @@ function schedManageSeries(instructorId) {
       <div style="display:grid;grid-template-columns:1fr auto auto;gap:8px;align-items:center;padding:8px 0;border-bottom:1px solid var(--b);">
         <div>
           <input id="rename_${esc(s.code)}" type="text" value="${esc(s.code)}" style="width:100%;padding:5px 8px;border-radius:5px;border:1px solid var(--b);background:var(--bg);color:var(--t);font-size:13px;font-weight:700;outline:none;box-sizing:border-box;" />
-          <div style="font-size:10px;color:var(--td);margin-top:2px;">${s.dates.length} shifts · ${s.min} → ${s.max}</div>
+          <div style="font-size:10px;color:var(--td);margin-top:2px;">${s.count} shifts · ${s.min} → ${s.max}</div>
         </div>
         <button onclick="schedApplySeriesRename('${esc(instructorId)}','${esc(s.code)}')" class="btn" style="font-size:11px;padding:5px 10px;white-space:nowrap;">✎ Appliquer</button>
         <button onclick="schedDeleteSeriesFromManager('${esc(instructorId)}','${esc(s.code)}')" class="btn danger" style="font-size:11px;padding:5px 10px;white-space:nowrap;">🗑</button>
@@ -878,7 +886,7 @@ async function schedApplySeriesRename(instructorId, oldCode) {
   }
   schedFlash(`${updated} shift${updated>1?'s':''} → ${newCode}`);
   await schedReloadEntries();
-  // Refresh the manager modal
+  schedRenderContent();
   document.getElementById('manage-series-overlay')?.remove();
   schedManageSeries(instructorId);
 }
@@ -925,6 +933,7 @@ async function schedExecDeleteFromManager(instructorId, code) {
   }
   schedFlash(`${deleted} shift${deleted>1?'s':''} supprimé${deleted>1?'s':''}`);
   await schedReloadEntries();
+  schedRenderContent();
   document.getElementById('manage-series-overlay')?.remove();
   schedManageSeries(instructorId);
 }
