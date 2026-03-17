@@ -111,6 +111,15 @@ async function dbDeleteScheduleEntry(id) {
   if(error) throw error;
 }
 
+// Trainer order persisted in localStorage (per-browser, instant, no schema needed)
+function dbSaveTrainerOrder(orderArr) {
+  try { localStorage.setItem('xg_schedule_trainer_order', JSON.stringify(orderArr)); } catch(e) {}
+}
+
+function dbLoadTrainerOrder() {
+  try { return JSON.parse(localStorage.getItem('xg_schedule_trainer_order') || '[]') || []; } catch(e) { return []; }
+}
+
 async function dbCopyWeek(sourceStart, targetStart) {
   const sourceEnd = dayjs(sourceStart).add(6,'day').format('YYYY-MM-DD');
   const {data,error} = await db.from('schedule_entries').select('*').gte('date',sourceStart).lte('date',sourceEnd);

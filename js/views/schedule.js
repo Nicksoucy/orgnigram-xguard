@@ -148,12 +148,27 @@ function schedCellBg(entry) {
   return schedProgramColor(entry.program);
 }
 
+// ---- Trainer order helpers ----
+
+function schedGetOrderedTrainers() {
+  const all = schedGetTrainers();
+  if (!_schedTrainerOrder || !_schedTrainerOrder.length) return all;
+  // Sort by saved order, append any new trainers at the end
+  const ordered = [];
+  _schedTrainerOrder.forEach(id => {
+    const t = all.find(x => x.id === id);
+    if (t) ordered.push(t);
+  });
+  all.forEach(t => { if (!ordered.find(x => x.id === t.id)) ordered.push(t); });
+  return ordered;
+}
+
 // ---- VIEW 1: Grille Mensuelle ----
 
 function schedBuildMonthGrid() {
   const days    = schedDaysInMonth(_schedMonth, _schedYear);
   const todayS  = schedTodayStr();
-  const trainers = schedGetTrainers();
+  const trainers = schedGetOrderedTrainers();
 
   // Apply trainer filter
   const filteredTrainers = _schedTrainer
@@ -223,9 +238,13 @@ function schedBuildMonthGrid() {
     const tEntries = entryMap[trainer.id] || {};
 
     const isLastRowForTrainer = !rows.find((r,ri) => ri > rows.indexOf(rows.find(x=>x===({trainer,quart,label}))) && r.trainer.id===trainer.id);
-    bodyHTML += `<tr data-trainer="${esc(trainer.id)}" data-quart="${esc(quart||'')}">`;
+    const isFirstRow = !label; // only first row of trainer gets drag handle
+    bodyHTML += `<tr data-trainer="${esc(trainer.id)}" data-quart="${esc(quart||'')}"
+      ${isFirstRow ? `draggable="true" ondragstart="schedDragStart(event,'${esc(trainer.id)}')" ondragover="schedDragOver(event)" ondrop="schedDrop(event,'${esc(trainer.id)}')" ondragend="schedDragEnd(event)"` : ''}
+      style="transition:opacity 0.15s;">`;
     bodyHTML += `<td class="trainer-name">
       <div style="display:flex;align-items:center;gap:6px;">
+        ${isFirstRow ? `<div class="sched-drag-handle" title="Glisser pour réordonner" style="color:var(--td);cursor:grab;font-size:13px;flex-shrink:0;padding:0 2px;user-select:none;" onmousedown="this.style.cursor='grabbing'" onmouseup="this.style.cursor='grab'">⠿</div>` : `<div style="width:15px;flex-shrink:0;"></div>`}
         <div style="width:20px;height:20px;border-radius:50%;background:${col};display:flex;align-items:center;justify-content:center;font-size:8px;font-weight:700;color:#fff;flex-shrink:0;">${esc(ini)}</div>
         <div style="flex:1;min-width:0;">
           <div style="font-size:11px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${esc(trainer.name)}</div>
@@ -306,6 +325,51 @@ function schedBuildMonthGrid() {
   <div style="margin-top:8px;font-size:11px;color:var(--td);opacity:0.6;">
     💡 Ctrl+clic pour sélectionner plusieurs dates → créer des shifts en lot
   </div>`;
+}
+
+// ---- Drag & drop row reorder ----
+
+let _schedDragSrcId = null;
+
+function schedDragStart(event, trainerId) {
+  _schedDragSrcId = trainerId;
+  event.dataTransfer.effectAllowed = 'move';
+  event.currentTarget.style.opacity = '0.4';
+}
+
+function schedDragOver(event) {
+  event.preventDefault();
+  event.dataTransfer.dropEffect = 'move';
+  // Highlight drop target row
+  const row = event.currentTarget;
+  row.style.borderTop = '2px solid var(--a)';
+}
+
+function schedDrop(event, targetId) {
+  event.preventDefault();
+  const row = event.currentTarget;
+  row.style.borderTop = '';
+  if (!_schedDragSrcId || _schedDragSrcId === targetId) return;
+
+  // Reorder _schedTrainerOrder
+  const trainers = schedGetOrderedTrainers();
+  const ids = trainers.map(t => t.id);
+  const srcIdx = ids.indexOf(_schedDragSrcId);
+  const tgtIdx = ids.indexOf(targetId);
+  if (srcIdx === -1 || tgtIdx === -1) return;
+  ids.splice(srcIdx, 1);
+  ids.splice(tgtIdx, 0, _schedDragSrcId);
+  _schedTrainerOrder = ids;
+  dbSaveTrainerOrder(ids);
+  schedRenderContent();
+}
+
+function schedDragEnd(event) {
+  event.currentTarget.style.opacity = '';
+  event.currentTarget.style.borderTop = '';
+  // Clean up all row borders
+  document.querySelectorAll('.sched-grid tr').forEach(r => r.style.borderTop = '');
+  _schedDragSrcId = null;
 }
 
 // ---- Multi-select & row management functions ----
@@ -1041,6 +1105,10 @@ let _schedWeekStart = null;
 // ---- Main render entry point ----
 
 async function renderSchedule(ct, cl) {
+  // Load saved trainer order on first render
+  if (!_schedTrainerOrder || !_schedTrainerOrder.length) {
+    _schedTrainerOrder = dbLoadTrainerOrder();
+  }
   // Initialize week start
   if (!_schedWeekStart) _schedWeekStart = schedGetWeekStart(_schedYear, _schedMonth);
 

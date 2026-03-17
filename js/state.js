@@ -45,6 +45,9 @@ let _schedEntries  = [];
 let _schedLocations = [];
 let _schedPrograms  = [];
 
+// Schedule trainer row order (array of instructor_ids, persisted to Supabase)
+let _schedTrainerOrder = []; // [] = default order from data array
+
 // Reports view state
 const REPORT_PEOPLE = {
   'L3': {type:'sac',        label:'SAC'},
