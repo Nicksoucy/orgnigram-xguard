@@ -28,7 +28,7 @@ const SCHED_STATUS_COLORS = {
 // Default program colors fallback (overridden by DB data)
 const SCHED_DEFAULT_PROGRAM_COLORS = {
   'BSP':           '#3b82f6',
-  'RCR':           '#10b981',
+  'RCR':           '#f97316',
   'ELITE':         '#8b5cf6',
   'DRONE':         '#f97316',
   'SECOURISME':    '#ef4444',
@@ -404,10 +404,19 @@ function schedCellClass(entry) {
   return '';
 }
 
+// Location ID for Salle Québec
+const SCHED_LOCATION_QC = '680eacdc-2975-4e7d-a80c-e944b7ae4df6';
+
 function schedCellBg(entry) {
   if (!entry) return '';
   const status = entry.status || 'scheduled';
   if (['holiday','unavailable','vacation','cancelled','replacement'].includes(status)) return '';
+  // RCR → orange distinct from BSP
+  if (entry.program === 'RCR') return '#f97316';
+  // Any program at Salle Québec → teal/purple
+  const isQc = entry.location_id === SCHED_LOCATION_QC
+    || (entry.locations && entry.locations.city === 'Quebec');
+  if (isQc) return '#7c3aed';
   return schedProgramColor(entry.program);
 }
 
