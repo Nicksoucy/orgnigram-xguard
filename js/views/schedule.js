@@ -386,31 +386,30 @@ function schedBuildMonthGrid() {
         if (!matchEntries.length && dayArr.length) matchEntries = [];
       }
 
-      const entry = matchEntries[0] || null;
-
       const tdClass = [isToday ? 'today' : '', isWe ? 'weekend-col' : ''].filter(Boolean).join(' ');
       const escapedDateS = esc(dateS);
-      const escapedId    = entry ? esc(entry.id) : '';
       const trainerId    = esc(trainer.id);
 
       const selKey = `${trainer.id}|${dateS}|${quart||''}`;
       const isSelected = !!_schedSelection[selKey];
       const selStyle = isSelected ? 'outline:2px solid var(--a);outline-offset:-2px;' : '';
 
-      if (entry) {
-        const cellText   = schedCellContent(entry);
-        const cellTip    = schedCellTooltip(entry);
-        const cellClass  = schedCellClass(entry);
-        const cellBg     = schedCellBg(entry);
-        const bgStyle    = cellBg ? `background:${cellBg};color:#fff;` : '';
-        // Show session_id as tiny bottom line if it exists
-        const sessionLine = entry.session_id
-          ? `<div style="font-size:7px;opacity:0.75;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:1px;font-family:'Space Mono',monospace;">${esc(entry.session_id.split('-').slice(-1)[0])}</div>`
-          : '';
-        bodyHTML += `<td class="${tdClass}" style="${selStyle}" onclick="schedCellClick('${escapedId}','${trainerId}','${escapedDateS}','${quart||''}',event)">
-          <span class="sched-cell ${cellClass}" style="${bgStyle};display:flex;flex-direction:column;align-items:center;" title="${esc(cellTip)}">
+      if (matchEntries.length > 0) {
+        // Stack all entries in this cell
+        const stackedHTML = matchEntries.map(entry => {
+          const cellText = schedCellContent(entry);
+          const cellTip  = schedCellTooltip(entry);
+          const cellBg   = schedCellBg(entry);
+          const bgStyle  = cellBg ? `background:${cellBg};color:#fff;` : '';
+          const sessionLine = entry.session_id
+            ? `<div style="font-size:7px;opacity:0.75;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:1px;font-family:'Space Mono',monospace;">${esc(entry.session_id.split('-').slice(-1)[0])}</div>`
+            : '';
+          return `<span class="sched-cell" style="${bgStyle};display:flex;flex-direction:column;align-items:center;margin-bottom:2px;width:100%;" title="${esc(cellTip)}" onclick="schedCellClick('${esc(entry.id)}','${trainerId}','${escapedDateS}','${quart||''}',event)">
             <span>${esc(cellText)}</span>${sessionLine}
-          </span>
+          </span>`;
+        }).join('');
+        bodyHTML += `<td class="${tdClass}" style="${selStyle};padding:2px;vertical-align:top;">
+          ${stackedHTML}
         </td>`;
       } else {
         bodyHTML += `<td class="${tdClass}" style="${selStyle}" onclick="schedCellClick(null,'${trainerId}','${escapedDateS}','${quart||''}',event)">
