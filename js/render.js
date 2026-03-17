@@ -8,6 +8,7 @@ function render(){
   else if(currentView==='canvas') renderCanvas(ct,cl);
   else if(currentView==='tasks') renderTasks(ct,cl);
   else if(currentView==='reports') renderReports(ct,cl);
+  else if(currentView==='horaires') renderHoraires(ct,cl);
   else renderFuture(ct,cl);
 
   renderSummary();

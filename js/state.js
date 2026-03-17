@@ -27,6 +27,14 @@ let _tkCardOrder = JSON.parse(localStorage.getItem('tkCardOrder')||'[]');
 // Department modal state
 let _editDeptKey = null;
 
+// Horaires view state
+let _horCurrentWeek = null; // will be set to current Monday on init
+let _horLocations = [];
+let _horEntries = [];
+let _horFilter = 'all'; // 'all','formation_qc','rcr_mtl','classe_mtl','formation_ligne'
+let _horViewMode = 'week'; // 'week' | 'month'
+let _horDpInited = false;
+
 // Reports view state
 const REPORT_PEOPLE = {
   'L3': {type:'sac',        label:'SAC'},

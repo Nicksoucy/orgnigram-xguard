@@ -63,6 +63,56 @@ async function dbSaveCanvasOrder(parentId, children) {
   if(error) console.error('dbSaveCanvasOrder error:',error);
 }
 
+// ==================== HORAIRES DB ====================
+
+async function dbGetScheduleWeek(weekStart, weekEnd) {
+  const {data,error} = await db.from('schedule_entries')
+    .select('*, locations(name,code), cohorts(code,program)')
+    .gte('date', weekStart).lte('date', weekEnd)
+    .order('date');
+  if(error) throw error;
+  return data||[];
+}
+
+async function dbGetLocations() {
+  const {data,error} = await db.from('locations').select('*').eq('is_active',true).order('name');
+  if(error) throw error;
+  return data||[];
+}
+
+async function dbSaveScheduleEntry(entry) {
+  const {data,error} = await db.from('schedule_entries').insert(entry).select().single();
+  if(error) throw error;
+  return data;
+}
+
+async function dbUpdateScheduleEntry(id, updates) {
+  const {data,error} = await db.from('schedule_entries').update(updates).eq('id',id).select().single();
+  if(error) throw error;
+  return data;
+}
+
+async function dbDeleteScheduleEntry(id) {
+  const {error} = await db.from('schedule_entries').delete().eq('id',id);
+  if(error) throw error;
+}
+
+async function dbCopyWeek(sourceStart, targetStart) {
+  const sourceEnd = dayjs(sourceStart).add(6,'day').format('YYYY-MM-DD');
+  const {data,error} = await db.from('schedule_entries').select('*').gte('date',sourceStart).lte('date',sourceEnd);
+  if(error) throw error;
+  const offset = dayjs(targetStart).diff(dayjs(sourceStart),'day');
+  const copies = (data||[]).map(({id,created_at,updated_at,time_range,...e})=>({
+    ...e,
+    date: dayjs(e.date).add(offset,'day').format('YYYY-MM-DD'),
+    status:'scheduled'
+  }));
+  if(!copies.length) return 0;
+  const {error:e2} = await db.from('schedule_entries').insert(copies);
+  if(e2) throw e2;
+  return copies.length;
+}
+
 // ==================== SUPABASE LOAD ====================
 async function loadFromSupabase() {
   try {
