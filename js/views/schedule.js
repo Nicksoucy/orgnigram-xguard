@@ -411,12 +411,15 @@ function schedCellBg(entry) {
   if (!entry) return '';
   const status = entry.status || 'scheduled';
   if (['holiday','unavailable','vacation','cancelled','replacement'].includes(status)) return '';
-  // RCR → orange distinct from BSP
+  // RCR → orange
   if (entry.program === 'RCR') return '#f97316';
-  // Any program at Salle Québec → teal/purple
-  const isQc = entry.location_id === SCHED_LOCATION_QC
-    || (entry.locations && entry.locations.city === 'Quebec');
+  const city = entry.locations && entry.locations.city;
+  // Any program at Salle Québec → violet
+  const isQc = entry.location_id === SCHED_LOCATION_QC || city === 'Quebec';
   if (isQc) return '#7c3aed';
+  // Any program at Salle Montréal → teal
+  const isMtl = city === 'Montreal';
+  if (isMtl) return '#0d9488';
   return schedProgramColor(entry.program);
 }
 
