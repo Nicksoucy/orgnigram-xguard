@@ -35,6 +35,16 @@ let _horFilter = 'all'; // 'all','formation_qc','rcr_mtl','classe_mtl','formatio
 let _horViewMode = 'week'; // 'week' | 'month'
 let _horDpInited = false;
 
+// Schedule view state
+let _schedMonth = new Date().getMonth() + 1;
+let _schedYear  = new Date().getFullYear();
+let _schedView  = 'grid'; // 'grid' | 'week' | 'trainer'
+let _schedTrainer  = null;
+let _schedProgram  = null;
+let _schedEntries  = [];
+let _schedLocations = [];
+let _schedPrograms  = [];
+
 // Reports view state
 const REPORT_PEOPLE = {
   'L3': {type:'sac',        label:'SAC'},

@@ -113,6 +113,36 @@ async function dbCopyWeek(sourceStart, targetStart) {
   return copies.length;
 }
 
+// ==================== SCHEDULE MODULE DB ====================
+
+async function dbGetScheduleEntries(month, year, instructorId) {
+  const startDate = year + '-' + String(month).padStart(2, '0') + '-01';
+  const endDate   = new Date(year, month, 0).toISOString().split('T')[0]; // last day of month
+  let q = db.from('schedule_entries')
+    .select('*, cohorts(code,program), locations(name,code,city)')
+    .gte('date', startDate)
+    .lte('date', endDate)
+    .order('date');
+  if (instructorId) q = q.eq('instructor_id', instructorId);
+  const { data, error } = await q;
+  if (error) throw error;
+  return data || [];
+}
+
+async function dbGetPrograms() {
+  const { data, error } = await db.from('programs').select('*').order('sort_order');
+  if (error) throw error;
+  return data || [];
+}
+
+async function dbGetCohorts(program) {
+  let q = db.from('cohorts').select('*').eq('is_active', true).order('cohort_number');
+  if (program) q = q.eq('program', program);
+  const { data, error } = await q;
+  if (error) throw error;
+  return data || [];
+}
+
 // ==================== SUPABASE LOAD ====================
 async function loadFromSupabase() {
   try {
