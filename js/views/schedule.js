@@ -42,6 +42,124 @@ const SCHED_DEFAULT_PROGRAM_COLORS = {
   'FILMAGE':       '#7c3aed'
 };
 
+// ---- Jours fériés Québec (fixes + Pâques calculé) ----
+
+function schedGetHolidaysQC(year) {
+  // Calcul Pâques (algorithme Anonymous Gregorian)
+  function easter(y) {
+    const a = y % 19, b = Math.floor(y/100), c = y % 100;
+    const d = Math.floor(b/4), e = b % 4, f = Math.floor((b+8)/25);
+    const g = Math.floor((b-f+1)/3), h = (19*a+b-d-g+15) % 30;
+    const i = Math.floor(c/4), k = c % 4;
+    const l = (32+2*e+2*i-h-k) % 7;
+    const m = Math.floor((a+11*h+22*l)/451);
+    const month = Math.floor((h+l-7*m+114)/31);
+    const day   = ((h+l-7*m+114) % 31) + 1;
+    return new Date(y, month-1, day);
+  }
+  const e = easter(year);
+  const addDays = (d, n) => { const r = new Date(d); r.setDate(r.getDate()+n); return r; };
+  const fmt = d => d.toISOString().slice(0,10);
+
+  return new Set([
+    `${year}-01-01`,                    // Jour de l'An
+    fmt(addDays(e, -2)),                // Vendredi Saint
+    fmt(addDays(e,  1)),                // Lundi de Pâques
+    `${year}-05-18`,                    // Journée nationale des patriotes (3e lundi mai ≈ fixe pour 2026)
+    `${year}-06-24`,                    // Fête nationale Québec
+    `${year}-07-01`,                    // Fête du Canada
+    `${year}-08-03`,                    // Congé civique (1er lundi août)
+    `${year}-09-07`,                    // Fête du Travail (1er lundi sept)
+    `${year}-10-12`,                    // Action de grâce (2e lundi oct)
+    `${year}-11-11`,                    // Jour du Souvenir
+    `${year}-12-25`,                    // Noël
+    `${year}-12-26`,                    // Lendemain de Noël
+  ]);
+}
+
+// ---- Cohort patterns ----
+
+const SCHED_COHORT_PATTERNS = {
+  'BSP_SOIR': {
+    label:      'BSP Soir (Lun-Jeu, 3 semaines)',
+    program:    'BSP',
+    shift_type: 'soir',
+    days:       [1,2,3,4],   // Lun=1,Mar=2,Mer=3,Jeu=4 (JS getDay)
+    sessions:   12,
+    start_time: '18:00',
+    end_time:   '22:00',
+    gap_days:   4,            // jours de pause entre cohortes (après dernier jour)
+    prefix:     'JS',
+  },
+  'BSP_JOUR': {
+    label:      'BSP Jour (Lun-Ven, 3 semaines)',
+    program:    'BSP',
+    shift_type: 'jour',
+    days:       [1,2,3,4,5],
+    sessions:   15,
+    start_time: '09:00',
+    end_time:   '17:00',
+    gap_days:   2,
+    prefix:     'J',
+  },
+  'BSP_WEEKEND': {
+    label:      'BSP Weekend (Sam-Dim, 6 weekends)',
+    program:    'BSP',
+    shift_type: 'weekend',
+    days:       [6,0],        // Sam=6, Dim=0
+    sessions:   12,
+    start_time: '09:00',
+    end_time:   '17:00',
+    gap_days:   0,
+    prefix:     'W',
+  },
+  'RCR': {
+    label:      'RCR (1 journée)',
+    program:    'RCR',
+    shift_type: 'jour',
+    days:       [6],          // Samedi
+    sessions:   1,
+    start_time: '09:00',
+    end_time:   '17:00',
+    gap_days:   0,
+    prefix:     'RCR',
+  },
+  'ELITE': {
+    label:      'Élite (Lun-Jeu, 2 semaines)',
+    program:    'ELITE',
+    shift_type: 'jour',
+    days:       [1,2,3,4],
+    sessions:   8,
+    start_time: '09:00',
+    end_time:   '17:00',
+    gap_days:   3,
+    prefix:     'E',
+  },
+};
+
+// Generate dates for one cohort starting at startDate, skipping holidays & wrong days
+function schedGenCohortDates(patternKey, startDate, year) {
+  const p = SCHED_COHORT_PATTERNS[patternKey];
+  if (!p) return [];
+  const holidays = schedGetHolidaysQC(year);
+  const also = schedGetHolidaysQC(year + 1); // in case cohort spans year boundary
+  also.forEach(h => holidays.add(h));
+
+  const dates = [];
+  let d = new Date(startDate + 'T00:00:00');
+  let safety = 0;
+  while (dates.length < p.sessions && safety < 500) {
+    safety++;
+    const iso = d.toISOString().slice(0,10);
+    const dow = d.getDay(); // 0=Sun…6=Sat
+    if (p.days.includes(dow) && !holidays.has(iso)) {
+      dates.push(iso);
+    }
+    d.setDate(d.getDate() + 1);
+  }
+  return dates;
+}
+
 // ---- State for shift modal ----
 let _schedModalEntry  = null;   // null = new, object = editing existing
 let _schedModalPrefill = {};    // prefill values when clicking empty cell
@@ -1154,7 +1272,8 @@ async function renderSchedule(ct, cl) {
       </select>
 
       <div style="display:flex;gap:6px;margin-left:auto;">
-        <button class="btn" style="font-size:12px;" onclick="schedOpenRecurring()">🔁 Horaire récurrent</button>
+        <button class="btn" style="font-size:12px;" onclick="schedOpenRecurring('recurring')">🔁 Horaire récurrent</button>
+        <button class="btn" style="font-size:12px;" onclick="schedOpenRecurring('pattern')">📋 Pattern cohorte</button>
         <button class="btn primary" style="font-size:12px;" onclick="schedOpenNewShift({})">+ Nouveau shift</button>
       </div>
     </div>`;
@@ -1189,9 +1308,11 @@ async function renderSchedule(ct, cl) {
   schedRenderContent();
 }
 
-// ==================== HORAIRE RÉCURRENT ====================
+// ==================== HORAIRE RÉCURRENT + PATTERN COHORTE ====================
 
-function schedOpenRecurring() {
+function schedOpenRecurring(mode) {
+  mode = mode || 'recurring';
+  if (mode === 'pattern') { schedOpenPatternModal(); return; }
   const existing = document.getElementById('recurring-modal-overlay');
   if (existing) existing.remove();
 
@@ -1429,5 +1550,244 @@ async function schedSaveRecurring() {
     console.error('schedSaveRecurring error:', err);
     alert('Erreur: ' + (err.message || err));
     if (saveBtn) { saveBtn.disabled = false; saveBtn.textContent = "Créer l'horaire"; }
+  }
+}
+
+// ==================== PATTERN COHORTE ====================
+
+function schedOpenPatternModal() {
+  const existing = document.getElementById('pattern-modal-overlay');
+  if (existing) existing.remove();
+
+  const trainers = schedGetOrderedTrainers();
+  const trainerOpts = trainers.map(t =>
+    `<option value="${esc(t.id)}">${esc(t.name)}</option>`
+  ).join('');
+
+  const patternOpts = Object.entries(SCHED_COHORT_PATTERNS).map(([k,p]) =>
+    `<option value="${esc(k)}">${esc(p.label)}</option>`
+  ).join('');
+
+  const overlay = document.createElement('div');
+  overlay.id = 'pattern-modal-overlay';
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.72);z-index:2000;display:flex;align-items:center;justify-content:center;backdrop-filter:blur(4px);';
+  overlay.addEventListener('click', ev => { if (ev.target === overlay) overlay.remove(); });
+
+  overlay.innerHTML = `
+    <div style="background:var(--s);border:1px solid var(--b);border-radius:14px;width:520px;max-width:95vw;max-height:90vh;overflow-y:auto;display:flex;flex-direction:column;">
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:18px 20px 14px;border-bottom:1px solid var(--b);">
+        <div>
+          <h3 style="font-size:16px;font-weight:700;margin:0;">📋 Générer par pattern de cohorte</h3>
+          <div style="font-size:11px;color:var(--td);margin-top:3px;">Crée plusieurs cohortes consécutives en sautant les fériés automatiquement</div>
+        </div>
+        <button onclick="document.getElementById('pattern-modal-overlay').remove()" style="background:none;border:none;color:var(--td);font-size:18px;cursor:pointer;">✕</button>
+      </div>
+
+      <div style="padding:18px 20px;display:flex;flex-direction:column;gap:14px;">
+
+        <!-- Formateur -->
+        <div>
+          <label style="font-family:'Space Mono',monospace;font-size:9px;text-transform:uppercase;letter-spacing:1px;color:var(--td);display:block;margin-bottom:5px;">Formateur</label>
+          <select id="pat_trainer" onchange="schedPatPreview()" style="width:100%;padding:8px 10px;border-radius:6px;border:1px solid var(--b);background:var(--bg);color:var(--t);font-size:13px;outline:none;">
+            ${trainerOpts}
+          </select>
+        </div>
+
+        <!-- Pattern -->
+        <div>
+          <label style="font-family:'Space Mono',monospace;font-size:9px;text-transform:uppercase;letter-spacing:1px;color:var(--td);display:block;margin-bottom:5px;">Pattern</label>
+          <select id="pat_pattern" onchange="schedPatOnPatternChange()" style="width:100%;padding:8px 10px;border-radius:6px;border:1px solid var(--b);background:var(--bg);color:var(--t);font-size:13px;outline:none;">
+            ${patternOpts}
+          </select>
+        </div>
+
+        <!-- Heures (modifiables) -->
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+          <div>
+            <label style="font-family:'Space Mono',monospace;font-size:9px;text-transform:uppercase;letter-spacing:1px;color:var(--td);display:block;margin-bottom:5px;">Heure début</label>
+            <input type="time" id="pat_start" value="18:00" onchange="schedPatPreview()" style="width:100%;padding:8px 10px;border-radius:6px;border:1px solid var(--b);background:var(--bg);color:var(--t);font-size:13px;outline:none;"/>
+          </div>
+          <div>
+            <label style="font-family:'Space Mono',monospace;font-size:9px;text-transform:uppercase;letter-spacing:1px;color:var(--td);display:block;margin-bottom:5px;">Heure fin</label>
+            <input type="time" id="pat_end" value="22:00" onchange="schedPatPreview()" style="width:100%;padding:8px 10px;border-radius:6px;border:1px solid var(--b);background:var(--bg);color:var(--t);font-size:13px;outline:none;"/>
+          </div>
+        </div>
+
+        <!-- Première cohorte -->
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+          <div>
+            <label style="font-family:'Space Mono',monospace;font-size:9px;text-transform:uppercase;letter-spacing:1px;color:var(--td);display:block;margin-bottom:5px;">Date de début (1ère cohorte)</label>
+            <input type="date" id="pat_startdate" onchange="schedPatPreview()" style="width:100%;padding:8px 10px;border-radius:6px;border:1px solid var(--b);background:var(--bg);color:var(--t);font-size:13px;outline:none;"/>
+          </div>
+          <div>
+            <label style="font-family:'Space Mono',monospace;font-size:9px;text-transform:uppercase;letter-spacing:1px;color:var(--td);display:block;margin-bottom:5px;">Code 1ère cohorte</label>
+            <input type="text" id="pat_firstcode" placeholder="ex: JS34" onchange="schedPatPreview()" style="width:100%;padding:8px 10px;border-radius:6px;border:1px solid var(--b);background:var(--bg);color:var(--t);font-size:13px;outline:none;"/>
+          </div>
+        </div>
+
+        <!-- Nombre de cohortes -->
+        <div>
+          <label style="font-family:'Space Mono',monospace;font-size:9px;text-transform:uppercase;letter-spacing:1px;color:var(--td);display:block;margin-bottom:5px;">Nombre de cohortes à générer</label>
+          <div style="display:flex;align-items:center;gap:10px;">
+            <input type="range" id="pat_count" min="1" max="20" value="5" oninput="document.getElementById('pat_count_lbl').textContent=this.value; schedPatPreview()" style="flex:1;accent-color:var(--a);">
+            <span id="pat_count_lbl" style="font-size:14px;font-weight:700;color:var(--a);min-width:24px;">5</span>
+          </div>
+        </div>
+
+        <!-- Gap entre cohortes -->
+        <div>
+          <label style="font-family:'Space Mono',monospace;font-size:9px;text-transform:uppercase;letter-spacing:1px;color:var(--td);display:block;margin-bottom:5px;">Pause entre cohortes <span style="opacity:0.5;">(jours)</span></label>
+          <div style="display:flex;align-items:center;gap:10px;">
+            <input type="range" id="pat_gap" min="0" max="14" value="4" oninput="document.getElementById('pat_gap_lbl').textContent=this.value; schedPatPreview()" style="flex:1;accent-color:var(--a);">
+            <span id="pat_gap_lbl" style="font-size:14px;font-weight:700;color:var(--a);min-width:24px;">4</span>
+          </div>
+        </div>
+
+        <!-- Aperçu -->
+        <div id="pat_preview" style="background:var(--bg);border-radius:8px;border:1px solid var(--b);padding:12px;font-size:11px;max-height:200px;overflow-y:auto;"></div>
+
+      </div>
+
+      <div style="padding:14px 20px;border-top:1px solid var(--b);display:flex;gap:8px;justify-content:flex-end;">
+        <button class="btn" onclick="document.getElementById('pattern-modal-overlay').remove()">Annuler</button>
+        <button class="btn primary" id="pat_save_btn" onclick="schedSavePattern()">Générer les cohortes</button>
+      </div>
+    </div>`;
+
+  document.body.appendChild(overlay);
+  schedPatOnPatternChange();
+}
+
+function schedPatOnPatternChange() {
+  const key = document.getElementById('pat_pattern')?.value;
+  const p = SCHED_COHORT_PATTERNS[key];
+  if (!p) return;
+  const startEl = document.getElementById('pat_start');
+  const endEl   = document.getElementById('pat_end');
+  const gapEl   = document.getElementById('pat_gap');
+  const gapLbl  = document.getElementById('pat_gap_lbl');
+  if (startEl) startEl.value = p.start_time;
+  if (endEl)   endEl.value   = p.end_time;
+  if (gapEl)   { gapEl.value = p.gap_days; }
+  if (gapLbl)  gapLbl.textContent = p.gap_days;
+  schedPatPreview();
+}
+
+function schedPatBuildAllCohorts() {
+  const patKey    = document.getElementById('pat_pattern')?.value;
+  const startDate = document.getElementById('pat_startdate')?.value;
+  const firstCode = document.getElementById('pat_firstcode')?.value?.trim() || '';
+  const count     = parseInt(document.getElementById('pat_count')?.value || '5');
+  const gap       = parseInt(document.getElementById('pat_gap')?.value   || '4');
+  const startTime = document.getElementById('pat_start')?.value || '18:00';
+  const endTime   = document.getElementById('pat_end')?.value   || '22:00';
+
+  if (!patKey || !startDate) return [];
+  const p = SCHED_COHORT_PATTERNS[patKey];
+  if (!p) return [];
+
+  // Parse first cohort number from code (e.g. "JS34" → prefix="JS", num=34)
+  const match = firstCode.match(/^([A-Za-z]*)(\d+)$/);
+  const prefix = match ? match[1] : (p.prefix || '');
+  let   num    = match ? parseInt(match[2]) : 1;
+
+  const cohorts = [];
+  let cursor = startDate;
+
+  for (let c = 0; c < count; c++) {
+    const year = parseInt(cursor.slice(0,4));
+    const dates = schedGenCohortDates(patKey, cursor, year);
+    if (!dates.length) break;
+
+    cohorts.push({
+      code:      prefix + num,
+      dates,
+      startTime,
+      endTime,
+      program:   p.program,
+      shiftType: p.shift_type,
+    });
+    num++;
+
+    // Next cohort starts gap days after last date of this cohort
+    const last = new Date(dates[dates.length-1] + 'T00:00:00');
+    last.setDate(last.getDate() + gap + 1);
+    cursor = last.toISOString().slice(0,10);
+  }
+  return cohorts;
+}
+
+function schedPatPreview() {
+  const preview = document.getElementById('pat_preview');
+  if (!preview) return;
+
+  const cohorts = schedPatBuildAllCohorts();
+  if (!cohorts.length) {
+    preview.innerHTML = '<span style="color:var(--td);">Remplis les champs pour voir l\'aperçu.</span>';
+    return;
+  }
+
+  const holidays = schedGetHolidaysQC(parseInt(cohorts[0].dates[0].slice(0,4)));
+  schedGetHolidaysQC(parseInt(cohorts[0].dates[0].slice(0,4)) + 1).forEach(h => holidays.add(h));
+
+  let html = `<div style="color:var(--a);font-weight:700;margin-bottom:8px;">${cohorts.length} cohortes · ${cohorts.reduce((s,c)=>s+c.dates.length,0)} shifts total</div>`;
+  cohorts.forEach(c => {
+    const skipped = []; // holidays that were skipped — we can show them
+    html += `<div style="margin-bottom:6px;padding:6px 8px;background:rgba(255,255,255,0.04);border-radius:5px;">
+      <span style="font-family:'Space Mono',monospace;font-size:10px;color:var(--a);font-weight:700;">${esc(c.code)}</span>
+      <span style="color:var(--td);font-size:10px;"> · ${c.dates.length} jours · ${c.dates[0]} → ${c.dates[c.dates.length-1]}</span>
+      <div style="font-size:9px;color:var(--td);margin-top:2px;opacity:0.7;">${c.startTime}–${c.endTime} · ${c.dates.join(' · ')}</div>
+    </div>`;
+  });
+  preview.innerHTML = html;
+}
+
+async function schedSavePattern() {
+  const instructor_id = document.getElementById('pat_trainer')?.value;
+  if (!instructor_id) { alert('Sélectionne un formateur.'); return; }
+
+  const cohorts = schedPatBuildAllCohorts();
+  if (!cohorts.length) { alert('Aucune cohorte générée. Vérifie les paramètres.'); return; }
+
+  const saveBtn = document.getElementById('pat_save_btn');
+  const totalShifts = cohorts.reduce((s,c) => s + c.dates.length, 0);
+  if (saveBtn) { saveBtn.disabled = true; saveBtn.textContent = `Création de ${totalShifts} shifts...`; }
+
+  try {
+    const allEntries = [];
+    cohorts.forEach(c => {
+      c.dates.forEach(date => {
+        allEntries.push({
+          instructor_id,
+          date,
+          shift_type:     c.shiftType,
+          program:        c.program,
+          excel_cell_code: c.code,
+          start_time:     c.startTime,
+          end_time:       c.endTime,
+          status:         'scheduled',
+          notes:          `Cohorte ${c.code}`,
+        });
+      });
+    });
+
+    const BATCH = 50;
+    let inserted = 0;
+    for (let i = 0; i < allEntries.length; i += BATCH) {
+      const { error } = await db.from('schedule_entries').insert(allEntries.slice(i, i + BATCH));
+      if (error) throw error;
+      inserted += BATCH;
+      if (saveBtn) saveBtn.textContent = `${Math.min(inserted, totalShifts)}/${totalShifts} créés...`;
+    }
+
+    document.getElementById('pattern-modal-overlay')?.remove();
+    await schedReloadEntries();
+
+    const trainerName = schedGetTrainers().find(t => t.id === instructor_id)?.name || instructor_id;
+    schedFlash(`✓ ${cohorts.length} cohortes créées pour ${trainerName} (${totalShifts} shifts)`);
+  } catch(err) {
+    console.error('schedSavePattern error:', err);
+    alert('Erreur: ' + (err.message || err));
+    if (saveBtn) { saveBtn.disabled = false; saveBtn.textContent = 'Générer les cohortes'; }
   }
 }
