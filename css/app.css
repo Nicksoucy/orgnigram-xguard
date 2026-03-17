@@ -521,3 +521,9 @@ input[name="fdColor"]:checked+.color-swatch{border-color:#fff;transform:scale(1.
 .sched-session-id { font-family:'Space Mono',monospace; font-size:10px; color:var(--a); background:rgba(255,107,53,0.1); padding:2px 6px; border-radius:3px; }
 .sched-session-date { color:var(--td); font-size:10px; min-width:70px; }
 .sched-session-prog { font-size:10px; font-weight:600; }
+
+/* Holiday column highlight */
+.sched-table th.holiday-col,
+.sched-table td.holiday-col {
+  background: rgba(59, 130, 246, 0.12) !important;
+}

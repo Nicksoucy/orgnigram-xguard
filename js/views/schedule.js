@@ -335,15 +335,21 @@ function schedBuildMonthGrid() {
     Formateur
     <div style="font-size:8px;font-weight:400;color:var(--td);margin-top:2px;">+ ligne</div>
   </th>`;
+  // Pre-compute holidays for this month
+  const _holidays = schedGetHolidaysQC(_schedYear);
+  schedGetHolidaysQC(_schedYear + 1).forEach(h => _holidays.add(h));
+
   for (let d = 1; d <= days; d++) {
     const dateS = schedDateStr(_schedYear, _schedMonth, d);
     const isToday = dateS === todayS;
     const isWe   = schedIsWeekend(_schedYear, _schedMonth, d);
+    const isHoliday = _holidays.has(dateS);
     const dow    = SCHED_DAYS_FR[schedDayOfWeek(dateS)];
-    const color  = isToday ? 'var(--a)' : isWe ? 'var(--td)' : 'inherit';
-    const opacity = isWe ? 'opacity:0.6;' : '';
-    headerHTML += `<th style="color:${color};${opacity}line-height:1.2;">
-      <div style="font-size:9px;font-weight:500;">${dow}</div>
+    const color  = isToday ? 'var(--a)' : isHoliday ? '#93c5fd' : isWe ? 'var(--td)' : 'inherit';
+    const opacity = isWe && !isHoliday ? 'opacity:0.6;' : '';
+    const holidayBg = isHoliday ? 'background:rgba(59,130,246,0.15);' : '';
+    headerHTML += `<th style="color:${color};${opacity}${holidayBg}line-height:1.2;" title="${isHoliday ? 'Jour férié' : ''}">
+      <div style="font-size:9px;font-weight:500;">${isHoliday ? '🏖' : dow}</div>
       <div style="font-size:11px;font-weight:700;">${d}</div>
     </th>`;
   }
@@ -386,7 +392,8 @@ function schedBuildMonthGrid() {
         if (!matchEntries.length && dayArr.length) matchEntries = [];
       }
 
-      const tdClass = [isToday ? 'today' : '', isWe ? 'weekend-col' : ''].filter(Boolean).join(' ');
+      const isHoliday = _holidays.has(dateS);
+      const tdClass = [isToday ? 'today' : '', isWe ? 'weekend-col' : '', isHoliday ? 'holiday-col' : ''].filter(Boolean).join(' ');
       const escapedDateS = esc(dateS);
       const trainerId    = esc(trainer.id);
 
