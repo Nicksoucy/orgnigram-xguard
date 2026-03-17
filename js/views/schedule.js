@@ -1593,6 +1593,10 @@ function schedOpenPatternModal(preTrainerId, prePatternKey, preQuart) {
     `<option value="${esc(p.id)}">${esc(p.label || p.id)}</option>`
   ).join('');
 
+  const locationOpts = _schedLocations.length
+    ? _schedLocations.map(l => `<option value="${esc(l.id)}">${esc(l.name || l.city || l.code)}</option>`).join('')
+    : `<option value="online">En ligne</option><option value="mtl">Montréal</option><option value="qc">Québec</option>`;
+
   const overlay = document.createElement('div');
   overlay.id = 'pattern-modal-overlay';
   overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.72);z-index:2000;display:flex;align-items:center;justify-content:center;backdrop-filter:blur(4px);';
@@ -1632,6 +1636,15 @@ function schedOpenPatternModal(preTrainerId, prePatternKey, preQuart) {
           <label style="font-family:'Space Mono',monospace;font-size:9px;text-transform:uppercase;letter-spacing:1px;color:var(--td);display:block;margin-bottom:5px;">Programme</label>
           <select id="pat_program" style="width:100%;padding:8px 10px;border-radius:6px;border:1px solid var(--b);background:var(--bg);color:var(--t);font-size:13px;outline:none;">
             ${programOpts}
+          </select>
+        </div>
+
+                <!-- Salle / Lieu -->
+        <div>
+          <label style="font-family:'Space Mono',monospace;font-size:9px;text-transform:uppercase;letter-spacing:1px;color:var(--td);display:block;margin-bottom:5px;">Salle / Lieu</label>
+          <select id="pat_location" style="width:100%;padding:8px 10px;border-radius:6px;border:1px solid var(--b);background:var(--bg);color:var(--t);font-size:13px;outline:none;">
+            <option value="">— Aucune salle —</option>
+            ${locationOpts}
           </select>
         </div>
 
@@ -1741,6 +1754,7 @@ function schedPatBuildAllCohorts() {
   const startTime = document.getElementById('pat_start')?.value || '18:00';
   const endTime   = document.getElementById('pat_end')?.value   || '22:00';
   const program   = document.getElementById('pat_program')?.value || null;
+  const location_id = document.getElementById('pat_location')?.value || null;
 
   if (!patKey || !startDate) return [];
   const p = SCHED_COHORT_PATTERNS[patKey];
@@ -1766,6 +1780,7 @@ function schedPatBuildAllCohorts() {
       endTime,
       program:   program || p.program,
       shiftType: p.shift_type,
+      locationId: location_id,
     });
     num++;
 
@@ -1822,6 +1837,7 @@ async function schedSavePattern() {
           date,
           shift_type:     c.shiftType,
           program:        c.program,
+          location_id:    c.locationId || null,
           excel_cell_code: c.code,
           start_time:     c.startTime,
           end_time:       c.endTime,
