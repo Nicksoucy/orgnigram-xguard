@@ -138,15 +138,27 @@ const SCHED_COHORT_PATTERNS = {
     prefix:     'W',
   },
   'RCR': {
-    label:      'RCR (1 journée)',
+    label:      'RCR (2 jours — Sam+Dim)',
     program:    'RCR',
     shift_type: 'jour',
-    days:       [6],          // Samedi
-    sessions:   1,
+    days:       [6,0],        // Samedi + Dimanche
+    sessions:   2,
+    consecutive: true,        // 2 jours consécutifs
     start_time: '09:00',
     end_time:   '17:00',
     gap_days:   0,
     prefix:     'RCR',
+  },
+  'RCR_1J': {
+    label:      'RCR (1 journée — Samedi)',
+    program:    'RCR',
+    shift_type: 'jour',
+    days:       [6],
+    sessions:   1,
+    start_time: '09:00',
+    end_time:   '17:00',
+    gap_days:   0,
+    prefix:     'RC',
   },
   'ELITE': {
     label:      'Élite (Lun-Jeu, 2 semaines)',
