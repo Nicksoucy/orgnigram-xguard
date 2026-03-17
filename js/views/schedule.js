@@ -812,6 +812,90 @@ function schedBuildTrainerView() {
 
 // ---- Shift Detail Popup ----
 
+async function schedDeleteSeriesPrompt(entryId, code, entryDate) {
+  const overlay = document.createElement('div');
+  overlay.id = 'delete-series-overlay';
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.72);z-index:3000;display:flex;align-items:center;justify-content:center;';
+  overlay.innerHTML = `
+    <div style="background:var(--s);border:1px solid var(--b);border-radius:12px;padding:24px;width:360px;font-family:'DM Sans',sans-serif;">
+      <div style="font-size:14px;font-weight:700;margin-bottom:6px;">Supprimer la série <span style="color:var(--a);">${esc(code)}</span></div>
+      <div style="font-size:12px;color:var(--td);margin-bottom:16px;">Choisissez ce que vous voulez supprimer.</div>
+
+      <div style="display:flex;flex-direction:column;gap:10px;margin-bottom:20px;">
+        <label style="display:flex;align-items:center;gap:10px;cursor:pointer;padding:10px;border-radius:8px;border:1px solid var(--b);background:var(--bg);">
+          <input type="radio" name="del_mode" value="all" checked style="accent-color:var(--a);width:16px;height:16px;">
+          <div>
+            <div style="font-size:13px;font-weight:600;">Toute la série</div>
+            <div style="font-size:11px;color:var(--td);">Supprime tous les shifts avec le code ${esc(code)}</div>
+          </div>
+        </label>
+        <label style="display:flex;align-items:center;gap:10px;cursor:pointer;padding:10px;border-radius:8px;border:1px solid var(--b);background:var(--bg);">
+          <input type="radio" name="del_mode" value="from" style="accent-color:var(--a);width:16px;height:16px;" onchange="document.getElementById('del_from_date_wrap').style.display='block'">
+          <div style="flex:1;">
+            <div style="font-size:13px;font-weight:600;">À partir d'une date</div>
+            <div style="font-size:11px;color:var(--td);">Supprime seulement les shifts à partir de la date choisie</div>
+          </div>
+        </label>
+        <div id="del_from_date_wrap" style="display:none;padding:0 10px;">
+          <input type="date" id="del_from_date" value="${esc(entryDate)}" style="width:100%;padding:8px 10px;border-radius:6px;border:1px solid var(--b);background:var(--bg);color:var(--t);font-size:13px;outline:none;box-sizing:border-box;" />
+        </div>
+      </div>
+
+      <div style="display:flex;gap:8px;justify-content:flex-end;">
+        <button onclick="document.getElementById('delete-series-overlay').remove()" style="padding:8px 16px;border-radius:6px;border:1px solid var(--b);background:transparent;color:var(--t);cursor:pointer;font-size:13px;">Annuler</button>
+        <button onclick="schedDeleteSeries('${esc(entryId)}','${esc(code)}')" style="padding:8px 16px;border-radius:6px;background:#ef4444;color:#fff;border:none;cursor:pointer;font-size:13px;font-weight:600;">Supprimer</button>
+      </div>
+    </div>
+  `;
+  // Wire up radio to show/hide date input
+  overlay.querySelectorAll && setTimeout(() => {
+    const radios = document.querySelectorAll('input[name="del_mode"]');
+    radios.forEach(r => r.addEventListener('change', () => {
+      const wrap = document.getElementById('del_from_date_wrap');
+      if (wrap) wrap.style.display = r.value === 'from' ? 'block' : 'none';
+    }));
+  }, 50);
+  document.body.appendChild(overlay);
+}
+
+async function schedDeleteSeries(entryId, code) {
+  const mode = document.querySelector('input[name="del_mode"]:checked')?.value || 'all';
+  const fromDate = document.getElementById('del_from_date')?.value || null;
+
+  const entry = _schedEntries.find(e => e.id === entryId);
+  if (!entry) return;
+  const instructorId = entry.instructor_id;
+
+  document.getElementById('delete-series-overlay')?.remove();
+  schedClosePopup();
+
+  // Filter entries to delete
+  let toDelete = _schedEntries.filter(e =>
+    e.instructor_id === instructorId && e.excel_cell_code === code
+  );
+  if (mode === 'from' && fromDate) {
+    toDelete = toDelete.filter(e => e.date >= fromDate);
+  }
+
+  if (!toDelete.length) {
+    schedFlash('Aucun shift trouvé à supprimer.', true);
+    return;
+  }
+
+  const ids = toDelete.map(e => e.id);
+  let deleted = 0;
+  const BATCH = 50;
+  for (let i = 0; i < ids.length; i += BATCH) {
+    const batch = ids.slice(i, i + BATCH);
+    const { error } = await db.from('schedule_entries').delete().in('id', batch);
+    if (!error) deleted += batch.length;
+  }
+
+  schedFlash(`${deleted} shift${deleted>1?'s':''} supprimé${deleted>1?'s':''}`, false);
+  await schedReloadEntries();
+  schedRenderContent();
+}
+
 async function schedRenameSeriesPrompt(entryId, currentCode) {
   // Show inline rename modal
   const overlay = document.createElement('div');
@@ -903,6 +987,7 @@ function schedOpenPopup(entryId, ev) {
     <div style="display:flex;gap:6px;margin-top:12px;">
       <button class="btn" style="font-size:11px;padding:5px 10px;flex:1;" onclick="schedEditEntry('${esc(entryId)}')">Modifier</button>
       ${cohort !== '—' ? `<button class="btn" style="font-size:11px;padding:5px 10px;background:var(--s2,#1e293b);flex:1;" onclick="schedRenameSeriesPrompt('${esc(entryId)}','${esc(cohort)}')">Série ✎</button>` : ''}
+      ${cohort !== '—' ? `<button class="btn danger" style="font-size:11px;padding:5px 10px;flex:1;" onclick="schedDeleteSeriesPrompt('${esc(entryId)}','${esc(cohort)}','${esc(entry.date)}')">Suppr. série</button>` : ''}
       <button class="btn danger" style="font-size:11px;padding:5px 10px;" onclick="schedDeleteEntry('${esc(entryId)}')">Supprimer</button>
     </div>`;
 
