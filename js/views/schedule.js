@@ -171,6 +171,18 @@ const SCHED_COHORT_PATTERNS = {
     gap_days:   3,
     prefix:     'E',
   },
+  'ALTERNATING': {
+    label:      'Alterné (2 groupes de jours)',
+    program:    'BSP',
+    shift_type: 'jour',
+    days:       [],           // handled specially by alternating logic
+    sessions:   0,
+    start_time: '09:00',
+    end_time:   '17:00',
+    gap_days:   0,
+    prefix:     'MC',
+    alternating: true,        // flag for special rendering
+  },
   'GESTION_CRISE_BIWEEKLY': {
     label:      'Gestion de Crise (1 Lundi sur 2)',
     program:    'GESTION_CRISE',
@@ -2339,6 +2351,44 @@ function schedOpenPatternModal(preTrainerId, prePatternKey, preQuart) {
           </select>
         </div>
 
+        <!-- Alternating config (hidden by default) -->
+        <div id="pat_alternating_section" style="display:none;">
+          <div style="background:var(--bg);border-radius:8px;padding:12px;margin-bottom:8px;">
+            <div style="font-size:11px;color:var(--a);font-weight:700;margin-bottom:10px;">Groupe A (ex: Jeu+Ven)</div>
+            <div style="display:flex;gap:8px;margin-bottom:8px;">
+              ${['Dim','Lun','Mar','Mer','Jeu','Ven','Sam'].map((d,i) =>
+                `<label style="display:flex;flex-direction:column;align-items:center;gap:3px;cursor:pointer;">
+                  <input type="checkbox" value="${i}" name="pat_days_a" style="accent-color:var(--a);">
+                  <span style="font-size:10px;">${d}</span>
+                </label>`
+              ).join('')}
+            </div>
+            <div style="font-size:11px;color:var(--a);font-weight:700;margin-bottom:10px;margin-top:10px;">Groupe B (ex: Sam+Dim)</div>
+            <div style="display:flex;gap:8px;">
+              ${['Dim','Lun','Mar','Mer','Jeu','Ven','Sam'].map((d,i) =>
+                `<label style="display:flex;flex-direction:column;align-items:center;gap:3px;cursor:pointer;">
+                  <input type="checkbox" value="${i}" name="pat_days_b" style="accent-color:var(--a);">
+                  <span style="font-size:10px;">${d}</span>
+                </label>`
+              ).join('')}
+            </div>
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:8px;">
+            <div>
+              <label style="font-family:'Space Mono',monospace;font-size:9px;text-transform:uppercase;letter-spacing:1px;color:var(--td);display:block;margin-bottom:5px;">Fréquence</label>
+              <select id="pat_alt_freq" style="width:100%;padding:8px 10px;border-radius:6px;border:1px solid var(--b);background:var(--bg);color:var(--t);font-size:13px;outline:none;">
+                <option value="weekly">Chaque semaine</option>
+                <option value="biweekly">1 semaine sur 2</option>
+              </select>
+            </div>
+            <div>
+              <label style="font-family:'Space Mono',monospace;font-size:9px;text-transform:uppercase;letter-spacing:1px;color:var(--td);display:block;margin-bottom:5px;">Nb de cohortes</label>
+              <input id="pat_alt_count" type="number" value="26" min="1" max="100" style="width:100%;padding:8px 10px;border-radius:6px;border:1px solid var(--b);background:var(--bg);color:var(--t);font-size:13px;outline:none;box-sizing:border-box;">
+            </div>
+          </div>
+        </div>
+
+        <div id="pat_normal_section">
         <!-- Heures (modifiables) -->
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
           <div>
@@ -2381,6 +2431,8 @@ function schedOpenPatternModal(preTrainerId, prePatternKey, preQuart) {
           </div>
         </div>
 
+        </div><!-- end pat_normal_section -->
+
         <!-- Aperçu -->
         <div id="pat_preview" style="background:var(--bg);border-radius:8px;border:1px solid var(--b);padding:12px;font-size:11px;max-height:200px;overflow-y:auto;"></div>
 
@@ -2422,6 +2474,19 @@ function schedOpenPatternModal(preTrainerId, prePatternKey, preQuart) {
 }
 
 function schedPatOnPatternChange() {
+  const patKey = document.getElementById('pat_pattern')?.value;
+  const altSection = document.getElementById('pat_alternating_section');
+  const normalSection = document.getElementById('pat_normal_section');
+  if (altSection && normalSection) {
+    if (patKey === 'ALTERNATING') {
+      altSection.style.display = 'block';
+      normalSection.style.display = 'none';
+    } else {
+      altSection.style.display = 'none';
+      normalSection.style.display = 'block';
+    }
+  }
+
   const key = document.getElementById('pat_pattern')?.value;
   const p = SCHED_COHORT_PATTERNS[key];
   if (!p) return;
@@ -2487,7 +2552,8 @@ function schedPatPreview() {
   const preview = document.getElementById('pat_preview');
   if (!preview) return;
 
-  const cohorts = schedPatBuildAllCohorts();
+  const patKey2 = document.getElementById('pat_pattern')?.value;
+  const cohorts = patKey2 === 'ALTERNATING' ? schedPatBuildAlternating() : schedPatBuildAllCohorts();
   if (!cohorts.length) {
     preview.innerHTML = '<span style="color:var(--td);">Remplis les champs pour voir l\'aperçu.</span>';
     return;
@@ -2508,11 +2574,92 @@ function schedPatPreview() {
   preview.innerHTML = html;
 }
 
+function schedPatBuildAlternating() {
+  const instructorId = document.getElementById('pat_trainer')?.value;
+  const startDate    = document.getElementById('pat_startdate')?.value;
+  const firstCode    = document.getElementById('pat_firstcode')?.value?.trim() || 'MC1';
+  const startTime    = document.getElementById('pat_start')?.value || '09:00';
+  const endTime      = document.getElementById('pat_end')?.value   || '17:00';
+  const program      = document.getElementById('pat_program')?.value || 'RCR';
+  const location_id  = document.getElementById('pat_location')?.value || null;
+  const freq         = document.getElementById('pat_alt_freq')?.value || 'weekly';
+  const totalCount   = parseInt(document.getElementById('pat_alt_count')?.value || '26');
+
+  const daysA = [...document.querySelectorAll('input[name="pat_days_a"]:checked')].map(el => parseInt(el.value));
+  const daysB = [...document.querySelectorAll('input[name="pat_days_b"]:checked')].map(el => parseInt(el.value));
+
+  if (!startDate || daysA.length === 0 || daysB.length === 0) return [];
+
+  const holidays = schedGetHolidaysQC(parseInt(startDate.slice(0,4)));
+  schedGetHolidaysQC(parseInt(startDate.slice(0,4))+1).forEach(h => holidays.add(h));
+
+  // Parse starting code number
+  const match = firstCode.match(/^([A-Za-z]*)(d+)$/);
+  const prefix = match ? match[1] : 'MC';
+  let num = match ? parseInt(match[2]) : 1;
+
+  // Find Monday of the start week
+  let d = new Date(startDate + 'T00:00:00');
+  while (d.getDay() !== 1) d.setDate(d.getDate() - 1); // go back to Monday
+  if (d > new Date(startDate + 'T00:00:00')) d.setDate(d.getDate() - 7);
+
+  const anchorMon = new Date(d);
+  const cohorts = [];
+  let weekOffset = 0;
+
+  while (cohorts.length < totalCount) {
+    const isOnWeek = freq === 'weekly' || (weekOffset % 2 === 0);
+
+    if (isOnWeek) {
+      // Group A: collect days from this week
+      const gA = [];
+      daysA.forEach(dow => {
+        const dd = new Date(d);
+        const diff = (dow - 1 + 7) % 7; // offset from Monday
+        dd.setDate(d.getDate() + diff);
+        const iso = dd.toISOString().slice(0,10);
+        if (!holidays.has(iso)) gA.push(iso);
+      });
+      gA.sort();
+
+      // Group B: collect days from this week (Sam/Dim may be in same or next week)
+      const gB = [];
+      daysB.forEach(dow => {
+        const dd = new Date(d);
+        // Sunday(0) is end of week = +6 from Monday
+        const diff = dow === 0 ? 6 : (dow - 1);
+        dd.setDate(d.getDate() + diff);
+        // If Sam/Dim, they're at end of week (+5,+6)
+        if (dow === 6) dd.setDate(d.getDate() + 5);
+        if (dow === 0) dd.setDate(d.getDate() + 6);
+        const iso = dd.toISOString().slice(0,10);
+        if (!holidays.has(iso)) gB.push(iso);
+      });
+      gB.sort();
+
+      if (gA.length > 0 && cohorts.length < totalCount) {
+        cohorts.push({ code: prefix+num, dates: gA, startTime, endTime, program, shiftType: freq==='weekly'?'jour':'jour', locationId: location_id });
+        num++;
+      }
+      if (gB.length > 0 && cohorts.length < totalCount) {
+        cohorts.push({ code: prefix+num, dates: gB, startTime, endTime, program, shiftType: 'weekend', locationId: location_id });
+        num++;
+      }
+    }
+
+    d.setDate(d.getDate() + 7);
+    weekOffset++;
+    if (weekOffset > 200) break; // safety
+  }
+  return cohorts;
+}
+
 async function schedSavePattern() {
   const instructor_id = document.getElementById('pat_trainer')?.value;
   if (!instructor_id) { alert('Sélectionne un formateur.'); return; }
 
-  const cohorts = schedPatBuildAllCohorts();
+  const patKey = document.getElementById('pat_pattern')?.value;
+  const cohorts = patKey === 'ALTERNATING' ? schedPatBuildAlternating() : schedPatBuildAllCohorts();
   if (!cohorts.length) { alert('Aucune cohorte générée. Vérifie les paramètres.'); return; }
 
   const saveBtn = document.getElementById('pat_save_btn');
