@@ -103,11 +103,11 @@ const SCHED_COHORT_PATTERNS = {
     prefix:     'J',
   },
   'BSP_WEEKEND': {
-    label:      'BSP Weekend (Sam-Dim, 6 weekends)',
+    label:      'BSP Weekend (Sam-Dim, 4 weekends)',
     program:    'BSP',
     shift_type: 'weekend',
     days:       [6,0],        // Sam=6, Dim=0
-    sessions:   12,
+    sessions:   8,
     start_time: '09:00',
     end_time:   '17:00',
     gap_days:   0,
