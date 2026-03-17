@@ -1087,7 +1087,10 @@ async function renderSchedule(ct, cl) {
         ${programFilterOpts}
       </select>
 
-      <button class="btn primary" style="margin-left:auto;font-size:12px;" onclick="schedOpenNewShift({})">+ Nouveau shift</button>
+      <div style="display:flex;gap:6px;margin-left:auto;">
+        <button class="btn" style="font-size:12px;" onclick="schedOpenRecurring()">🔁 Horaire récurrent</button>
+        <button class="btn primary" style="font-size:12px;" onclick="schedOpenNewShift({})">+ Nouveau shift</button>
+      </div>
     </div>`;
 
   // Main content area
@@ -1118,4 +1121,247 @@ async function renderSchedule(ct, cl) {
   }
 
   schedRenderContent();
+}
+
+// ==================== HORAIRE RÉCURRENT ====================
+
+function schedOpenRecurring() {
+  const existing = document.getElementById('recurring-modal-overlay');
+  if (existing) existing.remove();
+
+  const trainers = schedGetTrainers();
+  const trainerOpts = trainers.map(t =>
+    `<option value="${esc(t.id)}">${esc(t.name)}</option>`
+  ).join('');
+
+  const programs = _schedPrograms.length
+    ? _schedPrograms
+    : Object.entries(SCHED_DEFAULT_PROGRAM_COLORS).map(([id]) => ({ id, label: id }));
+  const programOpts = `<option value="">— Aucun programme —</option>` +
+    programs.map(p => `<option value="${esc(p.id)}">${esc(p.label || p.id)}</option>`).join('');
+
+  const currentYear = _schedYear;
+  const nextYear    = currentYear + 1;
+
+  const overlay = document.createElement('div');
+  overlay.id = 'recurring-modal-overlay';
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.72);z-index:2000;display:flex;align-items:center;justify-content:center;backdrop-filter:blur(4px);';
+  overlay.addEventListener('click', ev => { if (ev.target === overlay) overlay.remove(); });
+
+  overlay.innerHTML = `
+    <div style="background:var(--s);border:1px solid var(--b);border-radius:14px;width:480px;max-width:95vw;max-height:90vh;overflow-y:auto;display:flex;flex-direction:column;">
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:18px 20px 14px;border-bottom:1px solid var(--b);">
+        <div>
+          <h3 style="font-size:16px;font-weight:700;margin:0;">🔁 Horaire récurrent</h3>
+          <div style="font-size:11px;color:var(--td);margin-top:3px;">Génère automatiquement les shifts pour toute une période</div>
+        </div>
+        <button onclick="document.getElementById('recurring-modal-overlay').remove()" style="background:none;border:none;color:var(--td);font-size:18px;cursor:pointer;">✕</button>
+      </div>
+
+      <div style="padding:18px 20px;display:flex;flex-direction:column;gap:14px;">
+
+        <div>
+          <label style="font-family:'Space Mono',monospace;font-size:9px;text-transform:uppercase;letter-spacing:1px;color:var(--td);display:block;margin-bottom:5px;">Formateur</label>
+          <select id="rec_trainer" style="width:100%;padding:8px 10px;border-radius:6px;border:1px solid var(--b);background:var(--bg);color:var(--t);font-size:13px;outline:none;">
+            ${trainerOpts}
+          </select>
+        </div>
+
+        <div>
+          <label style="font-family:'Space Mono',monospace;font-size:9px;text-transform:uppercase;letter-spacing:1px;color:var(--td);display:block;margin-bottom:8px;">Jours de la semaine</label>
+          <div style="display:flex;gap:6px;">
+            ${['Lun','Mar','Mer','Jeu','Ven','Sam','Dim'].map((d,i) => `
+              <label style="display:flex;flex-direction:column;align-items:center;gap:4px;cursor:pointer;flex:1;padding:6px 4px;border-radius:6px;border:1px solid var(--b);background:var(--bg);" id="rec_daylabel_${i}">
+                <input type="checkbox" id="rec_day_${i}" value="${i}" ${i < 5 ? 'checked' : ''}
+                  onchange="schedRecUpdatePreview()"
+                  style="width:14px;height:14px;accent-color:var(--a);cursor:pointer;">
+                <span style="font-size:10px;font-weight:600;">${d}</span>
+              </label>`).join('')}
+          </div>
+        </div>
+
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+          <div>
+            <label style="font-family:'Space Mono',monospace;font-size:9px;text-transform:uppercase;letter-spacing:1px;color:var(--td);display:block;margin-bottom:5px;">Heure début</label>
+            <input type="time" id="rec_start" value="08:00" onchange="schedRecUpdatePreview()" style="width:100%;padding:8px 10px;border-radius:6px;border:1px solid var(--b);background:var(--bg);color:var(--t);font-size:13px;outline:none;"/>
+          </div>
+          <div>
+            <label style="font-family:'Space Mono',monospace;font-size:9px;text-transform:uppercase;letter-spacing:1px;color:var(--td);display:block;margin-bottom:5px;">Heure fin</label>
+            <input type="time" id="rec_end" value="16:00" onchange="schedRecUpdatePreview()" style="width:100%;padding:8px 10px;border-radius:6px;border:1px solid var(--b);background:var(--bg);color:var(--t);font-size:13px;outline:none;"/>
+          </div>
+        </div>
+
+        <div>
+          <label style="font-family:'Space Mono',monospace;font-size:9px;text-transform:uppercase;letter-spacing:1px;color:var(--td);display:block;margin-bottom:5px;">Programme <span style="opacity:0.5;">(optionnel)</span></label>
+          <select id="rec_program" style="width:100%;padding:8px 10px;border-radius:6px;border:1px solid var(--b);background:var(--bg);color:var(--t);font-size:13px;outline:none;">
+            ${programOpts}
+          </select>
+        </div>
+
+        <div>
+          <label style="font-family:'Space Mono',monospace;font-size:9px;text-transform:uppercase;letter-spacing:1px;color:var(--td);display:block;margin-bottom:8px;">Période</label>
+          <div style="display:flex;gap:6px;margin-bottom:8px;flex-wrap:wrap;">
+            <button onclick="schedRecSetPeriod(${currentYear})" class="btn" id="rec_period_cy" style="font-size:11px;">Année ${currentYear}</button>
+            <button onclick="schedRecSetPeriod(${nextYear})" class="btn" id="rec_period_ny" style="font-size:11px;">Année ${nextYear}</button>
+            <button onclick="schedRecSetPeriod('custom')" class="btn" id="rec_period_custom" style="font-size:11px;">Dates custom</button>
+          </div>
+          <div id="rec_custom_dates" style="display:none;grid-template-columns:1fr 1fr;gap:10px;">
+            <div>
+              <label style="font-size:10px;color:var(--td);display:block;margin-bottom:3px;">Date début</label>
+              <input type="date" id="rec_from" onchange="schedRecUpdatePreview()" style="width:100%;padding:7px 10px;border-radius:6px;border:1px solid var(--b);background:var(--bg);color:var(--t);font-size:12px;outline:none;"/>
+            </div>
+            <div>
+              <label style="font-size:10px;color:var(--td);display:block;margin-bottom:3px;">Date fin</label>
+              <input type="date" id="rec_to" onchange="schedRecUpdatePreview()" style="width:100%;padding:7px 10px;border-radius:6px;border:1px solid var(--b);background:var(--bg);color:var(--t);font-size:12px;outline:none;"/>
+            </div>
+          </div>
+          <input type="hidden" id="rec_period_val" value="${currentYear}"/>
+        </div>
+
+        <div style="display:flex;align-items:center;gap:8px;padding:10px 12px;background:rgba(255,107,53,0.06);border-radius:8px;border:1px solid rgba(255,107,53,0.2);">
+          <input type="checkbox" id="rec_replace" style="width:15px;height:15px;accent-color:var(--a);cursor:pointer;">
+          <label for="rec_replace" style="font-size:12px;cursor:pointer;color:var(--t);">Remplacer les shifts existants sur cette période</label>
+        </div>
+
+        <div id="rec_preview" style="font-size:12px;color:var(--td);text-align:center;padding:8px;background:var(--bg);border-radius:6px;"></div>
+      </div>
+
+      <div style="padding:14px 20px;border-top:1px solid var(--b);display:flex;gap:8px;justify-content:flex-end;">
+        <button class="btn" onclick="document.getElementById('recurring-modal-overlay').remove()">Annuler</button>
+        <button class="btn primary" id="rec_save_btn" onclick="schedSaveRecurring()">Créer l'horaire</button>
+      </div>
+    </div>`;
+
+  document.body.appendChild(overlay);
+  schedRecSetPeriod(currentYear);
+}
+
+function schedRecSetPeriod(val) {
+  ['cy','ny','custom'].forEach(k => {
+    const btn = document.getElementById('rec_period_' + k);
+    if (btn) { btn.style.background = ''; btn.style.color = ''; }
+  });
+  const customDiv = document.getElementById('rec_custom_dates');
+  const input = document.getElementById('rec_period_val');
+  if (!input) return;
+
+  if (val === 'custom') {
+    input.value = 'custom';
+    if (customDiv) customDiv.style.display = 'grid';
+    const btn = document.getElementById('rec_period_custom');
+    if (btn) { btn.style.background = 'var(--a)'; btn.style.color = '#fff'; }
+  } else {
+    input.value = String(val);
+    if (customDiv) customDiv.style.display = 'none';
+    const yr = parseInt(val) === _schedYear ? 'cy' : 'ny';
+    const btn = document.getElementById('rec_period_' + yr);
+    if (btn) { btn.style.background = 'var(--a)'; btn.style.color = '#fff'; }
+  }
+  schedRecUpdatePreview();
+}
+
+function schedRecGetDates() {
+  const periodVal = document.getElementById('rec_period_val')?.value;
+  let from, to;
+  if (periodVal === 'custom') {
+    from = document.getElementById('rec_from')?.value;
+    to   = document.getElementById('rec_to')?.value;
+    if (!from || !to) return [];
+  } else {
+    const yr = parseInt(periodVal);
+    from = yr + '-01-01';
+    to   = yr + '-12-31';
+  }
+
+  const selectedDays = [];
+  for (let i = 0; i < 7; i++) {
+    if (document.getElementById('rec_day_' + i)?.checked) selectedDays.push(i);
+  }
+  if (!selectedDays.length) return [];
+
+  // Map our index (0=Lun…6=Dim) to JS getDay() (0=Sun,1=Mon…6=Sat)
+  const jsDay = [1, 2, 3, 4, 5, 6, 0];
+  const selectedJsDays = selectedDays.map(i => jsDay[i]);
+
+  const dates = [];
+  const end = new Date(to + 'T00:00:00');
+  for (let d = new Date(from + 'T00:00:00'); d <= end; d.setDate(d.getDate() + 1)) {
+    if (selectedJsDays.includes(d.getDay())) {
+      dates.push(d.toISOString().slice(0, 10));
+    }
+  }
+  return dates;
+}
+
+function schedRecUpdatePreview() {
+  const preview = document.getElementById('rec_preview');
+  if (!preview) return;
+  const dates = schedRecGetDates();
+  if (!dates.length) {
+    preview.textContent = 'Sélectionne au moins un jour et une période.';
+    preview.style.color = 'var(--td)';
+  } else {
+    preview.innerHTML = `<span style="color:var(--a);font-weight:700;">${dates.length} shifts</span> du <strong>${dates[0]}</strong> au <strong>${dates[dates.length-1]}</strong>`;
+  }
+}
+
+async function schedSaveRecurring() {
+  const instructor_id = document.getElementById('rec_trainer')?.value;
+  const start_time    = document.getElementById('rec_start')?.value || '08:00';
+  const end_time      = document.getElementById('rec_end')?.value   || '16:00';
+  const program       = document.getElementById('rec_program')?.value || 'COORDINATION';
+  const replace       = document.getElementById('rec_replace')?.checked;
+  const dates         = schedRecGetDates();
+
+  if (!instructor_id) { alert('Veuillez sélectionner un formateur.'); return; }
+  if (!dates.length)  { alert('Aucune date générée. Vérifiez les jours et la période.'); return; }
+
+  const saveBtn = document.getElementById('rec_save_btn');
+  if (saveBtn) { saveBtn.disabled = true; saveBtn.textContent = `Création de ${dates.length} shifts...`; }
+
+  try {
+    if (replace) {
+      const { error: delErr } = await db.from('schedule_entries')
+        .delete()
+        .eq('instructor_id', instructor_id)
+        .gte('date', dates[0])
+        .lte('date', dates[dates.length - 1]);
+      if (delErr) throw delErr;
+    }
+
+    const entries = dates.map(date => ({
+      instructor_id,
+      date,
+      shift_type: 'jour',
+      program:    program || 'COORDINATION',
+      start_time,
+      end_time,
+      status: 'confirmed',
+      notes:  'Horaire récurrent'
+    }));
+
+    const BATCH = 50;
+    let inserted = 0;
+    const errors = [];
+    for (let i = 0; i < entries.length; i += BATCH) {
+      const { error } = await db.from('schedule_entries').insert(entries.slice(i, i + BATCH));
+      if (error) { errors.push(error); continue; }
+      inserted += BATCH;
+      if (saveBtn) saveBtn.textContent = `${Math.min(inserted, dates.length)}/${dates.length} créés...`;
+    }
+
+    document.getElementById('recurring-modal-overlay')?.remove();
+    await schedReloadEntries();
+
+    const trainerName = schedGetTrainers().find(t => t.id === instructor_id)?.name || instructor_id;
+    if (errors.length) {
+      schedFlash(`${inserted}/${dates.length} shifts créés — ${errors.length} erreur(s)`, true);
+    } else {
+      schedFlash(`✓ ${dates.length} shifts créés pour ${trainerName}`);
+    }
+  } catch(err) {
+    console.error('schedSaveRecurring error:', err);
+    alert('Erreur: ' + (err.message || err));
+    if (saveBtn) { saveBtn.disabled = false; saveBtn.textContent = "Créer l'horaire"; }
+  }
 }
