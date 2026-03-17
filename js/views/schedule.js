@@ -48,6 +48,10 @@ const SCHED_DEFAULT_PROGRAM_COLORS = {
 let _schedModalEntry  = null;   // null = new, object = editing existing
 let _schedModalPrefill = {};    // prefill values when clicking empty cell
 
+// ---- Multi-select state (Ctrl+click) ----
+let _schedSelection = {};  // { 'trainerId|dateStr|quart': true }
+let _schedSelTrainer = null; // trainer locked during multi-select
+
 // ---- Helpers ----
 
 function schedProgramColor(programId) {
@@ -170,44 +174,34 @@ function schedBuildMonthGrid() {
     activeTrainers = filteredTrainers;
   }
 
-  // Build rows: determine shift types per trainer
+  // Build rows: one default row per trainer + any manually added extra rows
+  // Extra rows stored in _schedExtraRows[trainerId] = ['soir','weekend',...]
+  if (!window._schedExtraRows) window._schedExtraRows = {};
   const rows = [];
   activeTrainers.forEach(trainer => {
-    const tEntries = entryMap[trainer.id] || {};
-    let hasJour = false, hasSoir = false, hasWeekend = false;
-    Object.values(tEntries).forEach(dayArr => {
-      dayArr.forEach(e => {
-        const q = (e.quart || '').toLowerCase();
-        if (q === 'soir') hasSoir = true;
-        else if (q === 'weekend') hasWeekend = true;
-        else hasJour = true;
-      });
-    });
-
-    const both = hasJour && hasSoir;
-    if (hasJour || (!hasSoir && !hasWeekend)) {
-      rows.push({ trainer, quart: both ? 'jour' : (hasSoir ? null : (hasWeekend ? null : null)), label: both ? 'jour' : null });
-    }
-    if (hasSoir) {
-      rows.push({ trainer, quart: 'soir', label: 'soir' });
-    }
-    if (hasWeekend) {
-      rows.push({ trainer, quart: 'weekend', label: 'weekend' });
-    }
-    // If no entries at all, add one default row
-    if (!hasJour && !hasSoir && !hasWeekend) {
-      rows.push({ trainer, quart: null, label: null });
-    }
+    // Always one default row (no label)
+    rows.push({ trainer, quart: null, label: null });
+    // Extra rows manually added
+    const extras = window._schedExtraRows[trainer.id] || [];
+    extras.forEach(q => rows.push({ trainer, quart: q, label: q }));
   });
 
-  // Build day headers
-  let headerHTML = `<th class="trainer-col">Formateur</th>`;
+  // Build day headers — show "Lun\n1" style
+  let headerHTML = `<th class="trainer-col">
+    Formateur
+    <div style="font-size:8px;font-weight:400;color:var(--td);margin-top:2px;">+ ligne</div>
+  </th>`;
   for (let d = 1; d <= days; d++) {
     const dateS = schedDateStr(_schedYear, _schedMonth, d);
     const isToday = dateS === todayS;
     const isWe   = schedIsWeekend(_schedYear, _schedMonth, d);
     const dow    = SCHED_DAYS_FR[schedDayOfWeek(dateS)];
-    headerHTML += `<th${isWe ? ' style="color:var(--td);opacity:0.7;"' : ''}${isToday ? ' style="color:var(--a);"' : ''} title="${dow} ${d}">${d}</th>`;
+    const color  = isToday ? 'var(--a)' : isWe ? 'var(--td)' : 'inherit';
+    const opacity = isWe ? 'opacity:0.6;' : '';
+    headerHTML += `<th style="color:${color};${opacity}line-height:1.2;">
+      <div style="font-size:9px;font-weight:500;">${dow}</div>
+      <div style="font-size:11px;font-weight:700;">${d}</div>
+    </th>`;
   }
 
   // Build body rows
@@ -217,14 +211,16 @@ function schedBuildMonthGrid() {
     const ini = initials(trainer.name);
     const tEntries = entryMap[trainer.id] || {};
 
-    bodyHTML += `<tr>`;
+    const isLastRowForTrainer = !rows.find((r,ri) => ri > rows.indexOf(rows.find(x=>x===({trainer,quart,label}))) && r.trainer.id===trainer.id);
+    bodyHTML += `<tr data-trainer="${esc(trainer.id)}" data-quart="${esc(quart||'')}">`;
     bodyHTML += `<td class="trainer-name">
       <div style="display:flex;align-items:center;gap:6px;">
         <div style="width:20px;height:20px;border-radius:50%;background:${col};display:flex;align-items:center;justify-content:center;font-size:8px;font-weight:700;color:#fff;flex-shrink:0;">${esc(ini)}</div>
-        <div>
-          <div style="font-size:11px;font-weight:700;">${esc(trainer.name)}</div>
-          ${label ? `<div class="shift-label">[${esc(label)}]</div>` : ''}
+        <div style="flex:1;min-width:0;">
+          <div style="font-size:11px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${esc(trainer.name)}</div>
+          ${label ? `<div class="shift-label" style="color:var(--a);font-size:9px;">[${esc(label)}]</div>` : ''}
         </div>
+        <button onclick="schedAddRow('${esc(trainer.id)}')" title="Ajouter une ligne" style="background:none;border:none;color:var(--td);cursor:pointer;font-size:14px;padding:0 2px;flex-shrink:0;" onmouseover="this.style.color='var(--a)'" onmouseout="this.style.color='var(--td)'">+</button>
       </div>
     </td>`;
 
@@ -248,16 +244,20 @@ function schedBuildMonthGrid() {
       const escapedId    = entry ? esc(entry.id) : '';
       const trainerId    = esc(trainer.id);
 
+      const selKey = `${trainer.id}|${dateS}|${quart||''}`;
+      const isSelected = !!_schedSelection[selKey];
+      const selStyle = isSelected ? 'outline:2px solid var(--a);outline-offset:-2px;' : '';
+
       if (entry) {
         const cellText   = schedCellContent(entry);
         const cellClass  = schedCellClass(entry);
         const cellBg     = schedCellBg(entry);
         const bgStyle    = cellBg ? `background:${cellBg};color:#fff;` : '';
-        bodyHTML += `<td class="${tdClass}" onclick="schedOpenPopup('${escapedId}', event)">
+        bodyHTML += `<td class="${tdClass}" style="${selStyle}" onclick="schedCellClick('${escapedId}','${trainerId}','${escapedDateS}','${quart||''}',event)">
           <span class="sched-cell ${cellClass}" style="${bgStyle}" title="${esc(cellText)}">${esc(cellText)}</span>
         </td>`;
       } else {
-        bodyHTML += `<td class="${tdClass}" onclick="schedClickEmpty('${trainerId}','${escapedDateS}','${quart || ''}')">
+        bodyHTML += `<td class="${tdClass}" style="${selStyle}" onclick="schedCellClick(null,'${trainerId}','${escapedDateS}','${quart||''}',event)">
           <span class="sched-cell empty-cell">+</span>
         </td>`;
       }
@@ -270,12 +270,90 @@ function schedBuildMonthGrid() {
     return `<div class="hor-empty-state">Aucun formateur avec des shifts ce mois-ci. Cliquez sur "+ Nouveau shift" pour en ajouter.</div>`;
   }
 
-  return `<div id="sched-wrap">
+  const selCount = Object.keys(_schedSelection).length;
+  const selToolbar = selCount > 0 ? `
+    <div style="position:sticky;top:0;z-index:10;background:rgba(255,107,53,0.15);border:1px solid var(--a);border-radius:8px;padding:8px 14px;margin-bottom:8px;display:flex;align-items:center;gap:12px;">
+      <span style="color:var(--a);font-weight:700;">✓ ${selCount} date${selCount>1?'s':''} sélectionnée${selCount>1?'s':''}</span>
+      <span style="color:var(--td);font-size:12px;">${Object.values(_schedSelection).map(s=>s.dateStr).sort().join(', ')}</span>
+      <button onclick="schedCreateBulkShifts()" style="margin-left:auto;background:var(--a);color:#fff;border:none;border-radius:6px;padding:6px 14px;cursor:pointer;font-weight:700;">Créer ${selCount} shift${selCount>1?'s':''}</button>
+      <button onclick="schedClearSelection()" style="background:var(--s);color:var(--td);border:1px solid var(--b);border-radius:6px;padding:6px 10px;cursor:pointer;">✕</button>
+    </div>` : '';
+
+  return `${selToolbar}<div id="sched-wrap">
     <table class="sched-grid">
       <thead><tr>${headerHTML}</tr></thead>
       <tbody>${bodyHTML}</tbody>
     </table>
+  </div>
+  <div style="margin-top:8px;font-size:11px;color:var(--td);opacity:0.6;">
+    💡 Ctrl+clic pour sélectionner plusieurs dates → créer des shifts en lot
   </div>`;
+}
+
+// ---- Multi-select & row management functions ----
+
+function schedAddRow(trainerId) {
+  if (!window._schedExtraRows) window._schedExtraRows = {};
+  const existing = window._schedExtraRows[trainerId] || [];
+  // Cycle through: soir → weekend → soir+weekend
+  let next = 'soir';
+  if (existing.includes('soir') && !existing.includes('weekend')) next = 'weekend';
+  else if (existing.includes('soir') && existing.includes('weekend')) {
+    // Already have both — do nothing
+    return;
+  }
+  window._schedExtraRows[trainerId] = [...existing, next];
+  renderSchedule(document.getElementById('content'), document.getElementById('controls'));
+}
+
+function schedCellClick(entryId, trainerId, dateStr, quart, event) {
+  if (event && event.ctrlKey) {
+    // Multi-select mode
+    const selKey = `${trainerId}|${dateStr}|${quart}`;
+    // Lock to same trainer
+    if (_schedSelTrainer && _schedSelTrainer !== trainerId) return;
+    _schedSelTrainer = trainerId;
+    if (_schedSelection[selKey]) {
+      delete _schedSelection[selKey];
+      if (Object.keys(_schedSelection).length === 0) _schedSelTrainer = null;
+    } else {
+      _schedSelection[selKey] = { trainerId, dateStr, quart };
+    }
+    // Re-render to show selection highlights
+    renderSchedule(document.getElementById('content'), document.getElementById('controls'));
+    return;
+  }
+  // Normal click
+  _schedSelection = {};
+  _schedSelTrainer = null;
+  if (entryId) {
+    schedOpenPopup(entryId, event);
+  } else {
+    schedClickEmpty(trainerId, dateStr, quart);
+  }
+}
+
+function schedCreateBulkShifts() {
+  const selected = Object.values(_schedSelection);
+  if (!selected.length) return;
+  const trainer = selected[0].trainerId;
+  const dates = selected.map(s => s.dateStr).sort();
+  // Open modal prefilled with trainer + first date, dates list shown
+  _schedModalEntry = null;
+  _schedModalPrefill = {
+    instructor_id: trainer,
+    date: dates[0],
+    _bulkDates: dates,
+    quart: selected[0].quart || ''
+  };
+  schedRenderModal();
+  document.getElementById('shift-modal').style.display = 'flex';
+}
+
+function schedClearSelection() {
+  _schedSelection = {};
+  _schedSelTrainer = null;
+  renderSchedule(document.getElementById('content'), document.getElementById('controls'));
 }
 
 // ---- VIEW 2: Hebdomadaire ----
@@ -671,12 +749,21 @@ async function schedRenderModal() {
   overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.72);z-index:2000;display:flex;align-items:center;justify-content:center;backdrop-filter:blur(4px);';
   overlay.addEventListener('click', ev => { if (ev.target === overlay) schedCloseModal(); });
 
+  const bulkDates = pf._bulkDates || null;
+  const bulkBanner = bulkDates && bulkDates.length > 1 ? `
+    <div style="padding:10px 20px;background:rgba(255,107,53,0.08);border-bottom:1px solid var(--b);">
+      <div style="font-family:'Space Mono',monospace;font-size:9px;text-transform:uppercase;letter-spacing:1px;color:var(--a);margin-bottom:5px;">${bulkDates.length} dates sélectionnées</div>
+      <div style="display:flex;flex-wrap:wrap;gap:4px;">${bulkDates.map(d => `<span style="font-family:'Space Mono',monospace;font-size:10px;background:rgba(255,107,53,0.15);color:var(--a);padding:2px 7px;border-radius:4px;">${d}</span>`).join('')}</div>
+      <div style="font-size:11px;color:var(--td);margin-top:6px;">Un shift sera créé pour chaque date ci-dessus avec les mêmes paramètres.</div>
+    </div>` : '';
+
   overlay.innerHTML = `
     <div style="background:var(--s);border:1px solid var(--b);border-radius:14px;width:500px;max-width:95vw;max-height:90vh;overflow-y:auto;display:flex;flex-direction:column;">
       <div style="display:flex;align-items:center;justify-content:space-between;padding:18px 20px 14px;border-bottom:1px solid var(--b);">
-        <h3 style="font-size:16px;font-weight:700;">${isEdit ? 'Modifier le shift' : 'Nouveau shift'}</h3>
+        <h3 style="font-size:16px;font-weight:700;">${isEdit ? 'Modifier le shift' : bulkDates && bulkDates.length > 1 ? `Créer ${bulkDates.length} shifts` : 'Nouveau shift'}</h3>
         <button onclick="schedCloseModal()" style="background:none;border:none;color:var(--td);font-size:18px;cursor:pointer;padding:0 4px;line-height:1;">✕</button>
       </div>
+      ${bulkBanner}
       <div style="padding:16px 20px;display:flex;flex-direction:column;gap:12px;">
         <div class="sched-form-grid">
           <div>
@@ -781,15 +868,38 @@ async function schedSaveEntry() {
   const saveBtn = document.getElementById('sm_save_btn');
   if (saveBtn) { saveBtn.disabled = true; saveBtn.textContent = 'Enregistrement...'; }
 
+  // Check for bulk dates (multi-select Ctrl+click)
+  const bulkDates = _schedModalPrefill && _schedModalPrefill._bulkDates;
+
   try {
     if (_schedModalEntry) {
+      // Edit mode — update single entry
       await dbUpdateScheduleEntry(_schedModalEntry.id, payload);
+      schedCloseModal();
+      await schedReloadEntries();
+      schedFlash('Shift mis à jour');
+    } else if (bulkDates && bulkDates.length > 1) {
+      // Bulk create — one entry per selected date
+      const results = await Promise.allSettled(
+        bulkDates.map(d => dbSaveScheduleEntry({ ...payload, date: d }))
+      );
+      const failed = results.filter(r => r.status === 'rejected');
+      schedCloseModal();
+      _schedSelection = {};
+      _schedSelTrainer = null;
+      await schedReloadEntries();
+      if (failed.length) {
+        schedFlash(`${bulkDates.length - failed.length}/${bulkDates.length} shifts créés (${failed.length} erreur${failed.length > 1 ? 's' : ''})`, true);
+      } else {
+        schedFlash(`${bulkDates.length} shifts créés`);
+      }
     } else {
+      // Single new entry
       await dbSaveScheduleEntry(payload);
+      schedCloseModal();
+      await schedReloadEntries();
+      schedFlash('Shift enregistré');
     }
-    schedCloseModal();
-    await schedReloadEntries();
-    schedFlash('Shift enregistré');
   } catch(err) {
     console.error('schedSaveEntry error:', err);
     alert('Erreur lors de la sauvegarde: ' + (err.message || err));
