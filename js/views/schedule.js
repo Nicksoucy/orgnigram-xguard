@@ -159,6 +159,18 @@ const SCHED_COHORT_PATTERNS = {
     gap_days:   3,
     prefix:     'E',
   },
+  'GESTION_CRISE_BIWEEKLY': {
+    label:      'Gestion de Crise (1 Lundi sur 2)',
+    program:    'GESTION_CRISE',
+    shift_type: 'jour',
+    days:       [1],          // Lundi seulement
+    sessions:   1,            // 1 session à la fois
+    start_time: '09:00',
+    end_time:   '17:00',
+    gap_days:   13,           // 13 jours de pause = prochain lundi dans 2 semaines
+    prefix:     'GC',
+    biweekly:   true,
+  },
 };
 
 // Generate dates for one cohort starting at startDate, skipping holidays & wrong days
