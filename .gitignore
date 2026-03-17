@@ -1,11 +1,4 @@
 .env
-run_schema.js
-add_banji.js
-add_adrian.js
-fix_*.js
-update_*.js
-seed_*.js
-check_*.js
-create_*.js
+scripts/
 *.sql
 index.html.bak

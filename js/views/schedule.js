@@ -44,6 +44,15 @@ const SCHED_DEFAULT_PROGRAM_COLORS = {
 
 // ---- Jours fériés Québec (fixes + Pâques calculé) ----
 
+// Returns the nth occurrence of a weekday (0=Sun…6=Sat) in a given month/year
+function nthWeekday(year, month, weekday, n) {
+  const d = new Date(year, month - 1, 1);
+  // Advance to first occurrence of weekday
+  const diff = (weekday - d.getDay() + 7) % 7;
+  d.setDate(1 + diff + (n - 1) * 7);
+  return d;
+}
+
 function schedGetHolidaysQC(year) {
   // Calcul Pâques (algorithme Anonymous Gregorian)
   function easter(y) {
@@ -65,12 +74,12 @@ function schedGetHolidaysQC(year) {
     `${year}-01-01`,                    // Jour de l'An
     fmt(addDays(e, -2)),                // Vendredi Saint
     // Lundi de Pâques retiré — XGuard travaille ce jour
-    `${year}-05-18`,                    // Journée nationale des patriotes (3e lundi mai ≈ fixe pour 2026)
+    fmt(nthWeekday(year, 5, 1, 3)),     // Journée nationale des patriotes (3e lundi mai)
     `${year}-06-24`,                    // Fête nationale Québec
     `${year}-07-01`,                    // Fête du Canada
-    `${year}-08-03`,                    // Congé civique (1er lundi août)
-    `${year}-09-07`,                    // Fête du Travail (1er lundi sept)
-    `${year}-10-12`,                    // Action de grâce (2e lundi oct)
+    fmt(nthWeekday(year, 8, 1, 1)),     // Congé civique (1er lundi août)
+    fmt(nthWeekday(year, 9, 1, 1)),     // Fête du Travail (1er lundi sept)
+    fmt(nthWeekday(year, 10, 1, 2)),    // Action de grâce (2e lundi oct)
     `${year}-11-11`,                    // Jour du Souvenir
     `${year}-12-25`,                    // Noël
     `${year}-12-26`,                    // Lendemain de Noël
@@ -673,9 +682,7 @@ function schedRemoveRow(trainerId, quart) {
   if (!window._schedExtraRows) window._schedExtraRows = {};
   const arr = window._schedExtraRows[trainerId] || [];
   window._schedExtraRows[trainerId] = arr.filter(q => q !== quart);
-  const ct = document.getElementById('sched-ct');
-  const cl = document.getElementById('sched-cl');
-  schedBuildMonthGrid(ct, cl);
+  schedRenderContent();
 }
 
 function schedOpenPatternForRow(trainerId, quart) {
@@ -1064,9 +1071,14 @@ async function schedManageSeries(instructorId) {
 async function schedApplySeriesRename(instructorId, oldCode) {
   const newCode = document.getElementById('rename_' + oldCode)?.value?.trim();
   if (!newCode || newCode === oldCode) return;
-  const toUpdate = _schedEntries.filter(e => e.instructor_id === instructorId && e.excel_cell_code === oldCode);
+  // Query Supabase directly so rename works across all months, not just the loaded cache
+  const { data: toUpdate, error: fetchErr } = await db.from('schedule_entries')
+    .select('id')
+    .eq('instructor_id', instructorId)
+    .eq('excel_cell_code', oldCode);
+  if (fetchErr) { schedFlash('Erreur: ' + fetchErr.message); return; }
   let updated = 0;
-  for (const e of toUpdate) {
+  for (const e of (toUpdate || [])) {
     const { error } = await db.from('schedule_entries').update({ excel_cell_code: newCode }).eq('id', e.id);
     if (!error) updated++;
   }
@@ -1108,10 +1120,16 @@ async function schedExecDeleteFromManager(instructorId, code) {
   const fromDate = document.getElementById('del2_from_date')?.value || null;
   document.getElementById('del-confirm-overlay')?.remove();
 
-  let toDelete = _schedEntries.filter(e => e.instructor_id === instructorId && e.excel_cell_code === code);
-  if (mode === 'from' && fromDate) toDelete = toDelete.filter(e => e.date >= fromDate);
+  // Query Supabase directly so delete works across all months, not just the loaded cache
+  let query = db.from('schedule_entries')
+    .select('id')
+    .eq('instructor_id', instructorId)
+    .eq('excel_cell_code', code);
+  if (mode === 'from' && fromDate) query = query.gte('date', fromDate);
+  const { data: toDelete, error: fetchErr } = await query;
+  if (fetchErr) { schedFlash('Erreur: ' + fetchErr.message); return; }
 
-  const ids = toDelete.map(e => e.id);
+  const ids = (toDelete || []).map(e => e.id);
   let deleted = 0;
   for (let i = 0; i < ids.length; i += 50) {
     const { error } = await db.from('schedule_entries').delete().in('id', ids.slice(i, i+50));
@@ -1963,8 +1981,9 @@ async function schedGenerateAutoRules() {
   const rules = schedGetAutoRules();
   if (!rules.length) { alert('Aucune règle définie.'); return; }
 
-  const holidays = schedGetHolidaysQC(2026);
-  schedGetHolidaysQC(2027).forEach(h => holidays.add(h));
+  const startYear = new Date().getFullYear();
+  const holidays = schedGetHolidaysQC(startYear);
+  schedGetHolidaysQC(startYear + 1).forEach(h => holidays.add(h));
 
   const todayStr = new Date().toISOString().slice(0,10);
 
@@ -2606,7 +2625,7 @@ function schedPatBuildAlternating() {
   schedGetHolidaysQC(parseInt(startDate.slice(0,4))+1).forEach(h => holidays.add(h));
 
   // Parse starting code number
-  const match = firstCode.match(/^([A-Za-z]*)(d+)$/);
+  const match = firstCode.match(/^([A-Za-z]*)(\d+)$/);
   const prefix = match ? match[1] : 'MC';
   let num = match ? parseInt(match[2]) : 1;
 
