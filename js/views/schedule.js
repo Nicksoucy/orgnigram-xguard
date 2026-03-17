@@ -986,10 +986,13 @@ function schedOpenPopup(entryId, ev) {
     ${entry.notes ? `<div style="font-size:11px;color:var(--td);margin-top:8px;font-style:italic;">${esc(entry.notes)}</div>` : ''}
     <div style="display:flex;gap:6px;margin-top:12px;">
       <button class="btn" style="font-size:11px;padding:5px 10px;flex:1;" onclick="schedEditEntry('${esc(entryId)}')">Modifier</button>
-      ${cohort !== '—' ? `<button class="btn" style="font-size:11px;padding:5px 10px;background:var(--s2,#1e293b);flex:1;" onclick="schedRenameSeriesPrompt('${esc(entryId)}','${esc(cohort)}')">Série ✎</button>` : ''}
-      ${cohort !== '—' ? `<button class="btn danger" style="font-size:11px;padding:5px 10px;flex:1;" onclick="schedDeleteSeriesPrompt('${esc(entryId)}','${esc(cohort)}','${esc(entry.date)}')">Suppr. série</button>` : ''}
       <button class="btn danger" style="font-size:11px;padding:5px 10px;" onclick="schedDeleteEntry('${esc(entryId)}')">Supprimer</button>
-    </div>`;
+    </div>
+    ${cohort !== '—' ? `<div style="display:flex;gap:6px;margin-top:6px;padding-top:8px;border-top:1px solid var(--b);">
+      <button class="btn" style="font-size:11px;padding:5px 10px;flex:1;background:var(--s2,#1e293b);" onclick="schedRenameSeriesPrompt('${esc(entryId)}','${esc(cohort)}')">✎ Renommer série</button>
+      <button class="btn danger" style="font-size:11px;padding:5px 10px;flex:1;" onclick="schedDeleteSeriesPrompt('${esc(entryId)}','${esc(cohort)}','${esc(entry.date)}')">🗑 Supprimer série</button>
+    </div>` : ''}
+    `;
 
   document.body.appendChild(popup);
 
