@@ -1638,7 +1638,7 @@ function schedOpenPatternModal() {
         <div>
           <label style="font-family:'Space Mono',monospace;font-size:9px;text-transform:uppercase;letter-spacing:1px;color:var(--td);display:block;margin-bottom:5px;">Pause entre cohortes <span style="opacity:0.5;">(jours)</span></label>
           <div style="display:flex;align-items:center;gap:10px;">
-            <input type="range" id="pat_gap" min="0" max="14" value="4" oninput="document.getElementById('pat_gap_lbl').textContent=this.value; schedPatPreview()" style="flex:1;accent-color:var(--a);">
+            <input type="range" id="pat_gap" min="0" max="42" value="4" oninput="document.getElementById('pat_gap_lbl').textContent=this.value; schedPatPreview()" style="flex:1;accent-color:var(--a);">
             <span id="pat_gap_lbl" style="font-size:14px;font-weight:700;color:var(--a);min-width:24px;">4</span>
           </div>
         </div>
