@@ -102,6 +102,30 @@ const SCHED_COHORT_PATTERNS = {
     gap_days:   2,
     prefix:     'J',
   },
+  'BSP_JOUR_8J': {
+    label:      'BSP Jour — 8 jours ouvrables',
+    program:    'BSP',
+    shift_type: 'jour',
+    days:       [1,2,3,4,5],  // Lun-Ven, any start day
+    sessions:   8,
+    start_time: '09:00',
+    end_time:   '17:00',
+    gap_days:   2,
+    prefix:     'QC',
+    consecutive: true,        // flag: skip weekends+holidays only, no fixed day restriction
+  },
+  'BSP_JOUR_7J': {
+    label:      'BSP Jour — 7 jours ouvrables',
+    program:    'BSP',
+    shift_type: 'jour',
+    days:       [1,2,3,4,5],
+    sessions:   7,
+    start_time: '09:00',
+    end_time:   '17:00',
+    gap_days:   2,
+    prefix:     'QC',
+    consecutive: true,
+  },
   'BSP_WEEKEND': {
     label:      'BSP Weekend (Sam-Dim, 4 weekends)',
     program:    'BSP',
@@ -207,6 +231,24 @@ function schedGenCohortDates(patternKey, startDate, year) {
         d.setDate(d.getDate() + 1);
         // When we hit Monday, the loop above takes over
       }
+    }
+    return dates;
+  }
+
+  // Consecutive patterns: just advance day by day, skip weekends+holidays
+  // Works for any start day (Lun, Mar, Mer, etc.)
+  if (p.consecutive) {
+    const dates = [];
+    let d = new Date(startDate + 'T00:00:00');
+    let safety = 0;
+    while (dates.length < p.sessions && safety < 200) {
+      safety++;
+      const iso = d.toISOString().slice(0,10);
+      const dow = d.getDay();
+      if (dow >= 1 && dow <= 5 && !holidays.has(iso)) {
+        dates.push(iso);
+      }
+      d.setDate(d.getDate() + 1);
     }
     return dates;
   }
