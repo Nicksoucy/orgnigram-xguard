@@ -1586,6 +1586,13 @@ function schedOpenPatternModal(preTrainerId, prePatternKey, preQuart) {
     `<option value="${esc(k)}">${esc(p.label)}</option>`
   ).join('');
 
+  const programOptsArr = _schedPrograms.length
+    ? _schedPrograms
+    : Object.entries(SCHED_DEFAULT_PROGRAM_COLORS).map(([id]) => ({ id, label: id }));
+  const programOpts = programOptsArr.map(p =>
+    `<option value="${esc(p.id)}">${esc(p.label || p.id)}</option>`
+  ).join('');
+
   const overlay = document.createElement('div');
   overlay.id = 'pattern-modal-overlay';
   overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.72);z-index:2000;display:flex;align-items:center;justify-content:center;backdrop-filter:blur(4px);';
@@ -1624,7 +1631,7 @@ function schedOpenPatternModal(preTrainerId, prePatternKey, preQuart) {
         <div>
           <label style="font-family:'Space Mono',monospace;font-size:9px;text-transform:uppercase;letter-spacing:1px;color:var(--td);display:block;margin-bottom:5px;">Programme</label>
           <select id="pat_program" style="width:100%;padding:8px 10px;border-radius:6px;border:1px solid var(--b);background:var(--bg);color:var(--t);font-size:13px;outline:none;">
-            ${(_schedPrograms.length ? _schedPrograms : Object.entries(SCHED_DEFAULT_PROGRAM_COLORS).map(([id])=>({id,label:id}))).map(p => `<option value="${esc(p.id)}">${esc(p.label||p.id)}</option>`).join('')}
+            ${programOpts}
           </select>
         </div>
 
