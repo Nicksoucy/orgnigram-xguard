@@ -470,16 +470,27 @@ function schedBuildMonthGrid() {
 
       if (matchEntries.length > 0) {
         // Stack all entries in this cell
+        // Compute trainer initials: "Marc Éric Deschambault" → "ME"
+        const trainerInitials = trainer.name
+          .split(' ')
+          .filter(w => w.length > 0)
+          .map(w => w[0].toUpperCase())
+          .slice(0, 2)
+          .join('');
+
         const stackedHTML = matchEntries.map(entry => {
           const cellText = schedCellContent(entry);
           const cellTip  = schedCellTooltip(entry);
           const cellBg   = schedCellBg(entry);
           const bgStyle  = cellBg ? `background:${cellBg};color:#fff;` : '';
+          // Show code + initials: "LS34-ME" or just program if no code
+          const code = entry.excel_cell_code || '';
+          const displayText = code ? `${code}-${trainerInitials}` : cellText;
           const sessionLine = entry.session_id
             ? `<div style="font-size:7px;opacity:0.75;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:1px;font-family:'Space Mono',monospace;">${esc(entry.session_id.split('-').slice(-1)[0])}</div>`
             : '';
           return `<span class="sched-cell" style="${bgStyle};display:flex;flex-direction:column;align-items:center;margin-bottom:2px;width:100%;" title="${esc(cellTip)}" onclick="schedCellClick('${esc(entry.id)}','${trainerId}','${escapedDateS}','${quart||''}',event)">
-            <span>${esc(cellText)}</span>${sessionLine}
+            <span style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;">${esc(displayText)}</span>${sessionLine}
           </span>`;
         }).join('');
         bodyHTML += `<td class="${tdClass}" style="${selStyle};padding:2px;vertical-align:top;${isHoliday ? 'background:rgba(147,197,253,0.20);' : ''}">
