@@ -80,16 +80,30 @@ async function dbGetLocations() {
   return data||[];
 }
 
+// Map our internal 'quart' field to DB column 'shift_type'
+function _schedEntryToDb(entry) {
+  const e = { ...entry };
+  if ('quart' in e) { e.shift_type = e.quart; delete e.quart; }
+  return e;
+}
+// Map DB 'shift_type' back to internal 'quart'
+function _schedEntryFromDb(row) {
+  if (!row) return row;
+  const r = { ...row };
+  if ('shift_type' in r) { r.quart = r.shift_type; delete r.shift_type; }
+  return r;
+}
+
 async function dbSaveScheduleEntry(entry) {
-  const {data,error} = await db.from('schedule_entries').insert(entry).select().single();
+  const {data,error} = await db.from('schedule_entries').insert(_schedEntryToDb(entry)).select().single();
   if(error) throw error;
-  return data;
+  return _schedEntryFromDb(data);
 }
 
 async function dbUpdateScheduleEntry(id, updates) {
-  const {data,error} = await db.from('schedule_entries').update(updates).eq('id',id).select().single();
+  const {data,error} = await db.from('schedule_entries').update(_schedEntryToDb(updates)).eq('id',id).select().single();
   if(error) throw error;
-  return data;
+  return _schedEntryFromDb(data);
 }
 
 async function dbDeleteScheduleEntry(id) {
@@ -126,7 +140,7 @@ async function dbGetScheduleEntries(month, year, instructorId) {
   if (instructorId) q = q.eq('instructor_id', instructorId);
   const { data, error } = await q;
   if (error) throw error;
-  return data || [];
+  return (data || []).map(_schedEntryFromDb);
 }
 
 async function dbGetPrograms() {
