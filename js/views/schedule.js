@@ -348,7 +348,7 @@ function schedBuildMonthGrid() {
     const color  = isToday ? 'var(--a)' : isHoliday ? '#93c5fd' : isWe ? 'var(--td)' : 'inherit';
     const opacity = isWe && !isHoliday ? 'opacity:0.6;' : '';
     const holidayBg = isHoliday ? 'background:rgba(59,130,246,0.15);' : '';
-    headerHTML += `<th style="color:${color};${opacity}${holidayBg}line-height:1.2;" title="${isHoliday ? 'Jour férié' : ''}">
+    headerHTML += `<th style="color:${color};${opacity}${isHoliday ? 'background:rgba(59,130,246,0.18);' : ''}line-height:1.2;" title="${isHoliday ? 'Jour férié' : ''}">
       <div style="font-size:9px;font-weight:500;">${isHoliday ? '🏖' : dow}</div>
       <div style="font-size:11px;font-weight:700;">${d}</div>
     </th>`;
@@ -415,12 +415,13 @@ function schedBuildMonthGrid() {
             <span>${esc(cellText)}</span>${sessionLine}
           </span>`;
         }).join('');
-        bodyHTML += `<td class="${tdClass}" style="${selStyle};padding:2px;vertical-align:top;">
+        bodyHTML += `<td class="${tdClass}" style="${selStyle};padding:2px;vertical-align:top;${isHoliday ? 'background:rgba(59,130,246,0.10);' : ''}">
           ${stackedHTML}
         </td>`;
       } else {
-        bodyHTML += `<td class="${tdClass}" style="${selStyle}" onclick="schedCellClick(null,'${trainerId}','${escapedDateS}','${quart||''}',event)">
-          <span class="sched-cell empty-cell">+</span>
+        const holidayStyle = isHoliday ? 'background:rgba(59,130,246,0.10);' : '';
+        bodyHTML += `<td class="${tdClass}" style="${selStyle}${holidayStyle}" onclick="schedCellClick(null,'${trainerId}','${escapedDateS}','${quart||''}',event)">
+          <span class="sched-cell empty-cell" style="${isHoliday?'opacity:0;':''}">+</span>
         </td>`;
       }
     }
