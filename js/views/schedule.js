@@ -947,7 +947,7 @@ async function schedManageSeries(instructorId) {
   // Fetch ALL entries for this trainer from Supabase (all months/years)
   const { data: allEntries, error } = await db
     .from('schedule_entries')
-    .select('id, date, excel_cell_code, program, quart')
+    .select('id, date, excel_cell_code, program, shift_type')
     .eq('instructor_id', instructorId)
     .not('excel_cell_code', 'is', null)
     .order('date', { ascending: true });
