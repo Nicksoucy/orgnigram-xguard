@@ -812,6 +812,59 @@ function schedBuildTrainerView() {
 
 // ---- Shift Detail Popup ----
 
+async function schedRenameSeriesPrompt(entryId, currentCode) {
+  // Show inline rename modal
+  const overlay = document.createElement('div');
+  overlay.id = 'rename-series-overlay';
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.72);z-index:3000;display:flex;align-items:center;justify-content:center;';
+  overlay.innerHTML = `
+    <div style="background:var(--s);border:1px solid var(--b);border-radius:12px;padding:24px;width:340px;font-family:'DM Sans',sans-serif;">
+      <div style="font-size:14px;font-weight:700;margin-bottom:6px;">Renommer la série</div>
+      <div style="font-size:12px;color:var(--td);margin-bottom:16px;">Tous les shifts avec le code <strong>${esc(currentCode)}</strong> pour ce formateur seront renommés.</div>
+      <label style="font-family:'Space Mono',monospace;font-size:9px;text-transform:uppercase;letter-spacing:1px;color:var(--td);display:block;margin-bottom:5px;">Nouveau code</label>
+      <input id="rename_new_code" type="text" value="${esc(currentCode)}" placeholder="ex: JS35" style="width:100%;padding:8px 10px;border-radius:6px;border:1px solid var(--b);background:var(--bg);color:var(--t);font-size:14px;outline:none;box-sizing:border-box;margin-bottom:16px;" />
+      <div style="display:flex;gap:8px;justify-content:flex-end;">
+        <button onclick="document.getElementById('rename-series-overlay').remove()" style="padding:8px 16px;border-radius:6px;border:1px solid var(--b);background:transparent;color:var(--t);cursor:pointer;font-size:13px;">Annuler</button>
+        <button onclick="schedRenameSeries('${esc(entryId)}','${esc(currentCode)}')" class="btn primary" style="padding:8px 16px;font-size:13px;">Renommer</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+  const inp = document.getElementById('rename_new_code');
+  if (inp) { inp.focus(); inp.select(); }
+}
+
+async function schedRenameSeries(entryId, oldCode) {
+  const newCode = document.getElementById('rename_new_code')?.value?.trim();
+  if (!newCode || newCode === oldCode) {
+    document.getElementById('rename-series-overlay')?.remove();
+    return;
+  }
+  const entry = _schedEntries.find(e => e.id === entryId);
+  if (!entry) return;
+  const instructorId = entry.instructor_id;
+
+  // Find all entries with same instructor + same code
+  const toUpdate = _schedEntries.filter(e =>
+    e.instructor_id === instructorId && e.excel_cell_code === oldCode
+  );
+
+  document.getElementById('rename-series-overlay')?.remove();
+  schedClosePopup();
+
+  let updated = 0;
+  for (const e of toUpdate) {
+    const { error } = await db.from('schedule_entries')
+      .update({ excel_cell_code: newCode })
+      .eq('id', e.id);
+    if (!error) updated++;
+  }
+
+  schedFlash(`${updated} shift${updated>1?'s':''} renommé${updated>1?'s':''} → ${newCode}`);
+  await schedReloadEntries();
+  schedRenderContent();
+}
+
 function schedOpenPopup(entryId, ev) {
   schedClosePopup();
   const entry = _schedEntries.find(e => e.id === entryId);
@@ -849,6 +902,7 @@ function schedOpenPopup(entryId, ev) {
     ${entry.notes ? `<div style="font-size:11px;color:var(--td);margin-top:8px;font-style:italic;">${esc(entry.notes)}</div>` : ''}
     <div style="display:flex;gap:6px;margin-top:12px;">
       <button class="btn" style="font-size:11px;padding:5px 10px;flex:1;" onclick="schedEditEntry('${esc(entryId)}')">Modifier</button>
+      ${cohort !== '—' ? `<button class="btn" style="font-size:11px;padding:5px 10px;background:var(--s2,#1e293b);flex:1;" onclick="schedRenameSeriesPrompt('${esc(entryId)}','${esc(cohort)}')">Série ✎</button>` : ''}
       <button class="btn danger" style="font-size:11px;padding:5px 10px;" onclick="schedDeleteEntry('${esc(entryId)}')">Supprimer</button>
     </div>`;
 
