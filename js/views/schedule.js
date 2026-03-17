@@ -114,9 +114,23 @@ function schedCellContent(entry) {
   if (status === 'cancelled')   return 'CANCEL';
   if (status === 'unavailable') return 'OFF';
   if (status === 'replacement') return 'REMPL';
-  // Normal: show cohort code or excel_cell_code
+  // Normal: show cohort code or program short
   const code = (entry.cohorts && entry.cohorts.code) || entry.excel_cell_code || '';
-  return code || (entry.program ? entry.program.substring(0, 4) : '?');
+  return code || (entry.program ? entry.program.substring(0, 6) : '?');
+}
+
+// Full tooltip text for cell hover
+function schedCellTooltip(entry) {
+  if (!entry) return '';
+  const parts = [];
+  const prog = schedProgramLabel(entry.program) || entry.program || '';
+  if (prog) parts.push(prog);
+  const code = (entry.cohorts && entry.cohorts.code) || entry.excel_cell_code || '';
+  if (code) parts.push('Cohorte: ' + code);
+  if (entry.start_time && entry.end_time) parts.push(entry.start_time + ' – ' + entry.end_time);
+  if (entry.session_id) parts.push('ID: ' + entry.session_id);
+  if (entry.quart) parts.push(entry.quart);
+  return parts.join(' | ');
 }
 
 function schedCellClass(entry) {
@@ -163,14 +177,13 @@ function schedBuildMonthGrid() {
     entryMap[e.instructor_id][d].push(e);
   });
 
-  // Determine which trainers have entries for the month
-  let activeTrainers = filteredTrainers.filter(t => {
-    if (_schedProgram) return entryMap[t.id] && Object.keys(entryMap[t.id]).length > 0;
-    // Show all trainers who have entries OR are type trainer
-    return entryMap[t.id] || t.dept === 'training' || (t.programs && t.programs.length > 0);
-  });
-
-  if (!_schedTrainer && !activeTrainers.length) {
+  // Determine which trainers to show
+  let activeTrainers;
+  if (_schedProgram) {
+    // Program filter: only trainers with matching entries
+    activeTrainers = filteredTrainers.filter(t => entryMap[t.id] && Object.keys(entryMap[t.id]).length > 0);
+  } else {
+    // No program filter: show everyone (so newly added shifts appear)
     activeTrainers = filteredTrainers;
   }
 
@@ -250,11 +263,18 @@ function schedBuildMonthGrid() {
 
       if (entry) {
         const cellText   = schedCellContent(entry);
+        const cellTip    = schedCellTooltip(entry);
         const cellClass  = schedCellClass(entry);
         const cellBg     = schedCellBg(entry);
         const bgStyle    = cellBg ? `background:${cellBg};color:#fff;` : '';
+        // Show session_id as tiny bottom line if it exists
+        const sessionLine = entry.session_id
+          ? `<div style="font-size:7px;opacity:0.75;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:1px;font-family:'Space Mono',monospace;">${esc(entry.session_id.split('-').slice(-1)[0])}</div>`
+          : '';
         bodyHTML += `<td class="${tdClass}" style="${selStyle}" onclick="schedCellClick('${escapedId}','${trainerId}','${escapedDateS}','${quart||''}',event)">
-          <span class="sched-cell ${cellClass}" style="${bgStyle}" title="${esc(cellText)}">${esc(cellText)}</span>
+          <span class="sched-cell ${cellClass}" style="${bgStyle};display:flex;flex-direction:column;align-items:center;" title="${esc(cellTip)}">
+            <span>${esc(cellText)}</span>${sessionLine}
+          </span>
         </td>`;
       } else {
         bodyHTML += `<td class="${tdClass}" style="${selStyle}" onclick="schedCellClick(null,'${trainerId}','${escapedDateS}','${quart||''}',event)">
@@ -347,7 +367,6 @@ function schedCreateBulkShifts() {
     quart: selected[0].quart || ''
   };
   schedRenderModal();
-  document.getElementById('shift-modal').style.display = 'flex';
 }
 
 function schedClearSelection() {
