@@ -61,11 +61,12 @@ async function _authLoadRole() {
     .single();
 
   if (error || !data) {
-    // No profile found — default to admin for existing users (backward compat)
-    _authRole      = 'admin';
+    // No profile found — deny access by default (no role = no access)
+    _authRole      = null;
     _authTrainerId = null;
+    console.warn('user_profiles lookup failed:', error?.message);
   } else {
-    _authRole      = data.role || 'admin';
+    _authRole      = data.role || null;
     _authTrainerId = data.instructor_id || null;
   }
 }
