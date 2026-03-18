@@ -254,16 +254,25 @@
 .mm-table tbody tr { border-bottom:1px solid rgba(255,255,255,0.04); transition:background 0.08s; }
 .mm-table tbody tr:hover > td { background:rgba(255,255,255,0.025) !important; }
 
+/* Prevent text selection during drag */
+.mm-table { user-select:none; }
+
 /* Day data cells */
 .mm-cell {
   padding:2px 2px; vertical-align:middle; text-align:center;
   border-right:1px solid rgba(255,255,255,0.05); height:26px; min-width:30px; width:34px;
+  cursor:pointer;
 }
 .mm-cell:last-child { border-right:none; }
-.mm-cell.mm-empty { cursor:pointer; }
 .mm-cell.mm-empty:hover { background:rgba(255,107,53,0.09) !important; }
-.mm-cell.mm-dim { opacity:0.22; cursor:default; }
-.mm-cell.mm-dim:hover { background:transparent !important; cursor:default; }
+.mm-cell.mm-dim { opacity:0.22; cursor:default; pointer-events:none; }
+
+/* Selected cell — orange outline like the grid view */
+.mm-cell.mm-selected {
+  outline:2px solid var(--a);
+  outline-offset:-2px;
+  background:rgba(255,107,53,0.15) !important;
+}
 
 /* Shift chips */
 .mm-chip {
