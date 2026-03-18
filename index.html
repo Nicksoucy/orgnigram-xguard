@@ -130,30 +130,42 @@
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="js/config.js?v=20260317f"></script>
-<script src="js/state.js?v=20260317f"></script>
-<script src="js/utils.js?v=20260317f"></script>
-<script src="js/db.js?v=20260317f"></script>
-<script src="js/render.js?v=20260317f"></script>
-<script src="js/views/dept.js?v=20260317f"></script>
-<script src="js/views/tree.js?v=20260317f"></script>
-<script src="js/views/canvas.js?v=20260317f"></script>
-<script src="js/views/future.js?v=20260317f"></script>
-<script src="js/views/tasks.js?v=20260317f"></script>
-<script src="js/views/reports.js?v=20260317f"></script>
-<script src="js/views/horaires.js?v=20260317f"></script>
-<script src="js/views/schedule/config.js?v=20260317g"></script>
-<script src="js/views/schedule/cohortDates.js?v=20260317g"></script>
-<script src="js/views/schedule/helpers.js?v=20260317g"></script>
-<script src="js/views/schedule/gridView.js?v=20260317g"></script>
-<script src="js/views/schedule/weekView.js?v=20260317g"></script>
-<script src="js/views/schedule/trainerView.js?v=20260317g"></script>
-<script src="js/views/schedule/seriesManager.js?v=20260317g"></script>
-<script src="js/views/schedule/shiftModal.js?v=20260317g"></script>
-<script src="js/views/schedule/main.js?v=20260317g"></script>
-<script src="js/views/schedule/autoRules.js?v=20260317g"></script>
-<script src="js/views/schedule/patternGenerator.js?v=20260317g"></script>
-<script src="js/modals.js?v=20260317f"></script>
-<script src="js/app.js?v=20260317f"></script>
+<script>
+// Auto cache-bust: append build timestamp so browsers always fetch latest JS
+(function() {
+  var V = Date.now();
+  var scripts = [
+    'js/config.js',
+    'js/state.js',
+    'js/utils.js',
+    'js/db.js',
+    'js/render.js',
+    'js/views/dept.js',
+    'js/views/tree.js',
+    'js/views/canvas.js',
+    'js/views/future.js',
+    'js/views/tasks.js',
+    'js/views/reports.js',
+    'js/views/horaires.js',
+    'js/views/schedule/config.js',
+    'js/views/schedule/cohortDates.js',
+    'js/views/schedule/helpers.js',
+    'js/views/schedule/gridView.js',
+    'js/views/schedule/weekView.js',
+    'js/views/schedule/trainerView.js',
+    'js/views/schedule/seriesManager.js',
+    'js/views/schedule/shiftModal.js',
+    'js/views/schedule/main.js',
+    'js/views/schedule/autoRules.js',
+    'js/views/schedule/patternGenerator.js',
+    'js/modals.js',
+    'js/app.js',
+  ];
+  // Synchronous sequential load via document.write (safe at parse time)
+  scripts.forEach(function(src) {
+    document.write('<script src="' + src + '?v=' + V + '"></script>');
+  });
+})();
+</script>
 </body>
 </html>
