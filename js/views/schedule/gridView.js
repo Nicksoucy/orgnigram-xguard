@@ -119,10 +119,10 @@ function schedBuildMonthGrid() {
       const selKey = `${trainer.id}|${dateS}|${quart||''}`;
       const isSelected = !!_schedSelection[selKey];
       const selStyle = isSelected ? 'outline:2px solid var(--a);outline-offset:-2px;' : '';
+      const tdMouseEvents = `data-selkey="${esc(selKey)}" onmousedown="schedCellMouseDown('${trainerId}','${escapedDateS}','${quart||''}',event)" onmouseover="schedCellMouseOver('${trainerId}','${escapedDateS}','${quart||''}',event)"`;
 
       if (matchEntries.length > 0) {
         // Stack all entries in this cell
-        // Compute trainer initials using shared initials() from utils.js
         const trainerInitials = initials(trainer.name);
 
         const stackedHTML = matchEntries.map(entry => {
@@ -130,7 +130,6 @@ function schedBuildMonthGrid() {
           const cellTip  = schedCellTooltip(entry);
           const cellBg   = schedCellBg(entry);
           const bgStyle  = cellBg ? `background:${cellBg};color:#fff;` : '';
-          // Show code + initials: "LS34-ME" or just program if no code
           const code = entry.excel_cell_code || '';
           const displayText = code ? `${code}-${trainerInitials}` : cellText;
           const sessionLine = entry.session_id
@@ -140,12 +139,12 @@ function schedBuildMonthGrid() {
             <span style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;">${esc(displayText)}</span>${sessionLine}
           </span>`;
         }).join('');
-        bodyHTML += `<td class="${tdClass}" style="${selStyle};padding:2px;vertical-align:top;${isHoliday ? 'background:rgba(147,197,253,0.20);' : ''}">
+        bodyHTML += `<td class="${tdClass}" ${tdMouseEvents} style="${selStyle};padding:2px;vertical-align:top;${isHoliday ? 'background:rgba(147,197,253,0.20);' : ''}">
           ${stackedHTML}
         </td>`;
       } else {
         const holidayStyle = isHoliday ? 'background:rgba(147,197,253,0.20);' : '';
-        bodyHTML += `<td class="${tdClass}" style="${selStyle}${holidayStyle}" onclick="schedCellClick(null,'${trainerId}','${escapedDateS}','${quart||''}',event)">
+        bodyHTML += `<td class="${tdClass}" ${tdMouseEvents} style="${selStyle}${holidayStyle}" onclick="schedCellClick(null,'${trainerId}','${escapedDateS}','${quart||''}',event)">
           <span class="sched-cell empty-cell" style="${isHoliday?'opacity:0;':''}">+</span>
         </td>`;
       }
@@ -159,13 +158,16 @@ function schedBuildMonthGrid() {
   }
 
   const selCount = Object.keys(_schedSelection).length;
-  const selToolbar = selCount > 0 ? `
-    <div style="position:sticky;top:0;z-index:10;background:rgba(255,107,53,0.15);border:1px solid var(--a);border-radius:8px;padding:8px 14px;margin-bottom:8px;display:flex;align-items:center;gap:12px;">
-      <span style="color:var(--a);font-weight:700;">✓ ${selCount} date${selCount>1?'s':''} sélectionnée${selCount>1?'s':''}</span>
-      <span style="color:var(--td);font-size:12px;">${Object.values(_schedSelection).map(s=>s.dateStr).sort().join(', ')}</span>
-      <button onclick="schedCreateBulkShifts()" style="margin-left:auto;background:var(--a);color:#fff;border:none;border-radius:6px;padding:6px 14px;cursor:pointer;font-weight:700;">Créer ${selCount} shift${selCount>1?'s':''}</button>
+  const selDates = Object.values(_schedSelection).map(s=>s.dateStr).sort().join(', ');
+
+  // Toolbar is always rendered (hidden when empty) so _schedUpdateToolbar() can target it
+  const selToolbar = `
+    <div id="sched-sel-toolbar" style="position:sticky;top:0;z-index:10;background:rgba(255,107,53,0.15);border:1px solid var(--a);border-radius:8px;padding:8px 14px;margin-bottom:8px;display:${selCount>0?'flex':'none'};align-items:center;gap:12px;">
+      <span class="sel-count" style="color:var(--a);font-weight:700;">✓ ${selCount} date${selCount>1?'s':''} sélectionnée${selCount>1?'s':''}</span>
+      <span class="sel-dates" style="color:var(--td);font-size:12px;">${selDates}</span>
+      <button class="sel-create-btn" onclick="schedCreateBulkShifts()" style="margin-left:auto;background:var(--a);color:#fff;border:none;border-radius:6px;padding:6px 14px;cursor:pointer;font-weight:700;">Créer ${selCount} shift${selCount>1?'s':''}</button>
       <button onclick="schedClearSelection()" style="background:var(--s);color:var(--td);border:1px solid var(--b);border-radius:6px;padding:6px 10px;cursor:pointer;">✕</button>
-    </div>` : '';
+    </div>`;
 
   return `${selToolbar}<div id="sched-wrap">
     <table class="sched-grid">
@@ -174,7 +176,7 @@ function schedBuildMonthGrid() {
     </table>
   </div>
   <div style="margin-top:8px;font-size:11px;color:var(--td);opacity:0.6;">
-    💡 Ctrl+clic pour sélectionner plusieurs dates → créer des shifts en lot
+    💡 Ctrl+clic ou Ctrl+glisser pour sélectionner plusieurs dates → créer des shifts en lot
   </div>`;
 }
 
@@ -225,7 +227,6 @@ function schedDragEnd(event) {
 
 // ---- Multi-select & row management functions ----
 
-
 function schedRemoveRow(trainerId, quart) {
   if (!window._schedExtraRows) window._schedExtraRows = {};
   const arr = window._schedExtraRows[trainerId] || [];
@@ -234,46 +235,115 @@ function schedRemoveRow(trainerId, quart) {
 }
 
 function schedOpenPatternForRow(trainerId, quart) {
-  // Pre-fill pattern modal with trainer + quart
   const quartMap = { 'soir': 'BSP_SOIR', 'weekend': 'BSP_WEEKEND', 'jour': 'BSP_JOUR' };
-  const patternKey = quartMap[quart] || null;
-  schedOpenPatternModal(trainerId, patternKey, quart);
+  schedOpenPatternModal(trainerId, quartMap[quart] || null, quart);
 }
 
 function schedAddRow(trainerId) {
   if (!window._schedExtraRows) window._schedExtraRows = {};
   const existing = window._schedExtraRows[trainerId] || [];
-  // Cycle through: soir → weekend → soir+weekend
   let next = 'soir';
   if (existing.includes('soir') && !existing.includes('weekend')) next = 'weekend';
-  else if (existing.includes('soir') && existing.includes('weekend')) {
-    // Already have both — do nothing
-    return;
-  }
+  else if (existing.includes('soir') && existing.includes('weekend')) return;
   window._schedExtraRows[trainerId] = [...existing, next];
   renderSchedule(document.getElementById('content'), document.getElementById('controls'));
 }
 
+// ---- Drag-to-select (Excel-style Ctrl+drag) ----
+
+let _schedDragSelActive = false;
+
+// Stop drag when mouse button released anywhere on the page
+document.addEventListener('mouseup', () => { _schedDragSelActive = false; });
+
+/**
+ * Called on mousedown on any grid cell.
+ * Ctrl held → start a drag-selection; toggle this cell immediately.
+ */
+function schedCellMouseDown(trainerId, dateStr, quart, event) {
+  if (!event.ctrlKey) return;
+  event.preventDefault(); // prevent text selection during drag
+
+  if (_schedSelTrainer && _schedSelTrainer !== trainerId) return;
+  _schedDragSelActive = true;
+  _schedSelTrainer = trainerId;
+
+  _schedSelToggleCell(trainerId, dateStr, quart);
+  _schedUpdateSelectionUI();
+}
+
+/**
+ * Called on mouseover on any grid cell.
+ * If drag-select is active and Ctrl is still held, add this cell instantly.
+ */
+function schedCellMouseOver(trainerId, dateStr, quart, event) {
+  if (!_schedDragSelActive || !event.ctrlKey) return;
+  if (_schedSelTrainer && _schedSelTrainer !== trainerId) return;
+
+  const selKey = `${trainerId}|${dateStr}|${quart}`;
+  if (!_schedSelection[selKey]) {
+    _schedSelection[selKey] = { trainerId, dateStr, quart };
+    // Highlight directly in DOM — zero re-render cost
+    const td = event.currentTarget;
+    td.style.outline = '2px solid var(--a)';
+    td.style.outlineOffset = '-2px';
+    _schedUpdateToolbar();
+  }
+}
+
+/** Toggle a single cell in/out of the selection state. */
+function _schedSelToggleCell(trainerId, dateStr, quart) {
+  const selKey = `${trainerId}|${dateStr}|${quart}`;
+  if (_schedSelection[selKey]) {
+    delete _schedSelection[selKey];
+    if (Object.keys(_schedSelection).length === 0) _schedSelTrainer = null;
+  } else {
+    _schedSelection[selKey] = { trainerId, dateStr, quart };
+  }
+}
+
+/**
+ * Syncs every cell outline in the DOM to match _schedSelection.
+ * Direct DOM manipulation — no HTML rebuild.
+ */
+function _schedUpdateSelectionUI() {
+  document.querySelectorAll('.sched-grid td[data-selkey]').forEach(td => {
+    const sel = !!_schedSelection[td.dataset.selkey];
+    td.style.outline = sel ? '2px solid var(--a)' : '';
+    td.style.outlineOffset = sel ? '-2px' : '';
+  });
+  _schedUpdateToolbar();
+}
+
+/** Updates just the toolbar count/label without touching the grid. */
+function _schedUpdateToolbar() {
+  const selCount = Object.keys(_schedSelection).length;
+  const toolbar  = document.getElementById('sched-sel-toolbar');
+  if (!toolbar) return;
+  if (selCount === 0) { toolbar.style.display = 'none'; return; }
+  toolbar.style.display = 'flex';
+  const countEl = toolbar.querySelector('.sel-count');
+  const datesEl = toolbar.querySelector('.sel-dates');
+  const btnEl   = toolbar.querySelector('.sel-create-btn');
+  if (countEl) countEl.textContent = `✓ ${selCount} date${selCount>1?'s':''} sélectionnée${selCount>1?'s':''}`;
+  if (datesEl) datesEl.textContent = Object.values(_schedSelection).map(s=>s.dateStr).sort().join(', ');
+  if (btnEl)   btnEl.textContent   = `Créer ${selCount} shift${selCount>1?'s':''}`;
+}
+
 function schedCellClick(entryId, trainerId, dateStr, quart, event) {
+  // Ctrl+click: toggle selection, update DOM only — no re-render
   if (event && event.ctrlKey) {
-    // Multi-select mode
-    const selKey = `${trainerId}|${dateStr}|${quart}`;
-    // Lock to same trainer
     if (_schedSelTrainer && _schedSelTrainer !== trainerId) return;
     _schedSelTrainer = trainerId;
-    if (_schedSelection[selKey]) {
-      delete _schedSelection[selKey];
-      if (Object.keys(_schedSelection).length === 0) _schedSelTrainer = null;
-    } else {
-      _schedSelection[selKey] = { trainerId, dateStr, quart };
-    }
-    // Re-render to show selection highlights
-    renderSchedule(document.getElementById('content'), document.getElementById('controls'));
+    _schedSelToggleCell(trainerId, dateStr, quart);
+    _schedUpdateSelectionUI();
     return;
   }
-  // Normal click
-  _schedSelection = {};
-  _schedSelTrainer = null;
+  // Normal click while something is selected → just clear selection
+  if (Object.keys(_schedSelection).length > 0) {
+    schedClearSelection();
+    return;
+  }
   if (entryId) {
     schedOpenPopup(entryId, event);
   } else {
@@ -286,7 +356,6 @@ function schedCreateBulkShifts() {
   if (!selected.length) return;
   const trainer = selected[0].trainerId;
   const dates = selected.map(s => s.dateStr).sort();
-  // Open modal prefilled with trainer + first date, dates list shown
   _schedModalEntry = null;
   _schedModalPrefill = {
     instructor_id: trainer,
@@ -300,5 +369,10 @@ function schedCreateBulkShifts() {
 function schedClearSelection() {
   _schedSelection = {};
   _schedSelTrainer = null;
-  renderSchedule(document.getElementById('content'), document.getElementById('controls'));
+  _schedDragSelActive = false;
+  document.querySelectorAll('.sched-grid td[data-selkey]').forEach(td => {
+    td.style.outline = '';
+    td.style.outlineOffset = '';
+  });
+  _schedUpdateToolbar();
 }

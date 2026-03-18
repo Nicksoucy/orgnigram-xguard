@@ -3,6 +3,9 @@
    Extracted from app.css — task 14
    =====================================================*/
 
+/* Prevent text selection while Ctrl+drag-selecting cells */
+.sched-grid { user-select: none; }
+
 /* ============================================================
    VIEW: HORAIRES (calendar view — weekly/monthly)
    ============================================================ */
