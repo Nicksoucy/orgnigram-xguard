@@ -235,24 +235,44 @@
 /* Sticky trainer name column on the LEFT */
 .mm-name-col {
   position:sticky; left:0; z-index:4;
-  min-width:130px; max-width:160px;
-  padding:5px 10px;
-  border-right:2px solid var(--b) !important;
+  min-width:120px; max-width:150px;
+  padding:4px 8px;
+  border-right:none !important;
   background:var(--s);
   text-align:left;
+  vertical-align:middle;
 }
 /* Header corner */
 .mm-table thead .mm-name-col { background:var(--sh); z-index:5; font-size:10px; color:var(--td); }
-/* Body name cell */
-.mm-name-cell { border-bottom:1px solid rgba(255,255,255,0.05); }
+/* Name cell spans all quart rows — bottom border only on last quart row */
+.mm-name-cell { border-bottom:none; }
 .mm-table tbody tr:hover .mm-name-col { background:var(--sh); }
+
+/* Quart label — the narrow "Jour / Soir / WE" pill between name and days */
+.mm-quart-label {
+  position:sticky; left:120px; z-index:4;
+  width:36px; min-width:36px; max-width:36px;
+  padding:2px 4px;
+  font-size:8px; font-weight:700; text-transform:uppercase;
+  letter-spacing:0.5px; color:var(--td);
+  background:var(--s);
+  border-right:2px solid var(--b);
+  border-bottom:1px solid rgba(255,255,255,0.04);
+  text-align:center; vertical-align:middle;
+  white-space:nowrap;
+}
+.mm-quart-last { border-bottom:2px solid var(--b); }
+.mm-table thead .mm-quart-label { background:var(--sh); }
+
+/* Last quart row of each trainer gets a thicker bottom border */
+.mm-trainer-last > td { border-bottom:2px solid rgba(255,255,255,0.10) !important; }
 
 /* Day header cells */
 .mm-day-th { min-width:30px; width:34px; vertical-align:middle; padding:3px 1px; }
 
 /* Body rows */
-.mm-table tbody tr { border-bottom:1px solid rgba(255,255,255,0.04); transition:background 0.08s; }
-.mm-table tbody tr:hover > td { background:rgba(255,255,255,0.025) !important; }
+.mm-table tbody tr { border-bottom:1px solid rgba(255,255,255,0.035); transition:background 0.08s; }
+.mm-table tbody tr:hover > td { background:rgba(255,255,255,0.022) !important; }
 
 /* Prevent text selection during drag */
 .mm-table { user-select:none; }
@@ -260,14 +280,16 @@
 /* Day data cells */
 .mm-cell {
   padding:2px 2px; vertical-align:middle; text-align:center;
-  border-right:1px solid rgba(255,255,255,0.05); height:26px; min-width:30px; width:34px;
+  border-right:1px solid rgba(255,255,255,0.05); height:24px; min-width:30px; width:34px;
   cursor:pointer;
 }
 .mm-cell:last-child { border-right:none; }
 .mm-cell.mm-empty:hover { background:rgba(255,107,53,0.09) !important; }
-.mm-cell.mm-dim { opacity:0.22; cursor:default; pointer-events:none; }
+.mm-cell.mm-dim { opacity:0.20; cursor:default; pointer-events:none; }
+/* Last quart row cell bottom border */
+.mm-cell.mm-cell-last { border-bottom:2px solid rgba(255,255,255,0.10); }
 
-/* Selected cell — orange outline like the grid view */
+/* Selected cell — orange outline */
 .mm-cell.mm-selected {
   outline:2px solid var(--a);
   outline-offset:-2px;
