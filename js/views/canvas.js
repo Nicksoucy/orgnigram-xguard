@@ -90,6 +90,8 @@ function renderCanvas(ct,cl){
   CV_DIV_MAP=cvBuildMembers(); // refresh division memberships from data
   cl.innerHTML=`<button class="btn primary" onclick="openAdd()">+ Add Person</button>
     <span style="flex:1"></span>
+    <button class="btn" onclick="cvExportPNG()" title="Export PNG" style="gap:4px;">🖼 PNG</button>
+    <button class="btn" onclick="cvExportPDF()" title="Export PDF" style="gap:4px;">📄 PDF</button>
     <div class="cn-zoom">
       <button class="btn" onclick="cvZoom(0.15)">＋</button>
       <button class="btn" onclick="cvZoom(-0.15)">－</button>
@@ -325,3 +327,58 @@ function cvZoom(d){
   _applyCV();
 }
 function cvReset(){ _cvZoom=0.72; _cvPanX=0; _cvPanY=20; _cvInited=false; cvOrder={}; renderCanvas(document.getElementById('content'),document.getElementById('controls')); }
+
+// ── Export helpers ──────────────────────────────────────────
+async function _cvCapture() {
+  const stage = document.getElementById('canvas-stage');
+  if (!stage) return null;
+  // Temporarily reset transform so html2canvas captures full diagram
+  const saved = stage.style.transform;
+  stage.style.transform = 'translate(0px,0px) scale(1)';
+  await new Promise(r => requestAnimationFrame(r)); // let browser repaint
+  const canvas = await html2canvas(stage, {
+    backgroundColor: '#0c0c0f',
+    scale: 1.5,           // 1.5× for crisp output
+    useCORS: true,
+    logging: false,
+  });
+  stage.style.transform = saved;
+  return canvas;
+}
+
+async function cvExportPNG() {
+  const btn = document.querySelector('[onclick="cvExportPNG()"]');
+  if (btn) { btn.textContent = '⏳ Export…'; btn.disabled = true; }
+  try {
+    const canvas = await _cvCapture();
+    if (!canvas) return;
+    const link = document.createElement('a');
+    link.download = `xguard-org-chart-${new Date().toISOString().slice(0,10)}.png`;
+    link.href = canvas.toDataURL('image/png');
+    link.click();
+  } finally {
+    if (btn) { btn.textContent = '🖼 PNG'; btn.disabled = false; }
+  }
+}
+
+async function cvExportPDF() {
+  const btn = document.querySelector('[onclick="cvExportPDF()"]');
+  if (btn) { btn.textContent = '⏳ Export…'; btn.disabled = true; }
+  try {
+    const canvas = await _cvCapture();
+    if (!canvas) return;
+    const { jsPDF } = window.jspdf;
+    const imgW = canvas.width, imgH = canvas.height;
+    // Landscape page sized to the diagram (in mm at 96dpi → px/3.7795)
+    const pxToMm = px => px / 3.7795;
+    const pdf = new jsPDF({
+      orientation: imgW > imgH ? 'landscape' : 'portrait',
+      unit: 'mm',
+      format: [pxToMm(imgW), pxToMm(imgH)],
+    });
+    pdf.addImage(canvas.toDataURL('image/png'), 'PNG', 0, 0, pxToMm(imgW), pxToMm(imgH));
+    pdf.save(`xguard-org-chart-${new Date().toISOString().slice(0,10)}.pdf`);
+  } finally {
+    if (btn) { btn.textContent = '📄 PDF'; btn.disabled = false; }
+  }
+}
