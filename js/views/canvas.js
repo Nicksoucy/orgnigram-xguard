@@ -92,6 +92,7 @@ function renderCanvas(ct,cl){
     <span style="flex:1"></span>
     <button class="btn" onclick="cvExportPNG()" title="Export PNG" style="gap:4px;">🖼 PNG</button>
     <button class="btn" onclick="cvExportPDF()" title="Export PDF" style="gap:4px;">📄 PDF</button>
+    <button class="btn" onclick="cvExportXLSX()" title="Export Excel" style="gap:4px;">📊 Excel</button>
     <div class="cn-zoom">
       <button class="btn" onclick="cvZoom(0.15)">＋</button>
       <button class="btn" onclick="cvZoom(-0.15)">－</button>
@@ -359,6 +360,104 @@ async function cvExportPNG() {
   } finally {
     if (btn) { btn.textContent = '🖼 PNG'; btn.disabled = false; }
   }
+}
+
+function cvExportXLSX() {
+  const wb = XLSX.utils.book_new();
+
+  // ── Sheet 1: Team Directory ──────────────────────────────
+  const dirRows = [
+    ['Nom', 'Titre / Rôle', 'Type', 'Département', 'Relève à', 'Programmes', 'Localisation(s)', 'Horaire', 'Capacité délégation', 'Notes']
+  ];
+  // VP row first
+  dirRows.push(['You (VP of Training)', 'VP of Training', '—', '—', '—', '—', 'MTL / QC / En ligne', '—', '—', '—']);
+
+  // Sort: leads first, then by dept, then by name
+  const sorted = [...data].sort((a,b) => {
+    if (a.type==='lead' && b.type!=='lead') return -1;
+    if (b.type==='lead' && a.type!=='lead') return 1;
+    if (a.dept < b.dept) return -1;
+    if (a.dept > b.dept) return 1;
+    return a.name.localeCompare(b.name);
+  });
+
+  sorted.forEach(p => {
+    const dept = departments.find(d=>d.key===p.dept);
+    const reportsTo = p.reportsTo==='vp' ? 'You (VP)' : (data.find(x=>x.id===p.reportsTo)?.name || p.reportsTo);
+    const delMap = {yes:'✅ Peut en prendre plus', partial:'🟡 Partiel', no:'🔴 Maxé', unknown:'Non évalué'};
+    dirRows.push([
+      p.name,
+      p.role || '',
+      p.type || '',
+      dept ? dept.label : p.dept,
+      reportsTo,
+      (p.programs||[]).join(', '),
+      (p.locations||[]).join(', '),
+      p.schedule || '',
+      delMap[p.delegatable] || p.delegatable || '',
+      p.notes || ''
+    ]);
+  });
+
+  const wsDir = XLSX.utils.aoa_to_sheet(dirRows);
+  // Column widths
+  wsDir['!cols'] = [
+    {wch:28},{wch:32},{wch:14},{wch:22},{wch:24},
+    {wch:22},{wch:20},{wch:22},{wch:24},{wch:40}
+  ];
+  XLSX.utils.book_append_sheet(wb, wsDir, 'Répertoire');
+
+  // ── Sheet 2: By Department ───────────────────────────────
+  const deptRows = [['Département', 'Nom', 'Titre / Rôle', 'Type', 'Programmes', 'Horaire']];
+  departments.forEach(dept => {
+    const members = data.filter(p=>p.dept===dept.key);
+    if (!members.length) return;
+    members.forEach((p,i) => {
+      deptRows.push([
+        i===0 ? dept.label : '',   // dept label only on first row
+        p.name,
+        p.role || '',
+        p.type || '',
+        (p.programs||[]).join(', '),
+        p.schedule || ''
+      ]);
+    });
+    deptRows.push(['','','','','','']); // blank row between depts
+  });
+
+  const wsDept = XLSX.utils.aoa_to_sheet(deptRows);
+  wsDept['!cols'] = [{wch:22},{wch:28},{wch:32},{wch:14},{wch:22},{wch:22}];
+  XLSX.utils.book_append_sheet(wb, wsDept, 'Par département');
+
+  // ── Sheet 3: Reporting Hierarchy ────────────────────────
+  const hierRows = [['Niveau', 'Nom', 'Titre / Rôle', 'Type', 'Département', 'Programmes']];
+  // BFS from VP
+  function addHierRows(pid, level) {
+    const children = pid==='vp' ? data.filter(p=>p.reportsTo==='vp') : data.filter(p=>p.reportsTo===pid);
+    children.sort((a,b)=>a.name.localeCompare(b.name));
+    children.forEach(p => {
+      const dept = departments.find(d=>d.key===p.dept);
+      const indent = '  '.repeat(level) + p.name;
+      hierRows.push([
+        level===0 ? 'Direct VP' : `Niveau ${level+1}`,
+        indent,
+        p.role || '',
+        p.type || '',
+        dept ? dept.label : p.dept,
+        (p.programs||[]).join(', ')
+      ]);
+      addHierRows(p.id, level+1);
+    });
+  }
+  addHierRows('vp', 0);
+
+  const wsHier = XLSX.utils.aoa_to_sheet(hierRows);
+  wsHier['!cols'] = [{wch:14},{wch:30},{wch:32},{wch:14},{wch:22},{wch:22}];
+  XLSX.utils.book_append_sheet(wb, wsHier, 'Hiérarchie');
+
+  // ── Download ─────────────────────────────────────────────
+  const date = new Date().toISOString().slice(0,10);
+  XLSX.writeFile(wb, `xguard-org-chart-${date}.xlsx`);
 }
 
 async function cvExportPDF() {
