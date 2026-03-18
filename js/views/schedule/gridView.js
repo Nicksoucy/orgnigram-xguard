@@ -370,9 +370,15 @@ function schedClearSelection() {
   _schedSelection = {};
   _schedSelTrainer = null;
   _schedDragSelActive = false;
+  _mmDragActive = false;
+  // Clear grid outlines
   document.querySelectorAll('.sched-grid td[data-selkey]').forEach(td => {
     td.style.outline = '';
     td.style.outlineOffset = '';
+  });
+  // Clear multi-month highlights
+  document.querySelectorAll('.mm-cell.mm-selected').forEach(td => {
+    td.classList.remove('mm-selected');
   });
   _schedUpdateToolbar();
 }
