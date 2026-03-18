@@ -1,4 +1,10 @@
 // ==================== DB HELPERS ====================
+
+/**
+ * Upserts a person record into the `people` table.
+ * Maps internal camelCase fields to DB snake_case columns.
+ * @param {Object} person - Person object from global `data` array.
+ */
 async function dbSavePerson(person) {
   const row = {
     id: person.id, name: person.name, role: person.role||'', type: person.type,
@@ -12,6 +18,10 @@ async function dbSavePerson(person) {
   if(error) console.error('dbSavePerson error:',error);
 }
 
+/**
+ * Deletes a person and all their associated tasks from Supabase.
+ * @param {string} id - Person ID to delete.
+ */
 async function dbDeletePerson(id) {
   const {error:e1}=await db.from('people').delete().eq('id',id);
   const {error:e2}=await db.from('tasks').delete().eq('person_id',id);
@@ -19,6 +29,11 @@ async function dbDeletePerson(id) {
   if(e2) console.error('dbDeleteTasks error:',e2);
 }
 
+/**
+ * Upserts the tasks/outcomes record for a person.
+ * @param {string} personId - Person ID.
+ * @param {Object} tasksObj - Object with `tasks`, `outcomes`, `expectedOutcomes` arrays.
+ */
 async function dbSaveTasks(personId, tasksObj) {
   const {error}=await db.from('tasks').upsert({
     person_id: personId,
@@ -29,22 +44,42 @@ async function dbSaveTasks(personId, tasksObj) {
   if(error) console.error('dbSaveTasks error:',error);
 }
 
+/**
+ * Upserts a department record.
+ * @param {Object} dept - Department object with `key`/`id`, `label`, `color`, `sort_order`.
+ */
 async function dbSaveDept(dept) {
   const {error}=await db.from('departments').upsert({id:dept.key||dept.id, label:dept.label, color:dept.color, sort_order:dept.sort_order||99});
   if(error) console.error('dbSaveDept error:',error);
 }
 
+/**
+ * Deletes a department by ID.
+ * @param {string} id - Department ID.
+ */
 async function dbDeleteDept(id) {
   const {error}=await db.from('departments').delete().eq('id',id);
   if(error) console.error('dbDeleteDept error:',error);
 }
 
+/**
+ * Inserts a weekly report record and returns the created row.
+ * @param {Object} report - Report payload matching the `weekly_reports` table schema.
+ * @returns {Promise<Object>} The inserted report row.
+ * @throws {Error} Supabase error if insert fails.
+ */
 async function dbSaveReport(report) {
   const {data,error} = await db.from('weekly_reports').insert(report).select().single();
   if(error) throw error;
   return data;
 }
 
+/**
+ * Fetches weekly reports, optionally filtered by person.
+ * @param {string|null} personId - Filter to a specific person, or null for all.
+ * @returns {Promise<Object[]>} Array of report rows ordered by week_start descending.
+ * @throws {Error} Supabase error if query fails.
+ */
 async function dbGetReports(personId) {
   let q = db.from('weekly_reports').select('*').order('week_start', {ascending:false});
   if(personId) q = q.eq('person_id', personId);
@@ -53,11 +88,21 @@ async function dbGetReports(personId) {
   return data||[];
 }
 
+/**
+ * Deletes a weekly report by ID.
+ * @param {string} id - Report row ID.
+ * @throws {Error} Supabase error if delete fails.
+ */
 async function dbDeleteReport(id) {
   const {error} = await db.from('weekly_reports').delete().eq('id', id);
   if(error) throw error;
 }
 
+/**
+ * Saves the canvas node order for a parent division.
+ * @param {string} parentId - Division ID.
+ * @param {string[]} children - Ordered array of child person IDs.
+ */
 async function dbSaveCanvasOrder(parentId, children) {
   const {error}=await db.from('canvas_order').upsert({id:parentId, children});
   if(error) console.error('dbSaveCanvasOrder error:',error);
@@ -65,6 +110,13 @@ async function dbSaveCanvasOrder(parentId, children) {
 
 // ==================== HORAIRES DB ====================
 
+/**
+ * Fetches all schedule entries for a given week range, with location and cohort joins.
+ * @param {string} weekStart - ISO date string for start of week e.g. "2026-03-16"
+ * @param {string} weekEnd   - ISO date string for end of week e.g. "2026-03-22"
+ * @returns {Promise<Object[]>} Array of schedule_entries rows with joined data.
+ * @throws {Error} Supabase error if query fails.
+ */
 async function dbGetScheduleWeek(weekStart, weekEnd) {
   const {data,error} = await db.from('schedule_entries')
     .select('*, locations(name,code), cohorts(code,program)')
@@ -74,19 +126,33 @@ async function dbGetScheduleWeek(weekStart, weekEnd) {
   return data||[];
 }
 
+/**
+ * Fetches all active locations ordered by name.
+ * @returns {Promise<Object[]>} Array of location rows.
+ * @throws {Error} Supabase error if query fails.
+ */
 async function dbGetLocations() {
   const {data,error} = await db.from('locations').select('*').eq('is_active',true).order('name');
   if(error) throw error;
   return data||[];
 }
 
-// Map our internal 'quart' field to DB column 'shift_type'
+/**
+ * Maps internal `quart` field to DB column `shift_type` before writing.
+ * @param {Object} entry - Schedule entry with optional `quart` field.
+ * @returns {Object} Entry with `quart` renamed to `shift_type`.
+ */
 function _schedEntryToDb(entry) {
   const e = { ...entry };
   if ('quart' in e) { e.shift_type = e.quart; delete e.quart; }
   return e;
 }
-// Map DB 'shift_type' back to internal 'quart'
+
+/**
+ * Maps DB `shift_type` column back to internal `quart` field after reading.
+ * @param {Object|null} row - DB row with optional `shift_type` field.
+ * @returns {Object|null} Row with `shift_type` renamed to `quart`.
+ */
 function _schedEntryFromDb(row) {
   if (!row) return row;
   const r = { ...row };
@@ -94,32 +160,66 @@ function _schedEntryFromDb(row) {
   return r;
 }
 
+/**
+ * Inserts a new schedule entry and returns the created row.
+ * @param {Object} entry - Schedule entry payload (uses internal `quart` field).
+ * @returns {Promise<Object>} Created row mapped back to internal format.
+ * @throws {Error} Supabase error if insert fails.
+ */
 async function dbSaveScheduleEntry(entry) {
   const {data,error} = await db.from('schedule_entries').insert(_schedEntryToDb(entry)).select().single();
   if(error) throw error;
   return _schedEntryFromDb(data);
 }
 
+/**
+ * Updates an existing schedule entry by ID.
+ * @param {string} id - schedule_entries row ID.
+ * @param {Object} updates - Partial update payload (uses internal `quart` field).
+ * @returns {Promise<Object>} Updated row mapped back to internal format.
+ * @throws {Error} Supabase error if update fails.
+ */
 async function dbUpdateScheduleEntry(id, updates) {
   const {data,error} = await db.from('schedule_entries').update(_schedEntryToDb(updates)).eq('id',id).select().single();
   if(error) throw error;
   return _schedEntryFromDb(data);
 }
 
+/**
+ * Deletes a schedule entry by ID.
+ * @param {string} id - schedule_entries row ID.
+ * @throws {Error} Supabase error if delete fails.
+ */
 async function dbDeleteScheduleEntry(id) {
   const {error} = await db.from('schedule_entries').delete().eq('id',id);
   if(error) throw error;
 }
 
-// Trainer order persisted in localStorage (per-browser, instant, no schema needed)
+/**
+ * Persists the trainer row display order to localStorage.
+ * Uses localStorage instead of Supabase — per-browser, instant, no schema needed.
+ * @param {string[]} orderArr - Ordered array of instructor_id strings.
+ */
 function dbSaveTrainerOrder(orderArr) {
   try { localStorage.setItem('xg_schedule_trainer_order', JSON.stringify(orderArr)); } catch(e) {}
 }
 
+/**
+ * Loads the saved trainer row display order from localStorage.
+ * @returns {string[]} Ordered array of instructor_id strings, or [] if not set.
+ */
 function dbLoadTrainerOrder() {
   try { return JSON.parse(localStorage.getItem('xg_schedule_trainer_order') || '[]') || []; } catch(e) { return []; }
 }
 
+/**
+ * Copies all schedule entries from one week to another, shifting dates by the offset.
+ * Resets status to 'scheduled' on all copied entries.
+ * @param {string} sourceStart - ISO date of source week Monday e.g. "2026-03-16"
+ * @param {string} targetStart - ISO date of target week Monday e.g. "2026-03-23"
+ * @returns {Promise<number>} Number of entries copied.
+ * @throws {Error} Supabase error if read or insert fails.
+ */
 async function dbCopyWeek(sourceStart, targetStart) {
   const sourceEnd = dayjs(sourceStart).add(6,'day').format('YYYY-MM-DD');
   const {data,error} = await db.from('schedule_entries').select('*').gte('date',sourceStart).lte('date',sourceEnd);
@@ -138,6 +238,15 @@ async function dbCopyWeek(sourceStart, targetStart) {
 
 // ==================== SCHEDULE MODULE DB ====================
 
+/**
+ * Fetches all schedule entries for a given month, with cohort and location joins.
+ * Optionally filters to a single instructor.
+ * @param {number} month - Month number (1–12).
+ * @param {number} year  - 4-digit year.
+ * @param {string} [instructorId] - Optional instructor UUID to filter by.
+ * @returns {Promise<Object[]>} Array of entries mapped to internal format (quart field).
+ * @throws {Error} Supabase error if query fails.
+ */
 async function dbGetScheduleEntries(month, year, instructorId) {
   const startDate = year + '-' + String(month).padStart(2, '0') + '-01';
   const endDate   = new Date(year, month, 0).toISOString().split('T')[0]; // last day of month
@@ -152,12 +261,23 @@ async function dbGetScheduleEntries(month, year, instructorId) {
   return (data || []).map(_schedEntryFromDb);
 }
 
+/**
+ * Fetches all programs ordered by sort_order.
+ * @returns {Promise<Object[]>} Array of program rows.
+ * @throws {Error} Supabase error if query fails.
+ */
 async function dbGetPrograms() {
   const { data, error } = await db.from('programs').select('*').order('sort_order');
   if (error) throw error;
   return data || [];
 }
 
+/**
+ * Fetches active cohorts, optionally filtered by program.
+ * @param {string} [program] - Optional program key to filter by e.g. "BSP".
+ * @returns {Promise<Object[]>} Array of cohort rows ordered by cohort_number.
+ * @throws {Error} Supabase error if query fails.
+ */
 async function dbGetCohorts(program) {
   let q = db.from('cohorts').select('*').eq('is_active', true).order('cohort_number');
   if (program) q = q.eq('program', program);
@@ -167,6 +287,12 @@ async function dbGetCohorts(program) {
 }
 
 // ==================== SUPABASE LOAD ====================
+
+/**
+ * Loads all app data from Supabase on startup: people, departments, tasks, canvas order.
+ * Populates global `VP`, `data`, `departments`, `tasksData`, and `cvOrder`.
+ * Falls back gracefully if the load fails — keeps whatever is in memory.
+ */
 async function loadFromSupabase() {
   try {
     const [pRes, dRes, tRes, cvRes] = await Promise.all([

@@ -1,0 +1,204 @@
+/* ==================== schedule.css ====================
+   Styles for Horaires (weekly calendar) and Planning (schedule grid)
+   Extracted from app.css — task 14
+   =====================================================*/
+
+/* ============================================================
+   VIEW: HORAIRES (calendar view — weekly/monthly)
+   ============================================================ */
+
+/* Info banner */
+.hor-notice{display:flex;align-items:center;gap:10px;padding:8px 14px;margin-bottom:10px;
+  background:rgba(255,107,53,0.06);border:1px solid rgba(255,107,53,0.2);border-radius:8px;
+  font-size:12px;color:var(--td);}
+
+/* Controls bar */
+.hor-controls{display:flex;align-items:center;gap:10px;flex-wrap:wrap;width:100%;}
+.hor-week-nav{display:flex;align-items:center;gap:6px;flex-shrink:0;}
+.hor-nav-btn{font-size:16px;padding:5px 12px;line-height:1;}
+.hor-week-label{font-size:13px;font-weight:600;color:var(--t);white-space:nowrap;min-width:200px;text-align:center;}
+.hor-view-toggle{display:flex;gap:0;}
+.hor-view-btn{border-radius:0;border-right-width:0;}
+.hor-view-btn:first-child{border-radius:6px 0 0 6px;}
+.hor-view-btn:last-child{border-radius:0 6px 6px 0;border-right-width:1px;}
+.hor-view-btn.active{background:var(--sh);border-color:var(--a);color:var(--a);}
+.hor-filters{display:flex;gap:4px;flex-wrap:wrap;}
+.hor-filter-btn{font-size:11px;padding:5px 12px;}
+.hor-filter-btn.active{background:var(--ag);border-color:var(--a);color:var(--a);}
+.hor-actions{display:flex;gap:6px;margin-left:auto;}
+
+/* Main area */
+.hor-main{display:flex;flex-direction:column;gap:14px;}
+.hor-loading{color:var(--td);font-size:13px;padding:40px;text-align:center;}
+.hor-empty-state{color:var(--td);font-size:13px;padding:40px;text-align:center;
+  background:var(--s);border:1px solid var(--b);border-radius:10px;}
+
+/* Legend */
+.hor-legend{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:2px;}
+.hor-legend-chip{font-family:'Space Mono',monospace;font-size:9px;text-transform:uppercase;
+  letter-spacing:1px;padding:3px 9px;border-radius:4px;font-weight:700;}
+
+/* Grid wrapper */
+.hor-grid-area{overflow-x:auto;}
+.hor-grid-wrap{overflow-x:auto;border-radius:10px;border:1px solid var(--b);background:var(--s);}
+
+/* Week grid table */
+.hor-grid{width:100%;border-collapse:collapse;table-layout:fixed;}
+.hor-grid th,.hor-grid td{border:1px solid var(--b);}
+.hor-th{padding:8px 6px;text-align:center;background:var(--sh);font-size:11px;font-weight:600;
+  min-width:120px;position:sticky;top:0;z-index:2;}
+.hor-trainer-th{min-width:180px;width:180px;text-align:left;padding-left:12px;position:sticky;left:0;z-index:3;background:var(--sh);}
+.hor-th.hor-today{background:rgba(255,107,53,0.12);color:var(--a);}
+.hor-th-day{font-size:10px;color:var(--td);text-transform:uppercase;letter-spacing:0.5px;}
+.hor-th-date{font-size:13px;font-weight:700;margin-top:1px;}
+
+.hor-row:hover .hor-trainer-cell{background:var(--sh);}
+.hor-trainer-cell{padding:8px 10px;background:var(--s);position:sticky;left:0;z-index:1;
+  display:flex;align-items:center;gap:8px;min-width:180px;width:180px;border-right:2px solid var(--b);}
+.hor-trainer-avatar{width:28px;height:28px;border-radius:50%;display:flex;align-items:center;
+  justify-content:center;font-size:10px;font-weight:700;color:#fff;flex-shrink:0;}
+.hor-trainer-info{flex:1;min-width:0;}
+.hor-trainer-name{font-size:11px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.hor-trainer-role{font-size:9px;color:var(--td);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+
+.hor-td{padding:4px 5px;vertical-align:top;cursor:pointer;min-height:60px;height:60px;
+  position:relative;transition:background 0.15s;}
+.hor-td:hover{background:rgba(255,255,255,0.03);}
+.hor-td.hor-today{background:rgba(255,107,53,0.05);}
+.hor-td-add{position:absolute;bottom:3px;right:4px;font-size:14px;color:var(--ba);
+  opacity:0;transition:opacity 0.15s;line-height:1;pointer-events:none;}
+.hor-td:hover .hor-td-add{opacity:1;}
+
+/* Shift pills */
+.hor-pill{font-size:9px;font-weight:700;padding:3px 6px;border-radius:4px;margin-bottom:2px;
+  cursor:pointer;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+  border:1px solid transparent;transition:opacity 0.15s,transform 0.1s;line-height:1.4;}
+.hor-pill:hover{opacity:0.85;transform:translateY(-1px);}
+
+/* Month calendar */
+.hor-month-label{font-size:16px;font-weight:700;margin-bottom:10px;color:var(--t);}
+.hor-mcal{width:100%;border-collapse:collapse;table-layout:fixed;}
+.hor-mcal th,.hor-mcal td{border:1px solid var(--b);}
+.hor-mcal-th{padding:8px;text-align:center;font-size:11px;font-weight:600;background:var(--sh);
+  color:var(--td);text-transform:uppercase;letter-spacing:0.5px;}
+.hor-mcal-td{padding:6px;vertical-align:top;min-height:90px;height:90px;cursor:pointer;
+  background:var(--s);transition:background 0.15s;}
+.hor-mcal-td:hover{background:var(--sh);}
+.hor-mcal-td.hor-today{background:rgba(255,107,53,0.06);}
+.hor-mcal-empty{background:var(--bg) !important;cursor:default;}
+.hor-mcal-day-num{font-size:11px;font-weight:700;color:var(--td);margin-bottom:4px;}
+.hor-today-num{color:var(--a) !important;background:var(--a);color:#fff;width:20px;height:20px;
+  border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:10px;}
+.hor-mcal-pill{font-size:9px;font-weight:700;padding:2px 5px;border-radius:3px;margin-bottom:2px;
+  color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer;
+  transition:opacity 0.15s;}
+.hor-mcal-pill:hover{opacity:0.8;}
+.hor-mcal-more{font-size:9px;color:var(--td);padding:1px 3px;}
+
+/* Shift modal */
+.hor-modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.72);z-index:2000;
+  display:flex;align-items:center;justify-content:center;backdrop-filter:blur(4px);}
+.hor-modal{background:var(--s);border:1px solid var(--b);border-radius:14px;
+  width:520px;max-width:95vw;max-height:90vh;overflow-y:auto;display:flex;flex-direction:column;}
+.hor-modal-header{display:flex;align-items:center;justify-content:space-between;
+  padding:18px 20px 14px;border-bottom:1px solid var(--b);}
+.hor-modal-title{font-size:16px;font-weight:700;}
+.hor-modal-close{background:none;border:none;color:var(--td);font-size:18px;cursor:pointer;
+  padding:0 4px;line-height:1;transition:color 0.15s;}
+.hor-modal-close:hover{color:var(--t);}
+.hor-modal-body{padding:16px 20px;display:flex;flex-direction:column;gap:12px;}
+.hor-modal-footer{padding:14px 20px;border-top:1px solid var(--b);display:flex;
+  align-items:center;justify-content:space-between;}
+.hor-modal-row{display:flex;gap:12px;}
+.hor-modal-row-2{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+.hor-field{display:flex;flex-direction:column;gap:4px;flex:1;}
+.hor-label{font-family:'Space Mono',monospace;font-size:9px;text-transform:uppercase;
+  letter-spacing:1px;color:var(--td);}
+.hor-input{font-family:'DM Sans',sans-serif;font-size:13px;padding:8px 10px;border-radius:6px;
+  border:1px solid var(--b);background:var(--bg);color:var(--t);outline:none;width:100%;}
+.hor-input:focus{border-color:var(--a);}
+.hor-textarea{resize:vertical;min-height:60px;}
+
+/* Flash notification */
+.hor-flash{position:fixed;bottom:24px;right:24px;background:var(--g);color:#000;
+  padding:12px 20px;border-radius:8px;font-weight:700;z-index:9999;font-size:13px;
+  font-family:'DM Sans',sans-serif;box-shadow:0 4px 20px rgba(0,0,0,0.4);
+  transition:opacity 0.4s;}
+.hor-flash.danger{background:var(--r);}
+.hor-flash.out{opacity:0;}
+
+@media(max-width:700px){
+  .hor-controls{gap:6px;}
+  .hor-week-label{min-width:120px;font-size:11px;}
+  .hor-actions{margin-left:0;}
+  .hor-modal-row-2{grid-template-columns:1fr;}
+}
+
+/* ============================================================
+   VIEW: PLANNING / SCHEDULE (grille mensuelle, semaine, par trainer)
+   ============================================================ */
+#sched-wrap { width:100%; overflow-x:auto; }
+.sched-grid { border-collapse:collapse; min-width:100%; font-size:11px; }
+.sched-grid th { background:var(--s); color:var(--td); padding:4px 6px; text-align:center; border:1px solid var(--b); white-space:nowrap; position:sticky; top:0; z-index:2; }
+.sched-grid th.trainer-col { position:sticky; left:0; z-index:3; min-width:140px; text-align:left; }
+.sched-grid td { border:1px solid var(--b); padding:2px 4px; text-align:center; cursor:pointer; min-width:36px; max-width:52px; white-space:nowrap; overflow:hidden; font-size:10px; }
+.sched-grid td.trainer-name { position:sticky; left:0; background:var(--s); z-index:1; text-align:left; padding:4px 8px; font-size:11px; min-width:140px; }
+.sched-grid td.trainer-name .shift-label { font-size:9px; color:var(--td); opacity:0.7; }
+.sched-grid td.today { outline:2px solid var(--a); outline-offset:-2px; }
+.sched-grid td.weekend-col { background:rgba(255,255,255,0.02); }
+.sched-cell { border-radius:3px; padding:1px 3px; font-weight:600; font-size:10px; display:inline-block; width:100%; }
+.sched-cell.status-holiday { background:#374151; color:#9ca3af; }
+.sched-cell.status-vacation { background:#1e3a5f; color:#93c5fd; }
+.sched-cell.status-cancelled { background:#7f1d1d; color:#fca5a5; }
+.sched-cell.status-replacement { background:#78350f; color:#fcd34d; }
+.sched-cell.empty-cell { color:transparent; }
+.sched-cell.empty-cell:hover { background:rgba(255,107,53,0.15); color:var(--a); }
+
+/* Shift detail popup */
+.shift-popup { position:fixed; background:var(--sh); border:1px solid var(--b); border-radius:10px; padding:16px; z-index:1000; min-width:260px; max-width:320px; box-shadow:0 8px 32px rgba(0,0,0,0.5); }
+.shift-popup .sp-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; }
+.shift-popup .sp-session { font-family:'Space Mono',monospace; font-size:10px; background:rgba(255,107,53,0.15); color:var(--a); padding:4px 8px; border-radius:4px; cursor:pointer; }
+.shift-popup .sp-session:hover { background:rgba(255,107,53,0.3); }
+
+/* New shift modal */
+#shift-modal .mo { max-width:480px; }
+.sched-form-grid { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+.sched-form-grid .full-width { grid-column:1/-1; }
+
+/* Schedule week view */
+.sched-week-wrap { overflow-x:auto; border-radius:10px; border:1px solid var(--b); }
+.sched-week-grid { border-collapse:collapse; min-width:100%; font-size:11px; }
+.sched-week-grid th { background:var(--sh); color:var(--td); padding:8px 6px; text-align:center; border:1px solid var(--b); white-space:nowrap; position:sticky; top:0; z-index:2; min-width:80px; }
+.sched-week-grid th.time-col { min-width:55px; width:55px; position:sticky; left:0; z-index:3; }
+.sched-week-grid td { border:1px solid var(--b); padding:2px; vertical-align:top; min-width:80px; height:32px; cursor:pointer; position:relative; transition:background 0.1s; }
+.sched-week-grid td:hover { background:rgba(255,255,255,0.03); }
+.sched-week-grid td.time-cell { position:sticky; left:0; background:var(--s); color:var(--td); font-size:9px; font-family:'Space Mono',monospace; text-align:right; padding-right:6px; z-index:1; white-space:nowrap; cursor:default; }
+.sched-week-grid td.sched-today-col { background:rgba(255,107,53,0.04); }
+.sched-week-pill { font-size:9px; font-weight:700; padding:2px 4px; border-radius:3px; color:#fff; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; cursor:pointer; display:block; margin-bottom:2px; transition:opacity 0.15s; }
+.sched-week-pill:hover { opacity:0.8; }
+
+/* Schedule trainer view */
+.sched-trainer-layout { display:grid; grid-template-columns:200px 1fr; gap:16px; align-items:start; }
+@media(max-width:700px) { .sched-trainer-layout { grid-template-columns:1fr; } }
+.sched-trainer-sidebar { background:var(--s); border:1px solid var(--b); border-radius:10px; overflow:hidden; position:sticky; top:0; }
+.sched-trainer-sidebar-title { font-family:'Space Mono',monospace; font-size:9px; text-transform:uppercase; letter-spacing:2px; color:var(--td); padding:10px 14px 8px; border-bottom:1px solid var(--b); }
+.sched-trainer-item { display:flex; align-items:center; gap:8px; padding:9px 14px; cursor:pointer; transition:background 0.15s; border-bottom:1px solid var(--b); }
+.sched-trainer-item:last-child { border-bottom:none; }
+.sched-trainer-item:hover { background:var(--sh); }
+.sched-trainer-item.active { background:var(--sh); border-left:3px solid var(--a); }
+.sched-trainer-name { font-size:11px; font-weight:700; flex:1; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.sched-trainer-main { min-height:300px; }
+.sched-trainer-header { background:var(--s); border:1px solid var(--b); border-radius:10px; padding:14px 18px; margin-bottom:16px; display:flex; align-items:center; gap:12px; }
+.sched-session-list { background:var(--s); border:1px solid var(--b); border-radius:10px; padding:14px 18px; margin-bottom:16px; }
+.sched-session-list-title { font-family:'Space Mono',monospace; font-size:9px; text-transform:uppercase; letter-spacing:1.5px; color:var(--a); margin-bottom:10px; display:flex; align-items:center; justify-content:space-between; }
+.sched-session-row { display:flex; align-items:center; gap:8px; padding:5px 0; border-bottom:1px solid var(--b); font-size:11px; }
+.sched-session-row:last-child { border-bottom:none; }
+.sched-session-id { font-family:'Space Mono',monospace; font-size:10px; color:var(--a); background:rgba(255,107,53,0.1); padding:2px 6px; border-radius:3px; }
+.sched-session-date { color:var(--td); font-size:10px; min-width:70px; }
+.sched-session-prog { font-size:10px; font-weight:600; }
+
+/* Holiday column highlight */
+.sched-table th.holiday-col,
+.sched-table td.holiday-col {
+  background: rgba(59, 130, 246, 0.12) !important;
+}
