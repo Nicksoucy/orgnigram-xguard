@@ -270,6 +270,11 @@
 /* Day header cells */
 .mm-day-th { min-width:30px; width:34px; vertical-align:middle; padding:3px 1px; }
 
+/* Weekend column tint — subtle blue stripe on header AND body cells */
+.mm-day-th.mm-we-col  { background:rgba(99,179,237,0.10) !important; color:#90cdf4 !important; opacity:1 !important; }
+.mm-cell.mm-we-col    { background:rgba(99,179,237,0.07) !important; }
+.mm-quart-label.mm-we-col { background:rgba(99,179,237,0.07) !important; }
+
 /* Body rows */
 .mm-table tbody tr { border-bottom:1px solid rgba(255,255,255,0.035); transition:background 0.08s; }
 .mm-table tbody tr:hover > td { background:rgba(255,255,255,0.022) !important; }

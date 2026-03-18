@@ -135,10 +135,11 @@ function _mmBlock(month, year, label, days, trainers, byTQD, quartsToShow, holid
     const isWe    = schedIsWeekend(year, month, d);
     const isHol   = holidays.has(dateS);
     const dow     = SCHED_DAYS_FR[schedDayOfWeek(dateS)];
+    const weCls   = isWe && !isHol ? ' mm-we-col' : '';
     const style   = isToday ? 'color:var(--a);background:rgba(255,107,53,0.18);'
       : isHol ? 'color:#93c5fd;background:rgba(147,197,253,0.14);'
-      : isWe  ? 'color:var(--td);opacity:0.55;' : '';
-    headerCells += `<th class="mm-day-th" style="${style}" title="${isHol?'Jour férié':dateS}">
+      : '';
+    headerCells += `<th class="mm-day-th${weCls}" style="${style}" title="${isHol?'Jour férié':dateS}">
       <div style="font-size:8px;line-height:1.1;">${isHol?'🏖':dow}</div>
       <div style="font-size:11px;font-weight:700;line-height:1.2;">${d}</div>
     </th>`;
@@ -187,9 +188,9 @@ function _mmBlock(month, year, label, days, trainers, byTQD, quartsToShow, holid
         const isSel      = !!_schedSelection[mmKey];
         const dimmed     = isWe || isHol;
 
+        const weBodyCls = isWe && !isHol ? ' mm-we-col' : '';
         const bg = isToday ? 'background:rgba(255,107,53,0.10);'
           : isHol ? 'background:rgba(147,197,253,0.10);'
-          : isWe  ? 'background:rgba(255,255,255,0.018);'
           : '';
 
         const dragAttrs = !dimmed
@@ -201,7 +202,7 @@ function _mmBlock(month, year, label, days, trainers, byTQD, quartsToShow, holid
 
         if (dayEntries.length === 0) {
           const cls = dimmed ? 'mm-dim' : 'mm-empty';
-          row += `<td class="mm-cell ${cls}${selClass}${lastCls}" style="${bg}"${dragAttrs}></td>`;
+          row += `<td class="mm-cell ${cls}${weBodyCls}${selClass}${lastCls}" style="${bg}"${dragAttrs}></td>`;
         } else {
           const chips = dayEntries.map(e => {
             const chipBg = schedCellBg(e) || '#3b82f6';
@@ -210,7 +211,7 @@ function _mmBlock(month, year, label, days, trainers, byTQD, quartsToShow, holid
             return `<span class="mm-chip" style="background:${chipBg};" title="${esc(tip)}"
               onclick="schedOpenPopup('${esc(e.id)}',null)">${esc(lbl)}</span>`;
           }).join('');
-          row += `<td class="mm-cell${selClass}${lastCls}" style="${bg}"${dragAttrs}>${chips}</td>`;
+          row += `<td class="mm-cell${weBodyCls}${selClass}${lastCls}" style="${bg}"${dragAttrs}>${chips}</td>`;
         }
       }
 
