@@ -76,15 +76,9 @@ function schedRenderContent() {
   else if (_schedView === 'trainer') wrap.innerHTML = schedBuildTrainerView();
 }
 
-// ---- Flash ----
+// ---- Flash (delegates to shared showFlash in utils.js) ----
 
-function schedFlash(msg, isDanger) {
-  const el = document.createElement('div');
-  el.className = 'hor-flash' + (isDanger ? ' danger' : '');
-  el.textContent = msg;
-  document.body.appendChild(el);
-  setTimeout(() => { el.classList.add('out'); setTimeout(() => el.remove(), 400); }, 2800);
-}
+function schedFlash(msg, isDanger) { showFlash(msg, isDanger); }
 
 // ---- Week start state ----
 let _schedWeekStart = null;

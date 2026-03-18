@@ -27,3 +27,20 @@ function gChk(id){return [...document.querySelectorAll(`#${id} input:checked`)].
 function sChk(id,v){document.querySelectorAll(`#${id} input`).forEach(c=>{c.checked=v.includes(c.value);});}
 
 function gTaskId(){ return 'tk_'+Math.random().toString(36).substr(2,7); }
+
+// ---- Shared flash notification (task 9) ----
+function showFlash(msg, isDanger) {
+  const el = document.createElement('div');
+  el.className = 'hor-flash' + (isDanger ? ' danger' : '');
+  el.textContent = msg;
+  document.body.appendChild(el);
+  setTimeout(() => { el.classList.add('out'); setTimeout(() => el.remove(), 400); }, 2800);
+}
+
+// ---- Shared trainer filter (task 10) ----
+function getTrainers() {
+  return data.filter(p =>
+    p.type !== 'exec' &&
+    (p.dept === 'training' || p.dept === 'sac' || (p.programs && p.programs.length > 0))
+  );
+}

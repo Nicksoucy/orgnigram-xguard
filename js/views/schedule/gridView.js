@@ -122,13 +122,8 @@ function schedBuildMonthGrid() {
 
       if (matchEntries.length > 0) {
         // Stack all entries in this cell
-        // Compute trainer initials: "Marc Éric Deschambault" → "ME"
-        const trainerInitials = trainer.name
-          .split(' ')
-          .filter(w => w.length > 0)
-          .map(w => w[0].toUpperCase())
-          .slice(0, 2)
-          .join('');
+        // Compute trainer initials using shared initials() from utils.js
+        const trainerInitials = initials(trainer.name);
 
         const stackedHTML = matchEntries.map(entry => {
           const cellText = schedCellContent(entry);

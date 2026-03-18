@@ -114,14 +114,11 @@ function horColorLight(hex) {
   return hex + '22';
 }
 
-// ---- Trainer filtering ----
+// ---- Trainer filtering (delegates to shared getTrainers in utils.js) ----
 
 function horGetTrainers() {
-  // Include anyone in training dept OR who has programs listed, excluding exec
-  return data.filter(p =>
-    p.type !== 'exec' &&
-    (p.dept === 'training' || (p.programs && p.programs.length > 0))
-  );
+  // Note: getTrainers() also includes dept==='sac' — unified criteria
+  return getTrainers();
 }
 
 // ---- Category label ----
@@ -603,15 +600,9 @@ function horSetView(mode) {
   horRenderGrid();
 }
 
-// ---- Flash notification ----
+// ---- Flash notification (delegates to shared showFlash in utils.js) ----
 
-function horFlash(msg, isDanger) {
-  const el = document.createElement('div');
-  el.className = 'hor-flash' + (isDanger ? ' danger' : '');
-  el.textContent = msg;
-  document.body.appendChild(el);
-  setTimeout(() => { el.classList.add('out'); setTimeout(() => el.remove(), 400); }, 2800);
-}
+function horFlash(msg, isDanger) { showFlash(msg, isDanger); }
 
 // ---- Main render entry point ----
 

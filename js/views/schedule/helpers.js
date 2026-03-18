@@ -53,13 +53,8 @@ function schedDayOfWeek(dateStr) {
   return d === 0 ? 6 : d - 1;
 }
 
-// Get people who are trainers (training dept / have programs / contractor type)
-function schedGetTrainers() {
-  return data.filter(p =>
-    p.type !== 'exec' &&
-    (p.dept === 'training' || p.dept === 'sac' || (p.programs && p.programs.length > 0))
-  );
-}
+// Get people who are trainers (delegates to shared getTrainers in utils.js)
+function schedGetTrainers() { return getTrainers(); }
 
 // ---- Get cell display text from entry ----
 function schedCellContent(entry) {

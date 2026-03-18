@@ -34,13 +34,8 @@ async function schedManageSeries(instructorId) {
   overlay.id = 'manage-series-overlay';
   overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.72);z-index:3000;display:flex;align-items:center;justify-content:center;';
 
-  // Compute trainer initials for display preview
-  const trainerInitials = trainerName
-    .split(' ')
-    .filter(w => w.length > 0)
-    .map(w => w[0].toUpperCase())
-    .slice(0, 2)
-    .join('');
+  // Compute trainer initials using shared initials() from utils.js
+  const trainerInitials = initials(trainerName);
 
   const rowsHTML = series.length === 0
     ? '<div style="color:var(--td);font-size:12px;text-align:center;padding:20px;">Aucune série trouvée pour ce formateur.</div>'
