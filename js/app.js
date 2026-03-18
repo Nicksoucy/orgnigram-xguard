@@ -26,18 +26,36 @@ const _loadTimeout = setTimeout(()=>{
   }
 }, 10000);
 
-// Load from Supabase then render
-loadFromSupabase().then(()=>{
-  clearTimeout(_loadTimeout);
-  try {
-    document.getElementById('loading-screen').style.display='none';
-    render();
-  } catch(renderErr) {
-    console.error('Render error:', renderErr);
-    document.getElementById('loading-screen').innerHTML=`<p style="color:#f87171;font-size:13px;font-family:'DM Sans',sans-serif;padding:20px;text-align:center;">Render error: ${renderErr.message}<br><button onclick="location.reload()" style="margin-top:12px;padding:8px 16px;background:#ff6b35;border:none;border-radius:6px;color:#fff;cursor:pointer;">Reload</button></p>`;
+// Auth init → then load data → then render
+authInit().then(() => {
+  if (!authIsLoggedIn()) {
+    // Not logged in — show login screen, hide loading spinner
+    clearTimeout(_loadTimeout);
+    document.getElementById('loading-screen').style.display = 'none';
+    _authShowLoginScreen();
+    return;
   }
-}).catch(err=>{
-  clearTimeout(_loadTimeout);
-  console.error('Init load error:',err);
-  document.getElementById('loading-screen').innerHTML=`<p style="color:#f87171;font-size:13px;font-family:'DM Sans',sans-serif;padding:20px;text-align:center;">Failed to connect: ${err.message}<br><button onclick="location.reload()" style="margin-top:12px;padding:8px 16px;background:#ff6b35;border:none;border-radius:6px;color:#fff;cursor:pointer;">Reload</button></p>`;
+
+  // Logged in — if formateur, lock the trainer filter to their own profile
+  if (!authIsAdmin() && authTrainerId()) {
+    // Will be enforced in render() via _schedTrainer
+    window._schedTrainerLocked = authTrainerId();
+  }
+
+  // Load data and render
+  loadFromSupabase().then(() => {
+    clearTimeout(_loadTimeout);
+    try {
+      document.getElementById('loading-screen').style.display = 'none';
+      authRenderUserChip();
+      render();
+    } catch(renderErr) {
+      console.error('Render error:', renderErr);
+      document.getElementById('loading-screen').innerHTML = `<p style="color:#f87171;font-size:13px;font-family:'DM Sans',sans-serif;padding:20px;text-align:center;">Render error: ${renderErr.message}<br><button onclick="location.reload()" style="margin-top:12px;padding:8px 16px;background:#ff6b35;border:none;border-radius:6px;color:#fff;cursor:pointer;">Reload</button></p>`;
+    }
+  }).catch(err => {
+    clearTimeout(_loadTimeout);
+    console.error('Init load error:', err);
+    document.getElementById('loading-screen').innerHTML = `<p style="color:#f87171;font-size:13px;font-family:'DM Sans',sans-serif;padding:20px;text-align:center;">Failed to connect: ${err.message}<br><button onclick="location.reload()" style="margin-top:12px;padding:8px 16px;background:#ff6b35;border:none;border-radius:6px;color:#fff;cursor:pointer;">Reload</button></p>`;
+  });
 });
