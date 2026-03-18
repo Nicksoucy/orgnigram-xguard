@@ -1,3 +1,6 @@
+/* ============================================================
+   BASE / RESET / CSS VARIABLES
+   ============================================================ */
 :root {
   --bg:#0c0c0f;--s:#16161a;--sh:#1e1e24;--b:#2a2a32;--ba:#3d3d48;
   --t:#e8e6e3;--td:#8b8a87;--a:#ff6b35;--ag:rgba(255,107,53,0.15);
@@ -8,6 +11,9 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--t);min-he
 .grain{position:fixed;inset:0;pointer-events:none;z-index:999;opacity:0.4;
   background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.04'/%3E%3C/svg%3E");}
 
+/* ============================================================
+   LAYOUT / HEADER / TABS / CONTROLS
+   ============================================================ */
 header{padding:28px 32px 14px;border-bottom:1px solid var(--b);}
 header .tag{font-family:'Space Mono',monospace;font-size:10px;text-transform:uppercase;letter-spacing:3px;color:var(--a);margin-bottom:5px;}
 header h1{font-size:26px;font-weight:700;}
@@ -33,7 +39,9 @@ header p{color:var(--td);margin-top:3px;font-size:13px;}
 
 .content{padding:24px 32px 40px;}
 
-/* === VIEW 1: DEPARTMENTS === */
+/* ============================================================
+   VIEW: DEPARTMENTS
+   ============================================================ */
 .dept-grid{display:flex;flex-direction:column;gap:20px;}
 .dept{background:var(--s);border:1px solid var(--b);border-radius:12px;overflow:hidden;}
 .dept-h{padding:12px 18px;display:flex;align-items:center;gap:10px;border-bottom:1px solid var(--b);cursor:pointer;user-select:none;}
@@ -46,7 +54,9 @@ header p{color:var(--td);margin-top:3px;font-size:13px;}
 .dept.collapsed .dept-body{display:none;}
 .dept-body{padding:14px;display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:10px;}
 
-/* === VIEW 2: HIERARCHY TREE === */
+/* ============================================================
+   VIEW: HIERARCHY TREE
+   ============================================================ */
 .tree{padding:0;}
 .tree-node{margin-left:0;}
 .tree-children{margin-left:32px;border-left:2px solid var(--b);padding-left:0;}
@@ -66,7 +76,9 @@ header p{color:var(--td);margin-top:3px;font-size:13px;}
   background:var(--bg);padding:2px 8px;border-radius:8px;}
 .tree-root>.tree-card{margin-bottom:8px;}
 
-/* === VIEW 3: FUTURE STATE === */
+/* ============================================================
+   VIEW: FUTURE STATE
+   ============================================================ */
 .future-container{display:grid;grid-template-columns:1fr 1fr;gap:24px;}
 .future-col{background:var(--s);border:1px solid var(--b);border-radius:12px;overflow:hidden;}
 .future-col-header{padding:14px 18px;border-bottom:1px solid var(--b);display:flex;align-items:center;gap:10px;}
@@ -88,7 +100,9 @@ header p{color:var(--td);margin-top:3px;font-size:13px;}
 .future-change .fc-to{font-size:11px;color:var(--g);}
 .future-change .fc-name{font-size:13px;font-weight:600;margin-bottom:4px;}
 
-/* CARDS (shared) */
+/* ============================================================
+   SHARED: CARDS / BADGES / TAGS
+   ============================================================ */
 .card{background:var(--bg);border:1px solid var(--b);border-radius:8px;padding:12px 14px;cursor:pointer;transition:all 0.2s;}
 .card:hover{border-color:var(--ba);transform:translateY(-1px);box-shadow:0 4px 16px rgba(0,0,0,0.3);}
 .card .name{font-size:13px;font-weight:600;}
@@ -112,6 +126,9 @@ header p{color:var(--td);margin-top:3px;font-size:13px;}
 .t-sales{background:rgba(251,191,36,0.12);color:var(--y);}
 .note-line{font-size:10px;color:var(--td);border-top:1px solid var(--b);padding-top:5px;margin-top:5px;font-style:italic;}
 
+/* ============================================================
+   SHARED: SUMMARY BAR / MODALS
+   ============================================================ */
 /* Summary */
 .summary-bar{position:fixed;bottom:0;left:0;right:0;background:var(--s);border-top:1px solid var(--b);
   padding:10px 32px;display:flex;gap:24px;font-size:11px;z-index:100;}
@@ -143,7 +160,9 @@ header p{color:var(--td);margin-top:3px;font-size:13px;}
 @media(max-width:768px){.future-container{grid-template-columns:1fr;}}
 @keyframes spin{to{transform:rotate(360deg);}}
 
-/* === VIEW 5: TASKS & OUTCOMES === */
+/* ============================================================
+   VIEW: TASKS & OUTCOMES
+   ============================================================ */
 .tasks-filters{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:18px;}
 .tasks-filters input{font-family:'DM Sans',sans-serif;font-size:12px;padding:7px 12px;border-radius:6px;
   border:1px solid var(--b);background:var(--s);color:var(--t);outline:none;width:200px;}
@@ -203,12 +222,16 @@ header p{color:var(--td);margin-top:3px;font-size:13px;}
 .tasks-progress .tp-fill{height:100%;background:var(--a);border-radius:3px;transition:width 0.3s;}
 .tasks-progress .tp-label{color:var(--td);white-space:nowrap;}
 
-/* === COLOR SWATCHES === */
+/* ============================================================
+   SHARED: COLOR SWATCHES (department modal)
+   ============================================================ */
 .color-swatch{display:inline-block;width:28px;height:28px;border-radius:50%;border:3px solid transparent;transition:border-color 0.15s,transform 0.15s;}
 input[name="fdColor"]:checked+.color-swatch{border-color:#fff;transform:scale(1.2);}
 .color-swatch:hover{transform:scale(1.15);}
 
-/* === VIEW 4: CANVAS TREE === */
+/* ============================================================
+   VIEW: CANVAS TREE
+   ============================================================ */
 #canvas-wrap{position:relative;width:100%;overflow:hidden;background:var(--bg);cursor:grab;user-select:none;}
 #canvas-wrap.dragging{cursor:grabbing;}
 #canvas-stage{position:absolute;top:0;left:0;transform-origin:0 0;will-change:transform;}
@@ -240,7 +263,9 @@ input[name="fdColor"]:checked+.color-swatch{border-color:#fff;transform:scale(1.
 .cn-div .cn-arrows{margin-top:0;opacity:0;transition:opacity 0.15s;}
 .cn-div:hover .cn-arrows{opacity:1;}
 
-/* === WEEKLY REPORT MODAL === */
+/* ============================================================
+   SHARED: WEEKLY REPORT MODAL
+   ============================================================ */
 .rp-section-title{font-size:11px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--a);margin:16px 0 8px;padding-bottom:4px;border-bottom:1px solid var(--b);}
 .rp-table{width:100%;border-collapse:collapse;font-size:12px;margin-bottom:8px;}
 .rp-table th{text-align:left;color:var(--td);padding:4px 8px;font-weight:500;border-bottom:1px solid var(--b);}
@@ -252,7 +277,9 @@ input[name="fdColor"]:checked+.color-swatch{border-color:#fff;transform:scale(1.
 .btn-primary{background:var(--a);color:#fff;border-color:var(--a);}
 .btn-primary:hover{background:#e85a25;}
 
-/* === VIEW 6: RAPPORTS === */
+/* ============================================================
+   VIEW: RAPPORTS
+   ============================================================ */
 .rpt-layout{display:grid;grid-template-columns:220px 1fr;gap:20px;align-items:start;}
 @media(max-width:700px){.rpt-layout{grid-template-columns:1fr;}}
 
@@ -337,7 +364,14 @@ input[name="fdColor"]:checked+.color-swatch{border-color:#fff;transform:scale(1.
 .rpt-form .rp-textarea{width:100%;background:var(--bg);border:1px solid var(--b);color:var(--t);border-radius:8px;padding:10px 12px;font-size:13px;font-family:'DM Sans',sans-serif;resize:vertical;min-height:70px;box-sizing:border-box;}
 .rpt-form .rp-textarea:focus{outline:none;border-color:var(--a);}
 
-/* === VIEW 7: HORAIRES === */
+/* ============================================================
+   VIEW: HORAIRES (calendar view — weekly/monthly)
+   ============================================================ */
+
+/* Info banner */
+.hor-notice{display:flex;align-items:center;gap:10px;padding:8px 14px;margin-bottom:10px;
+  background:rgba(255,107,53,0.06);border:1px solid rgba(255,107,53,0.2);border-radius:8px;
+  font-size:12px;color:var(--td);}
 
 /* Controls bar */
 .hor-controls{display:flex;align-items:center;gap:10px;flex-wrap:wrap;width:100%;}
@@ -461,7 +495,9 @@ input[name="fdColor"]:checked+.color-swatch{border-color:#fff;transform:scale(1.
   .hor-modal-row-2{grid-template-columns:1fr;}
 }
 
-/* === SCHEDULE VIEW === */
+/* ============================================================
+   VIEW: PLANNING / SCHEDULE (grille mensuelle, semaine, par trainer)
+   ============================================================ */
 #sched-wrap { width:100%; overflow-x:auto; }
 .sched-grid { border-collapse:collapse; min-width:100%; font-size:11px; }
 .sched-grid th { background:var(--s); color:var(--td); padding:4px 6px; text-align:center; border:1px solid var(--b); white-space:nowrap; position:sticky; top:0; z-index:2; }

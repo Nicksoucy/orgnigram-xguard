@@ -643,6 +643,10 @@ async function renderHoraires(ct, cl) {
   // Main content skeleton
   ct.innerHTML = `
     <div class="hor-main">
+      <div class="hor-notice">
+        📅 Vue calendrier combinée — pour gérer les shifts, cohortes et séries, utilisez
+        <button class="btn" style="font-size:11px;padding:3px 10px;" onclick="switchView('schedule',document.querySelector('.vtab[onclick*=schedule]'))">📆 Planning</button>
+      </div>
       ${horLegendHTML()}
       <div id="hor-grid-area" class="hor-grid-area">
         <div class="hor-loading">Chargement des horaires...</div>

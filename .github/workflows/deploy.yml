@@ -1,0 +1,29 @@
+name: Deploy to GitHub Pages
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Inject commit hash as cache-buster
+        run: |
+          HASH=$(git rev-parse --short HEAD)
+          # Replace all ?v=XXXXXXXX query strings with the current commit hash
+          sed -i "s/?v=[a-zA-Z0-9]*/?v=${HASH}/g" index.html
+          echo "Cache-buster set to: ${HASH}"
+
+      - name: Deploy to GitHub Pages
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./
+          exclude_assets: '.github,scripts,node_modules,.env'
