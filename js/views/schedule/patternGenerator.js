@@ -6,16 +6,10 @@ function schedOpenRecurring(mode) {
   const existing = document.getElementById('recurring-modal-overlay');
   if (existing) existing.remove();
 
-  const trainers = schedGetTrainers();
-  const trainerOpts = trainers.map(t =>
-    `<option value="${esc(t.id)}">${esc(t.name)}</option>`
-  ).join('');
+  const trainerOpts = schedBuildTrainerOpts();
 
-  const programs = _schedPrograms.length
-    ? _schedPrograms
-    : Object.entries(SCHED_DEFAULT_PROGRAM_COLORS).map(([id]) => ({ id, label: id }));
   const programOpts = `<option value="">— Aucun programme —</option>` +
-    programs.map(p => `<option value="${esc(p.id)}">${esc(p.label || p.id)}</option>`).join('');
+    schedBuildProgramOpts();
 
   const currentYear = _schedYear;
   const nextYear    = currentYear + 1;
@@ -249,25 +243,15 @@ function schedOpenPatternModal(preTrainerId, prePatternKey, preQuart) {
   const existing = document.getElementById('pattern-modal-overlay');
   if (existing) existing.remove();
 
-  const trainers = schedGetOrderedTrainers();
-  const trainerOpts = trainers.map(t =>
-    `<option value="${esc(t.id)}">${esc(t.name)}</option>`
-  ).join('');
+  const trainerOpts = schedBuildTrainerOpts();
 
   const patternOpts = Object.entries(SCHED_COHORT_PATTERNS).map(([k,p]) =>
     `<option value="${esc(k)}">${esc(p.label)}</option>`
   ).join('');
 
-  const programOptsArr = _schedPrograms.length
-    ? _schedPrograms
-    : Object.entries(SCHED_DEFAULT_PROGRAM_COLORS).map(([id]) => ({ id, label: id }));
-  const programOpts = programOptsArr.map(p =>
-    `<option value="${esc(p.id)}">${esc(p.label || p.id)}</option>`
-  ).join('');
+  const programOpts = schedBuildProgramOpts();
 
-  const locationOpts = _schedLocations.length
-    ? _schedLocations.map(l => `<option value="${esc(l.id)}">${esc(l.name || l.city || l.code)}</option>`).join('')
-    : `<option value="online">En ligne</option><option value="mtl">Montréal</option><option value="qc">Québec</option>`;
+  const locationOpts = schedBuildLocationOpts();
 
   const overlay = document.createElement('div');
   overlay.id = 'pattern-modal-overlay';

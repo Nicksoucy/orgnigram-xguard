@@ -123,23 +123,15 @@ async function schedRenderModal() {
   let cohorts = [];
   try { cohorts = await dbGetCohorts(); } catch(e) { cohorts = []; }
 
-  const trainers = schedGetTrainers();
   const isEdit   = !!_schedModalEntry;
   const e        = _schedModalEntry || {};
   const pf       = _schedModalPrefill;
 
-  const trainerOpts = trainers.map(t =>
-    `<option value="${esc(t.id)}"${(e.instructor_id || pf.instructor_id) === t.id ? ' selected' : ''}>${esc(t.name)}</option>`
-  ).join('');
+  const trainerOpts = schedBuildTrainerOpts(e.instructor_id || pf.instructor_id);
 
-  const programs = _schedPrograms.length ? _schedPrograms : Object.entries(SCHED_DEFAULT_PROGRAM_COLORS).map(([id]) => ({ id, label: id }));
-  const programOpts = programs.map(p =>
-    `<option value="${esc(p.id)}"${(e.program || pf.program) === p.id ? ' selected' : ''}>${esc(p.label || p.id)}</option>`
-  ).join('');
+  const programOpts = schedBuildProgramOpts(e.program || pf.program);
 
-  const locationOpts = _schedLocations.length
-    ? _schedLocations.map(l => `<option value="${esc(l.id)}"${e.location_id === l.id ? ' selected' : ''}>${esc(l.name || l.city || l.code)}</option>`).join('')
-    : '<option value="">— Aucune salle —</option>';
+  const locationOpts = schedBuildLocationOpts(e.location_id);
 
   const cohortOpts = cohorts.map(c =>
     `<option value="${esc(c.id)}"${e.cohort_id === c.id ? ' selected' : ''}>${esc(c.code || c.id)}</option>`

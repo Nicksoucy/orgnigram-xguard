@@ -21,20 +21,11 @@ function schedOpenAutoRules() {
   if (existing) existing.remove();
 
   const trainers = schedGetOrderedTrainers();
-  const trainerOpts = trainers.map(t =>
-    `<option value="${esc(t.id)}">${esc(t.name)}</option>`
-  ).join('');
+  const trainerOpts = schedBuildTrainerOpts();
 
-  const programOptsArr = _schedPrograms.length
-    ? _schedPrograms
-    : Object.entries(SCHED_DEFAULT_PROGRAM_COLORS).map(([id]) => ({id, label:id}));
-  const programOpts = programOptsArr.map(p =>
-    `<option value="${esc(p.id)}">${esc(p.label||p.id)}</option>`
-  ).join('');
+  const programOpts = schedBuildProgramOpts();
 
-  const locationOpts = _schedLocations.length
-    ? _schedLocations.map(l => `<option value="${esc(l.id)}">${esc(l.name||l.city||l.code)}</option>`).join('')
-    : `<option value="">— Aucune salle —</option>`;
+  const locationOpts = schedBuildLocationOpts();
 
   const rules = schedGetAutoRules();
   const rulesHTML = rules.length === 0

@@ -100,14 +100,12 @@ async function renderSchedule(ct, cl) {
   if (!_schedWeekStart) _schedWeekStart = schedGetWeekStart(_schedYear, _schedMonth);
 
   // Build trainer dropdown options
-  const trainers = schedGetTrainers();
   const trainerFilterOpts = `<option value="">Tous les formateurs</option>` +
-    trainers.map(t => `<option value="${esc(t.id)}"${_schedTrainer === t.id ? ' selected' : ''}>${esc(t.name)}</option>`).join('');
+    schedBuildTrainerOpts(_schedTrainer);
 
   // Build program dropdown options
-  const programs = _schedPrograms.length ? _schedPrograms : Object.entries(SCHED_DEFAULT_PROGRAM_COLORS).map(([id]) => ({ id, label: id }));
   const programFilterOpts = `<option value="">Tous les programmes</option>` +
-    programs.map(p => `<option value="${esc(p.id)}"${_schedProgram === p.id ? ' selected' : ''}>${esc(p.label || p.id)}</option>`).join('');
+    schedBuildProgramOpts(_schedProgram);
 
   // Controls bar
   cl.innerHTML = `

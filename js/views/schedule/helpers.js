@@ -129,3 +129,30 @@ function schedGetOrderedTrainers() {
   all.forEach(t => { if (!ordered.find(x => x.id === t.id)) ordered.push(t); });
   return ordered;
 }
+
+// ---- Dropdown option builders (DRY helpers) ----
+
+function schedGetPrograms() {
+  return _schedPrograms.length
+    ? _schedPrograms
+    : Object.entries(SCHED_DEFAULT_PROGRAM_COLORS).map(([id]) => ({ id, label: id }));
+}
+
+function schedBuildProgramOpts(selectedId) {
+  return schedGetPrograms().map(p =>
+    `<option value="${esc(p.id)}"${selectedId === p.id ? ' selected' : ''}>${esc(p.label || p.id)}</option>`
+  ).join('');
+}
+
+function schedBuildLocationOpts(selectedId) {
+  if (!_schedLocations.length) return `<option value="">— Aucune salle —</option>`;
+  return _schedLocations.map(l =>
+    `<option value="${esc(l.id)}"${selectedId === l.id ? ' selected' : ''}>${esc(l.name || l.city || l.code)}</option>`
+  ).join('');
+}
+
+function schedBuildTrainerOpts(selectedId) {
+  return schedGetOrderedTrainers().map(t =>
+    `<option value="${esc(t.id)}"${selectedId === t.id ? ' selected' : ''}>${esc(t.name)}</option>`
+  ).join('');
+}
