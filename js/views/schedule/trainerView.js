@@ -3,7 +3,7 @@
 // ---- VIEW 3: Par trainer ----
 
 function schedBuildTrainerView() {
-  const trainers = schedGetTrainers();
+  const trainers = getTrainers();
 
   // Sidebar
   let sidebarHTML = `<div class="sched-trainer-sidebar">

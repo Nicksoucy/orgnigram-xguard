@@ -53,9 +53,7 @@ function schedDayOfWeek(dateStr) {
   return d === 0 ? 6 : d - 1;
 }
 
-// Get people who are trainers (delegates to shared getTrainers in utils.js)
-function schedGetTrainers() { return getTrainers(); }
-
+// Get people who are trainers (uses shared getTrainers from utils.js)
 // ---- Get cell display text from entry ----
 function schedCellContent(entry) {
   if (!entry) return '';
@@ -113,7 +111,7 @@ function schedCellBg(entry) {
 // ---- Trainer order helpers ----
 
 function schedGetOrderedTrainers() {
-  const all = schedGetTrainers();
+  const all = getTrainers();
   if (!_schedTrainerOrder || !_schedTrainerOrder.length) return all;
   // Sort by saved order, append any new trainers at the end
   const ordered = [];

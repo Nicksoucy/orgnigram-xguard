@@ -79,13 +79,13 @@ async function schedApplySeriesRename(instructorId, oldCode) {
     .select('id')
     .eq('instructor_id', instructorId)
     .eq('excel_cell_code', oldCode);
-  if (fetchErr) { schedFlash('Erreur: ' + fetchErr.message); return; }
+  if (fetchErr) { showFlash('Erreur: ' + fetchErr.message); return; }
   let updated = 0;
   for (const e of (toUpdate || [])) {
     const { error } = await db.from('schedule_entries').update({ excel_cell_code: newCode }).eq('id', e.id);
     if (!error) updated++;
   }
-  schedFlash(`${updated} shift${updated>1?'s':''} → ${newCode}`);
+  showFlash(`${updated} shift${updated>1?'s':''} → ${newCode}`);
   await schedReloadEntries();
   schedRenderContent();
   document.getElementById('manage-series-overlay')?.remove();
@@ -130,7 +130,7 @@ async function schedExecDeleteFromManager(instructorId, code) {
     .eq('excel_cell_code', code);
   if (mode === 'from' && fromDate) query = query.gte('date', fromDate);
   const { data: toDelete, error: fetchErr } = await query;
-  if (fetchErr) { schedFlash('Erreur: ' + fetchErr.message); return; }
+  if (fetchErr) { showFlash('Erreur: ' + fetchErr.message); return; }
 
   const ids = (toDelete || []).map(e => e.id);
   let deleted = 0;
@@ -138,7 +138,7 @@ async function schedExecDeleteFromManager(instructorId, code) {
     const { error } = await db.from('schedule_entries').delete().in('id', ids.slice(i, i+50));
     if (!error) deleted += Math.min(50, ids.length - i);
   }
-  schedFlash(`${deleted} shift${deleted>1?'s':''} supprimé${deleted>1?'s':''}`);
+  showFlash(`${deleted} shift${deleted>1?'s':''} supprimé${deleted>1?'s':''}`);
   await schedReloadEntries();
   schedRenderContent();
   document.getElementById('manage-series-overlay')?.remove();
@@ -211,7 +211,7 @@ async function schedDeleteSeries(entryId, code) {
   }
 
   if (!toDelete.length) {
-    schedFlash('Aucun shift trouvé à supprimer.', true);
+    showFlash('Aucun shift trouvé à supprimer.', true);
     return;
   }
 
@@ -224,7 +224,7 @@ async function schedDeleteSeries(entryId, code) {
     if (!error) deleted += batch.length;
   }
 
-  schedFlash(`${deleted} shift${deleted>1?'s':''} supprimé${deleted>1?'s':''}`, false);
+  showFlash(`${deleted} shift${deleted>1?'s':''} supprimé${deleted>1?'s':''}`, false);
   await schedReloadEntries();
   schedRenderContent();
 }
@@ -277,7 +277,7 @@ async function schedRenameSeries(entryId, oldCode) {
     if (!error) updated++;
   }
 
-  schedFlash(`${updated} shift${updated>1?'s':''} renommé${updated>1?'s':''} → ${newCode}`);
+  showFlash(`${updated} shift${updated>1?'s':''} renommé${updated>1?'s':''} → ${newCode}`);
   await schedReloadEntries();
   schedRenderContent();
 }

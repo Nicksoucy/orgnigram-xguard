@@ -236,7 +236,7 @@ async function schedGenerateAutoRules() {
   });
 
   if (!toInsert.length) {
-    schedFlash('Aucun nouveau shift à créer (déjà planifiés ou aucune date valide).');
+    showFlash('Aucun nouveau shift à créer (déjà planifiés ou aucune date valide).');
     document.getElementById('auto-rules-overlay')?.remove();
     return;
   }
@@ -249,7 +249,7 @@ async function schedGenerateAutoRules() {
     if (!error) inserted += Math.min(BATCH, toInsert.length - i);
   }
 
-  schedFlash(`✅ ${inserted} shift${inserted>1?'s':''} créé${inserted>1?'s':''} selon les règles auto`);
+  showFlash(`✅ ${inserted} shift${inserted>1?'s':''} créé${inserted>1?'s':''} selon les règles auto`);
   document.getElementById('auto-rules-overlay')?.remove();
   await schedReloadEntries();
   schedRenderContent();

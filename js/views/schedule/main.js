@@ -76,9 +76,6 @@ function schedRenderContent() {
   else if (_schedView === 'trainer') wrap.innerHTML = schedBuildTrainerView();
 }
 
-// ---- Flash (delegates to shared showFlash in utils.js) ----
-
-function schedFlash(msg, isDanger) { showFlash(msg, isDanger); }
 
 // ---- Week start state ----
 let _schedWeekStart = null;
