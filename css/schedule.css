@@ -240,28 +240,28 @@
   overflow-x: auto;
 }
 
-/* The table inside each block */
+/* The table inside each block — auto width so columns fit content, not the full page */
 .mm-table {
   border-collapse: collapse;
   font-size: 11px;
   white-space: nowrap;
-  width: 100%;
+  width: auto;
+  min-width: 100%;
 }
 
-/* Sticky trainer header */
+/* Trainer header row */
 .mm-table thead { position: sticky; top: 0; z-index: 3; }
 .mm-table thead tr { background: var(--sh); border-bottom: 2px solid var(--b); }
-/* Hidden header (2nd+ blocks) — still rendered for column width, but invisible */
-.mm-thead-hidden tr { visibility: hidden; height: 0; }
-.mm-thead-hidden tr th { padding: 0; border: none; height: 0; font-size: 0; }
-.mm-table th { padding: 6px 4px; font-weight: 600; color: var(--td); border-right: 1px solid var(--b); text-align: center; }
+/* 2nd+ blocks: collapse the hidden thead completely so it takes zero height */
+.mm-thead-hidden { visibility: collapse; }
+.mm-table th { padding: 6px 8px; font-weight: 600; color: var(--td); border-right: 1px solid var(--b); text-align: center; }
 .mm-table th:last-child { border-right: none; }
 
 /* Left day column */
 .mm-day-col {
-  min-width: 52px;
-  width: 52px;
-  padding: 3px 8px !important;
+  min-width: 60px;
+  width: 60px;
+  padding: 3px 10px !important;
   text-align: left;
   border-right: 2px solid var(--b) !important;
   white-space: nowrap;
@@ -269,10 +269,11 @@
   font-size: 11px;
 }
 
-/* Trainer columns */
+/* Trainer columns — fixed width so all months align */
 .mm-trainer-col {
-  min-width: 80px;
-  max-width: 130px;
+  width: 110px;
+  min-width: 90px;
+  max-width: 140px;
 }
 
 /* Body rows */
