@@ -96,8 +96,13 @@ function schedCellBg(entry) {
   if (!entry) return '';
   const status = entry.status || 'scheduled';
   if (['holiday','unavailable','vacation','cancelled','replacement'].includes(status)) return '';
-  // BSP Weekend → cyan distinct from regular BSP blue (#3b82f6)
-  if (entry.program === 'BSP' && entry.quart === 'weekend') return '#0891b2';
+  // BSP: 3 teintes de bleu selon le quart
+  if (entry.program === 'BSP') {
+    const q = entry.quart || 'jour';
+    if (q === 'soir')    return '#1d4ed8'; // bleu foncé
+    if (q === 'weekend') return '#0891b2'; // cyan-teal
+    return '#3b82f6';                      // bleu standard (jour)
+  }
   // RCR → orange
   if (entry.program === 'RCR') return '#f97316';
   const city = entry.locations && entry.locations.city;
