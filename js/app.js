@@ -45,10 +45,11 @@ authInit().then(() => {
       else { btn.classList.add('active'); currentView = 'canvas'; }
     });
   } else if (authIsFormateur() && authTrainerId()) {
-    // Formateur: hide Rapports tab, lock trainer filter
+    // Formateur: Planning only, locked to their own trainer profile
     document.querySelectorAll('.vtab').forEach(btn => {
       const view = btn.getAttribute('onclick').match(/'(\w+)'/)?.[1];
-      if (view === 'reports') btn.style.display = 'none';
+      if (view !== 'schedule') btn.style.display = 'none';
+      else { btn.classList.add('active'); currentView = 'schedule'; }
     });
     window._schedTrainerLocked = authTrainerId();
   }
