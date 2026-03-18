@@ -4,7 +4,6 @@ let _schedMultiMonthCount = 4;
 let _schedMultiMonthCache = {};
 let _mmDragActive = false;
 
-// Stop drag on mouseup anywhere
 document.addEventListener('mouseup', () => { _mmDragActive = false; });
 
 async function schedMultiMonthLoad() {
@@ -26,49 +25,45 @@ async function schedMultiMonthLoad() {
 
 function schedMultiMonthInvalidate() { _schedMultiMonthCache = {}; }
 
-// ─── mousedown on a mm cell: start drag-select ───────────────────────────────
-function mmCellMouseDown(trainerId, dateStr, event) {
+// ─── Drag-select handlers ─────────────────────────────────────────────────────
+
+function mmCellMouseDown(trainerId, dateStr, quart, event) {
   event.preventDefault();
-  // Lock to one trainer at a time
-  if (_schedSelTrainer && _schedSelTrainer !== trainerId) {
-    schedClearSelection();
-  }
+  if (_schedSelTrainer && _schedSelTrainer !== trainerId) schedClearSelection();
   _schedSelTrainer = trainerId;
   _mmDragActive    = true;
 
-  const key = trainerId + '|' + dateStr + '|';
+  const key = trainerId + '|' + dateStr + '|' + quart;
   if (_schedSelection[key]) {
     delete _schedSelection[key];
     if (!Object.keys(_schedSelection).length) _schedSelTrainer = null;
   } else {
-    _schedSelection[key] = { trainerId, dateStr, quart: '' };
+    _schedSelection[key] = { trainerId, dateStr, quart };
   }
   _mmSyncSelUI();
   _schedUpdateToolbar();
 }
 
-// ─── mouseover: extend selection while dragging ───────────────────────────────
-function mmCellMouseOver(trainerId, dateStr, event) {
+function mmCellMouseOver(trainerId, dateStr, quart, event) {
   if (!_mmDragActive) return;
   if (_schedSelTrainer && _schedSelTrainer !== trainerId) return;
-  const key = trainerId + '|' + dateStr + '|';
+  const key = trainerId + '|' + dateStr + '|' + quart;
   if (!_schedSelection[key]) {
-    _schedSelection[key] = { trainerId, dateStr, quart: '' };
+    _schedSelection[key] = { trainerId, dateStr, quart };
     event.currentTarget.classList.add('mm-selected');
     _schedUpdateToolbar();
   }
 }
 
-// ─── Sync every mm cell's visual state to _schedSelection ────────────────────
 function _mmSyncSelUI() {
   document.querySelectorAll('.mm-cell[data-mmkey]').forEach(td => {
-    const sel = !!_schedSelection[td.dataset.mmkey];
-    td.classList.toggle('mm-selected', sel);
+    td.classList.toggle('mm-selected', !!_schedSelection[td.dataset.mmkey]);
   });
   _schedUpdateToolbar();
 }
 
-// ─── Build ────────────────────────────────────────────────────────────────────
+// ─── Main builder ─────────────────────────────────────────────────────────────
+
 function schedBuildMultiMonthView() {
   const todayS     = schedTodayStr();
   const allTrainers = schedGetOrderedTrainers();
@@ -79,7 +74,6 @@ function schedBuildMultiMonthView() {
   if (!trainers.length)
     return `<div class="hor-empty-state">Aucun formateur trouvé. Ajustez le filtre.</div>`;
 
-  // Selection toolbar (same one used by gridView)
   const selCount = Object.keys(_schedSelection).length;
   const selToolbar = `
     <div id="sched-sel-toolbar" style="position:sticky;top:0;z-index:20;background:rgba(255,107,53,0.15);border:1px solid var(--a);border-radius:8px;padding:8px 14px;margin-bottom:12px;display:${selCount>0?'flex':'none'};align-items:center;gap:12px;flex-wrap:wrap;">
@@ -96,30 +90,45 @@ function schedBuildMultiMonthView() {
     let entries = _schedMultiMonthCache[key] || [];
     if (_schedProgram) entries = entries.filter(e => e.program === _schedProgram);
 
-    const byTD = {};
+    // Index: instructor_id → quart → date → [entries]
+    const byTQD = {};
     entries.forEach(e => {
-      if (!byTD[e.instructor_id]) byTD[e.instructor_id] = {};
-      if (!byTD[e.instructor_id][e.date]) byTD[e.instructor_id][e.date] = [];
-      byTD[e.instructor_id][e.date].push(e);
+      const q = e.quart || 'jour';
+      if (!byTQD[e.instructor_id]) byTQD[e.instructor_id] = {};
+      if (!byTQD[e.instructor_id][q]) byTQD[e.instructor_id][q] = {};
+      if (!byTQD[e.instructor_id][q][e.date]) byTQD[e.instructor_id][q][e.date] = [];
+      byTQD[e.instructor_id][q][e.date].push(e);
     });
+
+    // Which quarts exist globally this month (preserve canonical order)
+    const QUART_ORDER = ['jour', 'soir', 'weekend'];
+    const activeQuarts = QUART_ORDER.filter(q =>
+      trainers.some(t => byTQD[t.id] && byTQD[t.id][q])
+    );
+    // Always show at least one row
+    const quartsToShow = activeQuarts.length ? activeQuarts : ['jour'];
 
     const holidays = schedGetHolidaysQC(y);
     schedGetHolidaysQC(y + 1).forEach(h => holidays.add(h));
 
-    blocks += _mmBlock(m, y, SCHED_MONTHS_FR[m-1]+' '+y, schedDaysInMonth(m,y), trainers, byTD, holidays, todayS);
+    blocks += _mmBlock(m, y, SCHED_MONTHS_FR[m-1]+' '+y, schedDaysInMonth(m,y),
+                       trainers, byTQD, quartsToShow, holidays, todayS);
     m++; if (m > 12) { m = 1; y++; }
   }
 
   return `${selToolbar}
     <div class="mm-stack-wrap">${blocks}</div>
     <div style="margin-top:8px;font-size:11px;color:var(--td);opacity:0.6;">
-      💡 Clic ou Ctrl+glisser pour sélectionner des dates → créer des shifts en lot
+      💡 Clic ou glisser pour sélectionner des dates → créer des shifts en lot
     </div>`;
 }
 
-function _mmBlock(month, year, label, days, trainers, byTD, holidays, todayS) {
-  // Day header
-  let headerCells = `<th class="mm-name-col">Formateur</th>`;
+// ─── One month block ──────────────────────────────────────────────────────────
+
+function _mmBlock(month, year, label, days, trainers, byTQD, quartsToShow, holidays, todayS) {
+
+  // ── Day header ──
+  let headerCells = `<th class="mm-name-col" colspan="2">Formateur</th>`;
   for (let d = 1; d <= days; d++) {
     const dateS   = schedDateStr(year, month, d);
     const isToday = dateS === todayS;
@@ -135,61 +144,79 @@ function _mmBlock(month, year, label, days, trainers, byTD, holidays, todayS) {
     </th>`;
   }
 
-  // Body rows — one per trainer
+  // ── Body: one row per trainer × quart ──
+  const QUART_LABELS = { jour: 'Jour', soir: 'Soir', weekend: 'WE' };
+
   let bodyRows = '';
   trainers.forEach(trainer => {
     const col  = avatarColor(trainer.id);
     const ini  = initials(trainer.name);
-    const name = trainer.name.split(' ').slice(0,2).join(' ');
+    const name = trainer.name.split(' ').slice(0, 2).join(' ');
     const tid  = esc(trainer.id);
+    const tQuartData = byTQD[trainer.id] || {};
 
-    let row = `<tr>`;
-    row += `<td class="mm-name-col mm-name-cell">
-      <div style="display:flex;align-items:center;gap:5px;">
-        <div style="width:20px;height:20px;border-radius:50%;background:${col};display:flex;align-items:center;justify-content:center;font-size:8px;font-weight:700;color:#fff;flex-shrink:0;">${esc(ini)}</div>
-        <span style="font-size:11px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${esc(name)}</span>
-      </div>
-    </td>`;
+    quartsToShow.forEach((quart, qi) => {
+      const isFirstRow = qi === 0;
+      const isLastRow  = qi === quartsToShow.length - 1;
+      const quartData  = tQuartData[quart] || {};
 
-    for (let d = 1; d <= days; d++) {
-      const dateS      = schedDateStr(year, month, d);
-      const escapedDate = esc(dateS);
-      const isToday    = dateS === todayS;
-      const isWe       = schedIsWeekend(year, month, d);
-      const isHol      = holidays.has(dateS);
-      const dayEntries = (byTD[trainer.id] && byTD[trainer.id][dateS]) || [];
-      const mmKey      = trainer.id + '|' + dateS + '|';
-      const isSel      = !!_schedSelection[mmKey];
-      const dimmed     = isWe || isHol;
+      let row = `<tr class="${isLastRow ? 'mm-trainer-last' : ''}">`;
 
-      const bg = isToday ? 'background:rgba(255,107,53,0.10);'
-        : isHol ? 'background:rgba(147,197,253,0.10);'
-        : isWe  ? 'background:rgba(255,255,255,0.018);'
-        : '';
-
-      // All non-dimmed cells are selectable via drag
-      const dragAttrs = !dimmed
-        ? ` data-mmkey="${esc(mmKey)}" onmousedown="mmCellMouseDown('${tid}','${escapedDate}',event)" onmouseover="mmCellMouseOver('${tid}','${escapedDate}',event)"`
-        : '';
-
-      const selClass = isSel ? ' mm-selected' : '';
-
-      if (dayEntries.length === 0) {
-        const cls = dimmed ? 'mm-dim' : 'mm-empty';
-        row += `<td class="mm-cell ${cls}${selClass}" style="${bg}"${dragAttrs}></td>`;
-      } else {
-        const chips = dayEntries.map(e => {
-          const chipBg = schedCellBg(e) || '#3b82f6';
-          const lbl    = _mmLabel(e);
-          const tip    = schedCellTooltip(e);
-          return `<span class="mm-chip" style="background:${chipBg};" title="${esc(tip)}"
-            onclick="schedOpenPopup('${esc(e.id)}',null)">${esc(lbl)}</span>`;
-        }).join('');
-        row += `<td class="mm-cell${selClass}" style="${bg}"${dragAttrs}>${chips}</td>`;
+      // ── Name cell: only on first quart row, rowspan covers all quarts ──
+      if (isFirstRow) {
+        row += `<td class="mm-name-col mm-name-cell" rowspan="${quartsToShow.length}">
+          <div style="display:flex;align-items:center;gap:5px;">
+            <div style="width:20px;height:20px;border-radius:50%;background:${col};display:flex;align-items:center;justify-content:center;font-size:8px;font-weight:700;color:#fff;flex-shrink:0;">${esc(ini)}</div>
+            <span style="font-size:11px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${esc(name)}</span>
+          </div>
+        </td>`;
       }
-    }
-    row += `</tr>`;
-    bodyRows += row;
+
+      // ── Quart label cell ──
+      row += `<td class="mm-quart-label${isLastRow ? ' mm-quart-last' : ''}">${QUART_LABELS[quart] || quart}</td>`;
+
+      // ── Day cells ──
+      for (let d = 1; d <= days; d++) {
+        const dateS      = schedDateStr(year, month, d);
+        const escapedDate = esc(dateS);
+        const isToday    = dateS === todayS;
+        const isWe       = schedIsWeekend(year, month, d);
+        const isHol      = holidays.has(dateS);
+        const dayEntries = quartData[dateS] || [];
+        const mmKey      = trainer.id + '|' + dateS + '|' + quart;
+        const isSel      = !!_schedSelection[mmKey];
+        const dimmed     = isWe || isHol;
+
+        const bg = isToday ? 'background:rgba(255,107,53,0.10);'
+          : isHol ? 'background:rgba(147,197,253,0.10);'
+          : isWe  ? 'background:rgba(255,255,255,0.018);'
+          : '';
+
+        const dragAttrs = !dimmed
+          ? ` data-mmkey="${esc(mmKey)}" onmousedown="mmCellMouseDown('${tid}','${escapedDate}','${quart}',event)" onmouseover="mmCellMouseOver('${tid}','${escapedDate}','${quart}',event)"`
+          : '';
+
+        const selClass = isSel ? ' mm-selected' : '';
+        const lastCls  = isLastRow ? ' mm-cell-last' : '';
+
+        if (dayEntries.length === 0) {
+          const cls = dimmed ? 'mm-dim' : 'mm-empty';
+          row += `<td class="mm-cell ${cls}${selClass}${lastCls}" style="${bg}"${dragAttrs}></td>`;
+        } else {
+          const chips = dayEntries.map(e => {
+            const chipBg = schedCellBg(e) || '#3b82f6';
+            const lbl    = _mmLabel(e);
+            const tip    = schedCellTooltip(e);
+            return `<span class="mm-chip" style="background:${chipBg};" title="${esc(tip)}"
+              onclick="schedOpenPopup('${esc(e.id)}',null)">${esc(lbl)}</span>`;
+          }).join('');
+          row += `<td class="mm-cell${selClass}${lastCls}" style="${bg}"${dragAttrs}>${chips}</td>`;
+        }
+      }
+
+      row += `</tr>`;
+      bodyRows += row;
+    });
   });
 
   return `
