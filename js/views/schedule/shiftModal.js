@@ -81,7 +81,7 @@ function schedClosePopup() {
 
 function schedCopySessionId(sid) {
   navigator.clipboard.writeText(sid).then(() => {
-    schedFlash('Session ID copié: ' + sid);
+    showFlash('Session ID copié: ' + sid);
   }).catch(() => {
     prompt('Session ID:', sid);
   });
@@ -89,10 +89,10 @@ function schedCopySessionId(sid) {
 
 function schedExportSessions() {
   const tEntries = _schedEntries.filter(e => e.instructor_id === _schedTrainer && e.session_id);
-  if (!tEntries.length) { schedFlash('Aucun session ID à exporter.', true); return; }
+  if (!tEntries.length) { showFlash('Aucun session ID à exporter.', true); return; }
   const lines = tEntries.map(e => e.session_id).join('\n');
   navigator.clipboard.writeText(lines).then(() => {
-    schedFlash(tEntries.length + ' session ID(s) copiés pour facture');
+    showFlash(tEntries.length + ' session ID(s) copiés pour facture');
   }).catch(() => {
     prompt('Session IDs (copier):', lines);
   });
@@ -278,7 +278,7 @@ async function schedSaveEntry() {
       await dbUpdateScheduleEntry(_schedModalEntry.id, payload);
       schedCloseModal();
       await schedReloadEntries();
-      schedFlash('Shift mis à jour');
+      showFlash('Shift mis à jour');
     } else if (bulkDates && bulkDates.length > 1) {
       // Bulk create — one entry per selected date
       const results = await Promise.allSettled(
@@ -290,16 +290,16 @@ async function schedSaveEntry() {
       _schedSelTrainer = null;
       await schedReloadEntries();
       if (failed.length) {
-        schedFlash(`${bulkDates.length - failed.length}/${bulkDates.length} shifts créés (${failed.length} erreur${failed.length > 1 ? 's' : ''})`, true);
+        showFlash(`${bulkDates.length - failed.length}/${bulkDates.length} shifts créés (${failed.length} erreur${failed.length > 1 ? 's' : ''})`, true);
       } else {
-        schedFlash(`${bulkDates.length} shifts créés`);
+        showFlash(`${bulkDates.length} shifts créés`);
       }
     } else {
       // Single new entry
       await dbSaveScheduleEntry(payload);
       schedCloseModal();
       await schedReloadEntries();
-      schedFlash('Shift enregistré');
+      showFlash('Shift enregistré');
     }
   } catch(err) {
     console.error('schedSaveEntry error:', err);
@@ -315,7 +315,7 @@ async function schedDeleteEntry(entryId) {
     schedCloseModal();
     await dbDeleteScheduleEntry(entryId);
     await schedReloadEntries();
-    schedFlash('Shift supprimé', true);
+    showFlash('Shift supprimé', true);
   } catch(err) {
     console.error('schedDeleteEntry error:', err);
     alert('Erreur: ' + (err.message || err));

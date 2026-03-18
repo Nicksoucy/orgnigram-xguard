@@ -114,13 +114,6 @@ function horColorLight(hex) {
   return hex + '22';
 }
 
-// ---- Trainer filtering (delegates to shared getTrainers in utils.js) ----
-
-function horGetTrainers() {
-  // Note: getTrainers() also includes dept==='sac' — unified criteria
-  return getTrainers();
-}
-
 // ---- Category label ----
 
 function horCatLabel(cat) {
@@ -309,7 +302,7 @@ function horLegendHTML() {
 // ---- Modal HTML ----
 
 function horModalHTML() {
-  const trainers = horGetTrainers();
+  const trainers = getTrainers();
   const trainerOptions = trainers.map(t =>
     `<option value="${t.id}">${esc(t.name)}</option>`
   ).join('');
@@ -514,7 +507,7 @@ async function horSaveEntry() {
     }
     horCloseModal();
     await horReloadEntries();
-    horFlash('Shift enregistré');
+    showFlash('Shift enregistré');
   } catch(err) {
     console.error('horSaveEntry error:', err);
     alert('Erreur lors de la sauvegarde: ' + (err.message || err));
@@ -528,7 +521,7 @@ async function horDeleteEntry(entryId) {
     await dbDeleteScheduleEntry(entryId);
     horCloseModal();
     await horReloadEntries();
-    horFlash('Shift supprimé', true);
+    showFlash('Shift supprimé', true);
   } catch(err) {
     console.error('horDeleteEntry error:', err);
     alert('Erreur: ' + (err.message || err));
@@ -540,7 +533,7 @@ async function horCopyWeek() {
   if (!confirm(`Copier les shifts de cette semaine vers la semaine du ${horWeekLabel(targetStart)}?`)) return;
   try {
     const n = await dbCopyWeek(_horCurrentWeek, targetStart);
-    horFlash(`${n} shift(s) copié(s) vers la semaine suivante`);
+    showFlash(`${n} shift(s) copié(s) vers la semaine suivante`);
   } catch(err) {
     console.error('horCopyWeek error:', err);
     alert('Erreur: ' + (err.message || err));
@@ -563,7 +556,7 @@ async function horReloadEntries() {
 function horRenderGrid() {
   const wrap = document.getElementById('hor-grid-area');
   if (!wrap) return;
-  const trainers  = horGetTrainers();
+  const trainers  = getTrainers();
   const weekDates = horWeekDates(_horCurrentWeek);
 
   if (_horViewMode === 'month') {
@@ -599,10 +592,6 @@ function horSetView(mode) {
   });
   horRenderGrid();
 }
-
-// ---- Flash notification (delegates to shared showFlash in utils.js) ----
-
-function horFlash(msg, isDanger) { showFlash(msg, isDanger); }
 
 // ---- Main render entry point ----
 

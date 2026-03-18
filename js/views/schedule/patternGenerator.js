@@ -224,11 +224,11 @@ async function schedSaveRecurring() {
     document.getElementById('recurring-modal-overlay')?.remove();
     await schedReloadEntries();
 
-    const trainerName = schedGetTrainers().find(t => t.id === instructor_id)?.name || instructor_id;
+    const trainerName = getTrainers().find(t => t.id === instructor_id)?.name || instructor_id;
     if (errors.length) {
-      schedFlash(`${inserted}/${dates.length} shifts créés — ${errors.length} erreur(s)`, true);
+      showFlash(`${inserted}/${dates.length} shifts créés — ${errors.length} erreur(s)`, true);
     } else {
-      schedFlash(`✓ ${dates.length} shifts créés pour ${trainerName}`);
+      showFlash(`✓ ${dates.length} shifts créés pour ${trainerName}`);
     }
   } catch(err) {
     console.error('schedSaveRecurring error:', err);
@@ -650,8 +650,8 @@ async function schedSavePattern() {
     document.getElementById('pattern-modal-overlay')?.remove();
     await schedReloadEntries();
 
-    const trainerName = schedGetTrainers().find(t => t.id === instructor_id)?.name || instructor_id;
-    schedFlash(`✓ ${cohorts.length} cohortes créées pour ${trainerName} (${totalShifts} shifts)`);
+    const trainerName = getTrainers().find(t => t.id === instructor_id)?.name || instructor_id;
+    showFlash(`✓ ${cohorts.length} cohortes créées pour ${trainerName} (${totalShifts} shifts)`);
   } catch(err) {
     console.error('schedSavePattern error:', err);
     alert('Erreur: ' + (err.message || err));
