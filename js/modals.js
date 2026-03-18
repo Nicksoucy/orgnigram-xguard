@@ -70,11 +70,15 @@ function saveP(){
 }
 
 function delP(){
-  if(!editId||!confirm('Remove this person?'))return;
+  if(!editId) return;
+  const p = data.find(x=>x.id===editId);
+  const name = p ? p.name : 'cette personne';
+  if(!confirm(`Archiver ${name}?\n\nLa personne sera masquée mais ses données seront conservées.`)) return;
   const id=editId;
+  // Reassign direct reports to VP
   data.filter(p=>p.reportsTo===id).forEach(p=>{p.reportsTo='vp';dbSavePerson(p);});
   data=data.filter(p=>p.id!==id);
-  dbDeletePerson(id);
+  dbArchivePerson(id);
   closeM();render();
 }
 

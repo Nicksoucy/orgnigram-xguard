@@ -45,7 +45,58 @@ function renderDept(ct,cl){
     </div>`;
   });
   h+=`</div>`;
+
+  // ── Archived section (admin only) ──
+  if (authIsAdmin()) {
+    h += `<div style="margin-top:32px;border-top:1px solid var(--b);padding-top:20px;">
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px;">
+        <span style="font-size:12px;color:var(--td);font-weight:600;text-transform:uppercase;letter-spacing:1px;">🗃 Personnes archivées</span>
+        <button class="btn" style="font-size:11px;padding:3px 10px;" onclick="toggleArchivedView()">
+          ${_showArchived ? 'Masquer' : 'Afficher'}
+        </button>
+      </div>
+      ${_showArchived ? _renderArchivedPeople() : ''}
+    </div>`;
+  }
+
   ct.innerHTML=h;
+}
+
+function _renderArchivedPeople() {
+  if (!_archivedData.length) return '<div class="empty" style="color:var(--td);font-size:12px;">Aucune personne archivée.</div>';
+  return `<div style="display:flex;flex-wrap:wrap;gap:10px;">` +
+    _archivedData.map(p => `
+      <div class="card" style="opacity:0.65;border-style:dashed;min-width:180px;">
+        <span class="badge" style="background:rgba(139,138,135,0.2);color:var(--td);">Archivé</span>
+        <div class="name" style="margin-top:3px;">${esc(p.name)}</div>
+        <div class="role-line">${esc(p.role)}</div>
+        <div style="margin-top:8px;">
+          <button class="btn" style="font-size:10px;padding:3px 10px;" onclick="restoreP('${esc(p.id)}')">↩ Restaurer</button>
+        </div>
+      </div>`).join('') +
+    `</div>`;
+}
+
+async function toggleArchivedView() {
+  _showArchived = !_showArchived;
+  if (_showArchived) {
+    try {
+      _archivedData = await dbGetArchivedPeople();
+    } catch(e) {
+      _archivedData = [];
+      console.error('Failed to load archived:', e);
+    }
+  }
+  render();
+}
+
+async function restoreP(id) {
+  if (!confirm('Restaurer cette personne?')) return;
+  await dbRestorePerson(id);
+  _archivedData = _archivedData.filter(p => p.id !== id);
+  // Reload active people
+  await loadFromSupabase();
+  render();
 }
 
 function eAll(){document.querySelectorAll('.dept').forEach(d=>d.classList.remove('collapsed'));}

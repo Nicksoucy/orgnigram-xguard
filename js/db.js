@@ -30,6 +30,24 @@ async function dbDeletePerson(id) {
 }
 
 /**
+ * Archives a person by setting archived=true (soft delete).
+ * @param {string} id - Person ID to archive.
+ */
+async function dbArchivePerson(id) {
+  const {error}=await db.from('people').update({archived:true}).eq('id',id);
+  if(error) console.error('dbArchivePerson error:',error);
+}
+
+/**
+ * Restores an archived person by setting archived=false.
+ * @param {string} id - Person ID to restore.
+ */
+async function dbRestorePerson(id) {
+  const {error}=await db.from('people').update({archived:false}).eq('id',id);
+  if(error) console.error('dbRestorePerson error:',error);
+}
+
+/**
  * Upserts the tasks/outcomes record for a person.
  * @param {string} personId - Person ID.
  * @param {Object} tasksObj - Object with `tasks`, `outcomes`, `expectedOutcomes` arrays.
@@ -106,6 +124,24 @@ async function dbDeleteReport(id) {
 async function dbSaveCanvasOrder(parentId, children) {
   const {error}=await db.from('canvas_order').upsert({id:parentId, children});
   if(error) console.error('dbSaveCanvasOrder error:',error);
+}
+
+/**
+ * Loads all archived people from Supabase.
+ * @returns {Promise<Object[]>} Array of archived person objects.
+ */
+async function dbGetArchivedPeople() {
+  const {data,error} = await db.from('people').select('*').eq('archived',true).order('sort_order');
+  if(error) throw error;
+  return (data||[]).map(p=>({
+    id:p.id, name:p.name, role:p.role||'', type:p.type||'contractor',
+    dept:p.dept||'', programs:p.programs||[], locations:[],
+    schedule:p.schedule||'', notes:p.notes||'',
+    delegatable:p.delegate===true||p.delegate==='yes'||p.delegate==='partial'?'yes':'no',
+    reportsTo:p.reports_to||'vp',
+    avatarColor:p.avatar_color, sort_order:p.sort_order||99,
+    archived:true
+  }));
 }
 
 // ==================== HORAIRES DB ====================
@@ -296,7 +332,7 @@ async function dbGetCohorts(program) {
 async function loadFromSupabase() {
   try {
     const [pRes, dRes, tRes, cvRes] = await Promise.all([
-      db.from('people').select('*').order('sort_order'),
+      db.from('people').select('*').eq('archived', false).order('sort_order'),
       db.from('departments').select('*').order('sort_order'),
       db.from('tasks').select('*'),
       db.from('canvas_order').select('*')

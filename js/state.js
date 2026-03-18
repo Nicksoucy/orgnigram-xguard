@@ -24,6 +24,10 @@ let _tkFilter = '', _tkDept = 'all';
 // Tasks card order (persisted to localStorage)
 let _tkCardOrder = JSON.parse(localStorage.getItem('tkCardOrder')||'[]');
 
+// Archive state
+let _showArchived = false;
+let _archivedData = []; // cached archived people
+
 // Department modal state
 let _editDeptKey = null;
 
