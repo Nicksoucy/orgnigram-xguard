@@ -1,13 +1,367 @@
 // ==================== VIEW: RAPPORTS ====================
 // REPORT_PEOPLE is defined in state.js:
 // const REPORT_PEOPLE = {
-//   'L3': {type:'sac', label:'SAC'},
-//   'v1': {type:'ventes', label:'Ventes'},
+//   'L3': {type:'sac',         label:'SAC'},
+//   'v1': {type:'ventes',      label:'Ventes'},
 //   'r1': {type:'recrutement', label:'Recrutement'},
-//   'L2': {type:'admin', label:'Admin'}
+//   'L2': {type:'admin',       label:'Admin'}
 // };
 
-// ---- Helpers ----
+// ============================================================
+// REPORT SCHEMA CONFIG
+// Defines fields, sections, and key stats for each report type.
+// To add a new report type: add an entry here + add to REPORT_PEOPLE in state.js.
+// ============================================================
+
+const RPT_SCHEMA = {
+
+  sac: {
+    requiredField: { id: 'rf_observations', label: 'Observations' },
+    sections: [
+      {
+        title: "Volume d'appels",
+        hint: '(tire de JustCall)',
+        type: 'agent-table',
+        agents: ['Hamza', 'Lilia', 'Sekou'],
+        cols: [
+          { label: 'Entrants',   suffix: '_in',   inputType: 'number' },
+          { label: 'Sortants',   suffix: '_out',  inputType: 'number' },
+          { label: 'Taux rep.%', suffix: '_rate', inputType: 'number', max: 100 },
+        ],
+      },
+      {
+        title: 'Dossiers',
+        type: 'fields',
+        fields: [
+          { id: 'annulations',    label: 'Annulations recues',                         inputType: 'number' },
+          { id: 'elite_jessica',  label: 'Dont ELITE (vers Jessica)',                  inputType: 'number' },
+          { id: 'leads_en',       label: 'Leads anglais non rappeles (vers Mitchell)', inputType: 'number' },
+          { id: 'unsolicited',    label: 'Appels non sollicites',                      inputType: 'number' },
+        ],
+      },
+      { title: 'Observations',         type: 'textarea', id: 'observations', required: true, placeholder: 'Resume des observations de la semaine (obligatoire)...' },
+      { title: 'Notes additionnelles', type: 'textarea', id: 'notes',        optional: true, placeholder: 'Hamza peut ajouter tout ce qui est important...' },
+    ],
+    keyStats: d => {
+      const total = (parseInt(d.hamza_in)||0) + (parseInt(d.lilia_in)||0) + (parseInt(d.sekou_in)||0);
+      return [
+        { label: 'Appels entrants', val: total },
+        { label: 'Annulations',     val: d.annulations },
+        { label: 'Leads EN',        val: d.leads_en },
+      ];
+    },
+  },
+
+  ventes: {
+    requiredField: { id: 'rf_overview', label: 'Overview semaine' },
+    sections: [
+      {
+        title: 'Appels',
+        type: 'fields',
+        fields: [
+          { id: 'appels_1er', label: 'Appels 1ers (nouveaux leads)',                      inputType: 'number' },
+          { id: 'appels_2e',  label: '2e appels (suivis)',                                inputType: 'number' },
+          { id: 'appels_3e',  label: '3e appels+',                                       inputType: 'number' },
+          { id: 'heures',     label: 'Heures travaillees', hint: '(max 20h payees)',      inputType: 'number', max: 168 },
+        ],
+      },
+      {
+        title: 'Inscriptions conclues',
+        type: 'fields',
+        fields: [
+          { id: 'bsp',        label: 'BSP Gardiennage', inputType: 'number' },
+          { id: 'secourisme', label: 'Secourisme',       inputType: 'number' },
+          { id: 'elite',      label: 'Elite',            inputType: 'number' },
+        ],
+      },
+      {
+        title: 'GHL Compliance',
+        type: 'radio',
+        name: 'ghl',
+        options: [
+          { value: 'yes', label: 'Oui — tous les appels logges dans GHL' },
+          { value: 'no',  label: 'Non' },
+        ],
+      },
+      { title: 'Overview semaine',     type: 'textarea', id: 'overview', required: true, placeholder: 'Resume general de la semaine (obligatoire)...' },
+      { title: 'Notes additionnelles', type: 'textarea', id: 'notes',    optional: true, placeholder: 'Notes additionnelles...' },
+    ],
+    keyStats: d => {
+      const inscriptions = (parseInt(d.bsp)||0) + (parseInt(d.secourisme)||0) + (parseInt(d.elite)||0);
+      return [
+        { label: '1ers appels',  val: d.appels_1er },
+        { label: 'Inscriptions', val: inscriptions },
+        { label: 'Heures',       val: d.heures },
+      ];
+    },
+  },
+
+  recrutement: {
+    requiredField: null,
+    sections: [
+      {
+        title: 'Entrevues',
+        type: 'fields',
+        fields: [
+          { id: 'entrevues',    label: 'Entrevues agents completees',          inputType: 'number' },
+          { id: 'retenus',      label: 'Candidats retenus',                    inputType: 'number' },
+          { id: 'refuses',      label: 'Refuses',                              inputType: 'number' },
+          { id: 'appels_elite', label: 'Premiers appels Elite completes',      inputType: 'number' },
+          { id: 'pipeline',     label: 'Pipeline candidats actifs (total)',    inputType: 'number' },
+        ],
+      },
+      {
+        title: 'Cohortes',
+        type: 'fields',
+        fields: [
+          { id: 'cohortes', label: 'Cohortes terminees cette semaine', inputType: 'number' },
+          { id: 'top5',     label: 'Top 5 recus des profs',            inputType: 'number' },
+        ],
+        append: {
+          type: 'radio-inline',
+          label: 'Dans les 48h?',
+          name: 'top5_48h',
+          options: [{ value: 'yes', label: 'Oui' }, { value: 'no', label: 'Non' }],
+        },
+      },
+      {
+        title: 'Marketing',
+        type: 'fields',
+        fields: [
+          { id: 'demandes_alex', label: 'Demandes envoyees a Alex cette semaine', inputType: 'number' },
+          { id: 'demandes_desc', label: 'Description', inputType: 'text', grow: true, placeholder: 'Description des demandes...' },
+        ],
+      },
+      { title: 'Notes additionnelles', type: 'textarea', id: 'notes', optional: true, placeholder: 'Notes additionnelles...' },
+    ],
+    keyStats: d => [
+      { label: 'Entrevues', val: d.entrevues },
+      { label: 'Retenus',   val: d.retenus },
+      { label: 'Pipeline',  val: d.pipeline },
+    ],
+  },
+
+  admin: {
+    requiredField: null,
+    sections: [
+      {
+        title: 'Bureau',
+        type: 'fields',
+        fields: [
+          { id: 'checklist_pascaline', label: 'Checklist Pascaline suivie?',  inputType: 'radio-inline', name: 'checklist_pascaline', options: [{value:'yes',label:'Oui'},{value:'no',label:'Non'}] },
+          { id: 'checklist_salle',     label: 'Checklist salle apres cours?', inputType: 'radio-inline', name: 'checklist_salle',     options: [{value:'yes',label:'Oui'},{value:'no',label:'Non'}] },
+          { id: 'nb_cours',            label: 'Nombre de cours',              inputType: 'number' },
+        ],
+      },
+      {
+        title: 'Commissions',
+        type: 'fields',
+        fields: [
+          { id: 'commissions', label: 'Suivi commissions a jour?', inputType: 'radio-inline', name: 'commissions', options: [{value:'yes',label:'Oui'},{value:'no',label:'Non'}] },
+        ],
+      },
+      {
+        title: 'Leads anglais (recus de Hamza)',
+        type: 'fields',
+        fields: [
+          { id: 'leads_recus',     label: 'Leads recus',            inputType: 'number' },
+          { id: 'leads_contactes', label: 'Contactes dans 24h',     inputType: 'number' },
+        ],
+      },
+      {
+        title: 'Rapport mensuel',
+        hint: '(si fin de mois)',
+        type: 'textareas',
+        fields: [
+          { id: 'etat_bureau', label: 'Etat bureau',  placeholder: 'Etat general du bureau...' },
+          { id: 'incidents',   label: 'Incidents',    placeholder: 'Incidents survenus...' },
+          { id: 'besoins',     label: 'Besoins',      placeholder: 'Besoins identifies...' },
+        ],
+      },
+      { title: 'Notes additionnelles', type: 'textarea', id: 'notes', optional: true, placeholder: 'Notes additionnelles...' },
+    ],
+    keyStats: d => [
+      { label: 'Checklist Pascaline', val: d.checklist_pascaline === 'yes' ? 'Oui' : (d.checklist_pascaline === 'no' ? 'Non' : null) },
+      { label: 'Leads recus',         val: d.leads_recus },
+      { label: 'Contactes 24h',       val: d.leads_contactes },
+    ],
+  },
+
+};
+
+// ============================================================
+// GENERIC RENDERERS — driven by RPT_SCHEMA
+// ============================================================
+
+/** Renders one section of a form based on its schema descriptor. */
+function _rptRenderFormSection(s) {
+  const titleHtml = `<div class="rpt-section-title">${s.title}${s.hint ? ` <span class="rpt-hint">${s.hint}</span>` : ''}${s.required ? ' <span class="rpt-required">*</span>' : ''}${s.optional ? ' <span class="rpt-optional">(optionnel)</span>' : ''}</div>`;
+
+  // Agent table (SAC call volumes)
+  if (s.type === 'agent-table') {
+    const thead = '<tr><th>Agent</th>' + s.cols.map(c => `<th>${c.label}</th>`).join('') + '</tr>';
+    const tbody = s.agents.map(agent => {
+      const key = agent.toLowerCase();
+      const cells = s.cols.map(c =>
+        `<td><input class="rp-num" type="number" min="0"${c.max ? ` max="${c.max}"` : ''} id="rf_${key}${c.suffix}" placeholder="0"/></td>`
+      ).join('');
+      return `<tr><td>${agent}</td>${cells}</tr>`;
+    }).join('');
+    return titleHtml + `<table class="rp-table"><thead>${thead}</thead><tbody>${tbody}</tbody></table>`;
+  }
+
+  // Regular fields row
+  if (s.type === 'fields') {
+    const fieldsHtml = s.fields.map(f => _rptRenderFormField(f)).join('');
+    const appendHtml = s.append ? _rptRenderAppend(s.append) : '';
+    return titleHtml + `<div class="rpt-field-row">${fieldsHtml}</div>${appendHtml}`;
+  }
+
+  // Multiple textareas (admin monthly section)
+  if (s.type === 'textareas') {
+    const areas = s.fields.map(f =>
+      `<label class="rpt-label" style="margin-top:8px;">${f.label}</label><textarea class="rp-textarea" id="rf_${f.id}" rows="2" placeholder="${f.placeholder || ''}"></textarea>`
+    ).join('');
+    return titleHtml + `<div>${areas}</div>`;
+  }
+
+  // Single textarea
+  if (s.type === 'textarea') {
+    return titleHtml + `<textarea class="rp-textarea" id="rf_${s.id}" rows="${s.required ? 4 : 3}" placeholder="${s.placeholder || ''}"></textarea>`;
+  }
+
+  // Standalone radio group
+  if (s.type === 'radio') {
+    const opts = s.options.map(o =>
+      `<label class="rpt-radio-label"><input type="radio" name="rf_${s.name}" value="${o.value}"/> ${o.label}</label>`
+    ).join('');
+    return titleHtml + `<div class="rpt-radio-group">${opts}</div>`;
+  }
+
+  return '';
+}
+
+/** Renders a single field inside a fields row. */
+function _rptRenderFormField(f) {
+  const growClass = f.grow ? ' rpt-field-grow' : '';
+  if (f.inputType === 'radio-inline') {
+    const opts = f.options.map(o =>
+      `<label class="rpt-radio-label"><input type="radio" name="rf_${f.name}" value="${o.value}"/> ${o.label}</label>`
+    ).join('');
+    return `<div class="rpt-field${growClass}"><label class="rpt-label">${f.label}</label><div class="rpt-radio-group rpt-radio-inline">${opts}</div></div>`;
+  }
+  if (f.inputType === 'text') {
+    return `<div class="rpt-field${growClass}"><label class="rpt-label">${f.label}</label><input class="rpt-text-input" type="text" id="rf_${f.id}" placeholder="${f.placeholder || ''}"/></div>`;
+  }
+  // Default: number input
+  return `<div class="rpt-field${growClass}"><label class="rpt-label">${f.label}${f.hint ? ` <span class="rpt-optional">${f.hint}</span>` : ''}</label><input class="rp-num" type="number" min="0"${f.max ? ` max="${f.max}"` : ''} id="rf_${f.id}" placeholder="0"/></div>`;
+}
+
+/** Renders an appended inline-radio below a fields row (e.g. "Dans les 48h?"). */
+function _rptRenderAppend(a) {
+  if (a.type === 'radio-inline') {
+    const opts = a.options.map(o =>
+      `<label class="rpt-radio-label"><input type="radio" name="rf_${a.name}" value="${o.value}"/> ${o.label}</label>`
+    ).join('');
+    return `<div class="rpt-field-row"><div class="rpt-field"><label class="rpt-label">${a.label}</label><div class="rpt-radio-group rpt-radio-inline">${opts}</div></div></div>`;
+  }
+  return '';
+}
+
+/**
+ * Collects all field values from the DOM for a given report type schema.
+ * Returns a flat data object with all field IDs as keys.
+ */
+function _rptCollectSchema(schema) {
+  const d = {};
+
+  schema.sections.forEach(s => {
+    if (s.type === 'agent-table') {
+      s.agents.forEach(agent => {
+        const key = agent.toLowerCase();
+        s.cols.forEach(c => {
+          d[`${key}${c.suffix}`] = rptNumEl(`rf_${key}${c.suffix}`);
+        });
+      });
+    } else if (s.type === 'fields') {
+      s.fields.forEach(f => {
+        if (f.inputType === 'radio-inline') {
+          d[f.id] = rptRadioVal(`rf_${f.name}`);
+        } else if (f.inputType === 'text') {
+          d[f.id] = rptValEl(`rf_${f.id}`);
+        } else {
+          d[f.id] = rptNumEl(`rf_${f.id}`);
+        }
+      });
+      if (s.append && s.append.type === 'radio-inline') {
+        d[s.append.name] = rptRadioVal(`rf_${s.append.name}`);
+      }
+    } else if (s.type === 'textareas') {
+      s.fields.forEach(f => { d[f.id] = rptValEl(`rf_${f.id}`); });
+    } else if (s.type === 'textarea') {
+      d[s.id] = rptValEl(`rf_${s.id}`);
+    } else if (s.type === 'radio') {
+      d[s.name] = rptRadioVal(`rf_${s.name}`);
+    }
+  });
+
+  return d;
+}
+
+/**
+ * Renders the detail view of a saved report using schema-driven row/section helpers.
+ * Falls back gracefully for unknown report types.
+ */
+function _rptDetailFromSchema(r) {
+  const d = r.data || {};
+  const schema = RPT_SCHEMA[r.report_type];
+  if (!schema) return '<div class="rpt-empty">Donnees non disponibles.</div>';
+
+  const row = (label, val) =>
+    '<div class="rpt-detail-row"><span class="rpt-detail-key">' + label + '</span><span>' + (val != null && val !== '' ? val : '—') + '</span></div>';
+  const section = (title, content) =>
+    '<div class="rpt-detail-section"><div class="rpt-detail-section-title">' + title + '</div><div class="rpt-detail-text">' + esc(content) + '</div></div>';
+  const yesNo = v => v === 'yes' ? 'Oui' : (v === 'no' ? 'Non' : '—');
+
+  let html = '';
+
+  schema.sections.forEach(s => {
+    if (s.type === 'agent-table') {
+      const thead = '<tr><th>Agent</th>' + s.cols.map(c => `<th>${c.label}</th>`).join('') + '</tr>';
+      const tbody = s.agents.map(agent => {
+        const key = agent.toLowerCase();
+        const cells = s.cols.map(c => `<td>${d[`${key}${c.suffix}`] != null ? d[`${key}${c.suffix}`] : '—'}</td>`).join('');
+        return `<tr><td>${agent}</td>${cells}</tr>`;
+      }).join('');
+      html += `<table class="rp-table" style="margin-top:8px;"><thead>${thead}</thead><tbody>${tbody}</tbody></table>`;
+    } else if (s.type === 'fields') {
+      s.fields.forEach(f => {
+        if (f.inputType === 'radio-inline') {
+          html += row(f.label, yesNo(d[f.id]));
+        } else if (f.inputType === 'text') {
+          html += row(f.label, d[f.id]);
+        } else {
+          html += row(f.label, d[f.id]);
+        }
+      });
+      if (s.append && s.append.type === 'radio-inline') {
+        html += row(s.append.label, yesNo(d[s.append.name]));
+      }
+    } else if (s.type === 'textareas') {
+      s.fields.forEach(f => { if (d[f.id]) html += section(f.label, d[f.id]); });
+    } else if (s.type === 'textarea') {
+      if (d[s.id]) html += section(s.title, d[s.id]);
+    } else if (s.type === 'radio') {
+      html += row(s.title, yesNo(d[s.name]));
+    }
+  });
+
+  return html || '<div class="rpt-empty">Donnees non disponibles.</div>';
+}
+
+// ============================================================
+// HELPERS
+// ============================================================
 
 function rptPersonName(id) {
   if (id === 'vp') return VP.name;
@@ -32,7 +386,6 @@ function rptWeekLabel(weekStart, weekEnd) {
   return 'Semaine du ' + fmt(weekStart);
 }
 
-// Default current week Mon-Sun
 function rptCurrentWeek() {
   const today = new Date();
   const dow = today.getDay();
@@ -43,281 +396,44 @@ function rptCurrentWeek() {
   return { start: fmt(mon), end: fmt(sun) };
 }
 
-// Key stats preview per report type
+function rptValEl(id) {
+  const el = document.getElementById(id);
+  return el ? el.value.trim() : '';
+}
+function rptNumEl(id) {
+  const v = rptValEl(id);
+  return v === '' ? null : parseInt(v);
+}
+function rptRadioVal(name) {
+  const el = document.querySelector('input[name="' + name + '"]:checked');
+  return el ? el.value : null;
+}
+
+// ============================================================
+// KEY STATS — driven by schema
+// ============================================================
+
 function rptKeyStats(reportType, reportData) {
-  if (!reportData) return '';
-  const d = reportData;
-  const stat = (label, val) =>
-    '<span class="rpt-stat-chip"><span class="rpt-stat-val">' + (val != null ? val : '—') + '</span><span class="rpt-stat-key">' + label + '</span></span>';
-
-  if (reportType === 'sac') {
-    const total = (parseInt(d.hamza_in)||0) + (parseInt(d.lilia_in)||0) + (parseInt(d.sekou_in)||0);
-    return stat('Appels entrants', total) +
-           stat('Annulations', d.annulations != null ? d.annulations : '—') +
-           stat('Leads EN', d.leads_en != null ? d.leads_en : '—');
-  }
-  if (reportType === 'ventes') {
-    const inscriptions = (parseInt(d.bsp)||0) + (parseInt(d.secourisme)||0) + (parseInt(d.elite)||0);
-    return stat('1ers appels', d.appels_1er != null ? d.appels_1er : '—') +
-           stat('Inscriptions', inscriptions) +
-           stat('Heures', d.heures != null ? d.heures : '—');
-  }
-  if (reportType === 'recrutement') {
-    return stat('Entrevues', d.entrevues != null ? d.entrevues : '—') +
-           stat('Retenus', d.retenus != null ? d.retenus : '—') +
-           stat('Pipeline', d.pipeline != null ? d.pipeline : '—');
-  }
-  if (reportType === 'admin') {
-    return stat('Checklist Pascaline', d.checklist_pascaline === 'yes' ? 'Oui' : (d.checklist_pascaline === 'no' ? 'Non' : '—')) +
-           stat('Leads recus', d.leads_recus != null ? d.leads_recus : '—') +
-           stat('Contactes 24h', d.leads_contactes != null ? d.leads_contactes : '—');
-  }
-  return '';
+  const schema = RPT_SCHEMA[reportType];
+  if (!schema || !schema.keyStats) return '';
+  const stats = schema.keyStats(reportData || {});
+  return stats.map(s =>
+    '<span class="rpt-stat-chip"><span class="rpt-stat-val">' + (s.val != null ? s.val : '—') + '</span><span class="rpt-stat-key">' + s.label + '</span></span>'
+  ).join('');
 }
 
-// ---- Form builders per type ----
-
-function rptFormSAC() {
-  return `
-    <div class="rpt-section-title">Volume d'appels <span class="rpt-hint">(tire de JustCall)</span></div>
-    <table class="rp-table">
-      <thead><tr><th>Agent</th><th>Entrants</th><th>Sortants</th><th>Taux rep.%</th></tr></thead>
-      <tbody>
-        <tr>
-          <td>Hamza</td>
-          <td><input class="rp-num" type="number" min="0" id="rf_hamza_in" placeholder="0"/></td>
-          <td><input class="rp-num" type="number" min="0" id="rf_hamza_out" placeholder="0"/></td>
-          <td><input class="rp-num" type="number" min="0" max="100" id="rf_hamza_rate" placeholder="0"/></td>
-        </tr>
-        <tr>
-          <td>Lilia</td>
-          <td><input class="rp-num" type="number" min="0" id="rf_lilia_in" placeholder="0"/></td>
-          <td><input class="rp-num" type="number" min="0" id="rf_lilia_out" placeholder="0"/></td>
-          <td><input class="rp-num" type="number" min="0" max="100" id="rf_lilia_rate" placeholder="0"/></td>
-        </tr>
-        <tr>
-          <td>Sekou</td>
-          <td><input class="rp-num" type="number" min="0" id="rf_sekou_in" placeholder="0"/></td>
-          <td><input class="rp-num" type="number" min="0" id="rf_sekou_out" placeholder="0"/></td>
-          <td><input class="rp-num" type="number" min="0" max="100" id="rf_sekou_rate" placeholder="0"/></td>
-        </tr>
-      </tbody>
-    </table>
-
-    <div class="rpt-section-title">Dossiers</div>
-    <div class="rpt-field-row">
-      <div class="rpt-field">
-        <label class="rpt-label">Annulations recues</label>
-        <input class="rp-num" type="number" min="0" id="rf_annulations" placeholder="0"/>
-      </div>
-      <div class="rpt-field">
-        <label class="rpt-label">Dont ELITE (vers Jessica)</label>
-        <input class="rp-num" type="number" min="0" id="rf_elite_jessica" placeholder="0"/>
-      </div>
-      <div class="rpt-field">
-        <label class="rpt-label">Leads anglais non rappeles (vers Mitchell)</label>
-        <input class="rp-num" type="number" min="0" id="rf_leads_en" placeholder="0"/>
-      </div>
-      <div class="rpt-field">
-        <label class="rpt-label">Appels non sollicites</label>
-        <input class="rp-num" type="number" min="0" id="rf_unsolicited" placeholder="0"/>
-      </div>
-    </div>
-
-    <div class="rpt-section-title">Observations <span class="rpt-required">*</span></div>
-    <textarea class="rp-textarea" id="rf_observations" rows="4" placeholder="Resume des observations de la semaine (obligatoire)..."></textarea>
-
-    <div class="rpt-section-title">Notes additionnelles <span class="rpt-optional">(optionnel)</span></div>
-    <textarea class="rp-textarea" id="rf_notes" rows="3" placeholder="Hamza peut ajouter tout ce qui est important..."></textarea>
-  `;
-}
-
-function rptFormVentes() {
-  return `
-    <div class="rpt-section-title">Appels</div>
-    <div class="rpt-field-row">
-      <div class="rpt-field">
-        <label class="rpt-label">Appels 1ers (nouveaux leads)</label>
-        <input class="rp-num" type="number" min="0" id="rf_appels_1er" placeholder="0"/>
-      </div>
-      <div class="rpt-field">
-        <label class="rpt-label">2e appels (suivis)</label>
-        <input class="rp-num" type="number" min="0" id="rf_appels_2e" placeholder="0"/>
-      </div>
-      <div class="rpt-field">
-        <label class="rpt-label">3e appels+</label>
-        <input class="rp-num" type="number" min="0" id="rf_appels_3e" placeholder="0"/>
-      </div>
-      <div class="rpt-field">
-        <label class="rpt-label">Heures travaillees <span class="rpt-optional">(max 20h payees)</span></label>
-        <input class="rp-num" type="number" min="0" max="168" id="rf_heures" placeholder="0"/>
-      </div>
-    </div>
-
-    <div class="rpt-section-title">Inscriptions conclues</div>
-    <div class="rpt-field-row">
-      <div class="rpt-field">
-        <label class="rpt-label">BSP Gardiennage</label>
-        <input class="rp-num" type="number" min="0" id="rf_bsp" placeholder="0"/>
-      </div>
-      <div class="rpt-field">
-        <label class="rpt-label">Secourisme</label>
-        <input class="rp-num" type="number" min="0" id="rf_secourisme" placeholder="0"/>
-      </div>
-      <div class="rpt-field">
-        <label class="rpt-label">Elite</label>
-        <input class="rp-num" type="number" min="0" id="rf_elite" placeholder="0"/>
-      </div>
-    </div>
-
-    <div class="rpt-section-title">GHL Compliance</div>
-    <div class="rpt-radio-group">
-      <label class="rpt-radio-label"><input type="radio" name="rf_ghl" value="yes"/> Oui — tous les appels logges dans GHL</label>
-      <label class="rpt-radio-label"><input type="radio" name="rf_ghl" value="no"/> Non</label>
-    </div>
-
-    <div class="rpt-section-title">Overview semaine <span class="rpt-required">*</span></div>
-    <textarea class="rp-textarea" id="rf_overview" rows="4" placeholder="Resume general de la semaine (obligatoire)..."></textarea>
-
-    <div class="rpt-section-title">Notes additionnelles <span class="rpt-optional">(optionnel)</span></div>
-    <textarea class="rp-textarea" id="rf_notes" rows="3" placeholder="Notes additionnelles..."></textarea>
-  `;
-}
-
-function rptFormRecrutement() {
-  return `
-    <div class="rpt-section-title">Entrevues</div>
-    <div class="rpt-field-row">
-      <div class="rpt-field">
-        <label class="rpt-label">Entrevues agents completees</label>
-        <input class="rp-num" type="number" min="0" id="rf_entrevues" placeholder="0"/>
-      </div>
-      <div class="rpt-field">
-        <label class="rpt-label">Candidats retenus</label>
-        <input class="rp-num" type="number" min="0" id="rf_retenus" placeholder="0"/>
-      </div>
-      <div class="rpt-field">
-        <label class="rpt-label">Refuses</label>
-        <input class="rp-num" type="number" min="0" id="rf_refuses" placeholder="0"/>
-      </div>
-      <div class="rpt-field">
-        <label class="rpt-label">Premiers appels Elite completes</label>
-        <input class="rp-num" type="number" min="0" id="rf_appels_elite" placeholder="0"/>
-      </div>
-      <div class="rpt-field">
-        <label class="rpt-label">Pipeline candidats actifs (total)</label>
-        <input class="rp-num" type="number" min="0" id="rf_pipeline" placeholder="0"/>
-      </div>
-    </div>
-
-    <div class="rpt-section-title">Cohortes</div>
-    <div class="rpt-field-row">
-      <div class="rpt-field">
-        <label class="rpt-label">Cohortes terminees cette semaine</label>
-        <input class="rp-num" type="number" min="0" id="rf_cohortes" placeholder="0"/>
-      </div>
-      <div class="rpt-field">
-        <label class="rpt-label">Top 5 recus des profs</label>
-        <input class="rp-num" type="number" min="0" id="rf_top5" placeholder="0"/>
-      </div>
-      <div class="rpt-field">
-        <label class="rpt-label">Dans les 48h?</label>
-        <div class="rpt-radio-group rpt-radio-inline">
-          <label class="rpt-radio-label"><input type="radio" name="rf_top5_48h" value="yes"/> Oui</label>
-          <label class="rpt-radio-label"><input type="radio" name="rf_top5_48h" value="no"/> Non</label>
-        </div>
-      </div>
-    </div>
-
-    <div class="rpt-section-title">Marketing</div>
-    <div class="rpt-field-row">
-      <div class="rpt-field">
-        <label class="rpt-label">Demandes envoyees a Alex cette semaine</label>
-        <input class="rp-num" type="number" min="0" id="rf_demandes_alex" placeholder="0"/>
-      </div>
-      <div class="rpt-field rpt-field-grow">
-        <label class="rpt-label">Description</label>
-        <input class="rpt-text-input" type="text" id="rf_demandes_desc" placeholder="Description des demandes..."/>
-      </div>
-    </div>
-
-    <div class="rpt-section-title">Notes additionnelles <span class="rpt-optional">(optionnel)</span></div>
-    <textarea class="rp-textarea" id="rf_notes" rows="3" placeholder="Notes additionnelles..."></textarea>
-  `;
-}
-
-function rptFormAdmin() {
-  return `
-    <div class="rpt-section-title">Bureau</div>
-    <div class="rpt-field-row">
-      <div class="rpt-field">
-        <label class="rpt-label">Checklist Pascaline suivie?</label>
-        <div class="rpt-radio-group rpt-radio-inline">
-          <label class="rpt-radio-label"><input type="radio" name="rf_checklist_pascaline" value="yes"/> Oui</label>
-          <label class="rpt-radio-label"><input type="radio" name="rf_checklist_pascaline" value="no"/> Non</label>
-        </div>
-      </div>
-      <div class="rpt-field">
-        <label class="rpt-label">Checklist salle apres cours?</label>
-        <div class="rpt-radio-group rpt-radio-inline">
-          <label class="rpt-radio-label"><input type="radio" name="rf_checklist_salle" value="yes"/> Oui</label>
-          <label class="rpt-radio-label"><input type="radio" name="rf_checklist_salle" value="no"/> Non</label>
-        </div>
-      </div>
-      <div class="rpt-field">
-        <label class="rpt-label">Nombre de cours</label>
-        <input class="rp-num" type="number" min="0" id="rf_nb_cours" placeholder="0"/>
-      </div>
-    </div>
-
-    <div class="rpt-section-title">Commissions</div>
-    <div class="rpt-field-row">
-      <div class="rpt-field">
-        <label class="rpt-label">Suivi commissions a jour?</label>
-        <div class="rpt-radio-group rpt-radio-inline">
-          <label class="rpt-radio-label"><input type="radio" name="rf_commissions" value="yes"/> Oui</label>
-          <label class="rpt-radio-label"><input type="radio" name="rf_commissions" value="no"/> Non</label>
-        </div>
-      </div>
-    </div>
-
-    <div class="rpt-section-title">Leads anglais (recus de Hamza)</div>
-    <div class="rpt-field-row">
-      <div class="rpt-field">
-        <label class="rpt-label">Leads recus</label>
-        <input class="rp-num" type="number" min="0" id="rf_leads_recus" placeholder="0"/>
-      </div>
-      <div class="rpt-field">
-        <label class="rpt-label">Contactes dans 24h</label>
-        <input class="rp-num" type="number" min="0" id="rf_leads_contactes" placeholder="0"/>
-      </div>
-    </div>
-
-    <div class="rpt-section-title">Rapport mensuel <span class="rpt-optional">(si fin de mois)</span></div>
-    <div>
-      <label class="rpt-label" style="margin-top:8px;">Etat bureau</label>
-      <textarea class="rp-textarea" id="rf_etat_bureau" rows="2" placeholder="Etat general du bureau..."></textarea>
-      <label class="rpt-label" style="margin-top:8px;">Incidents</label>
-      <textarea class="rp-textarea" id="rf_incidents" rows="2" placeholder="Incidents survenus..."></textarea>
-      <label class="rpt-label" style="margin-top:8px;">Besoins</label>
-      <textarea class="rp-textarea" id="rf_besoins" rows="2" placeholder="Besoins identifies..."></textarea>
-    </div>
-
-    <div class="rpt-section-title">Notes additionnelles <span class="rpt-optional">(optionnel)</span></div>
-    <textarea class="rp-textarea" id="rf_notes" rows="3" placeholder="Notes additionnelles..."></textarea>
-  `;
-}
+// ============================================================
+// FORM BUILDER — generic, driven by schema
+// ============================================================
 
 function rptBuildForm(personId) {
   const meta = REPORT_PEOPLE[personId];
   if (!meta) return '<div class="rpt-empty">Gabarit non defini.</div>';
-  const week = rptCurrentWeek();
+  const schema = RPT_SCHEMA[meta.type];
+  if (!schema) return '<div class="rpt-empty">Schema non defini pour ce type.</div>';
 
-  let body = '';
-  if (meta.type === 'sac')           body = rptFormSAC();
-  else if (meta.type === 'ventes')   body = rptFormVentes();
-  else if (meta.type === 'recrutement') body = rptFormRecrutement();
-  else if (meta.type === 'admin')    body = rptFormAdmin();
+  const week = rptCurrentWeek();
+  const body = schema.sections.map(s => _rptRenderFormSection(s)).join('');
 
   return `
     <div class="rpt-form" id="rpt-form-wrap">
@@ -344,92 +460,24 @@ function rptBuildForm(personId) {
   `;
 }
 
-// ---- Collect form data ----
-
-function rptValEl(id) {
-  const el = document.getElementById(id);
-  return el ? el.value.trim() : '';
-}
-function rptNumEl(id) {
-  const v = rptValEl(id);
-  return v === '' ? null : parseInt(v);
-}
-function rptRadioVal(name) {
-  const el = document.querySelector('input[name="' + name + '"]:checked');
-  return el ? el.value : null;
-}
+// ============================================================
+// COLLECT — generic, driven by schema
+// ============================================================
 
 function rptCollectForm(personId) {
   const meta = REPORT_PEOPLE[personId];
+  const schema = RPT_SCHEMA[meta.type];
   const weekStart = rptValEl('rf_week_start');
   const weekEnd   = rptValEl('rf_week_end');
   if (!weekStart) { alert('Veuillez choisir un debut de semaine.'); return null; }
 
-  let formData = {};
-
-  if (meta.type === 'sac') {
-    const obs = rptValEl('rf_observations');
-    if (!obs) { alert('Le champ Observations est obligatoire.'); return null; }
-    formData = {
-      hamza_in:       rptNumEl('rf_hamza_in'),
-      hamza_out:      rptNumEl('rf_hamza_out'),
-      hamza_rate:     rptNumEl('rf_hamza_rate'),
-      lilia_in:       rptNumEl('rf_lilia_in'),
-      lilia_out:      rptNumEl('rf_lilia_out'),
-      lilia_rate:     rptNumEl('rf_lilia_rate'),
-      sekou_in:       rptNumEl('rf_sekou_in'),
-      sekou_out:      rptNumEl('rf_sekou_out'),
-      sekou_rate:     rptNumEl('rf_sekou_rate'),
-      annulations:    rptNumEl('rf_annulations'),
-      elite_jessica:  rptNumEl('rf_elite_jessica'),
-      leads_en:       rptNumEl('rf_leads_en'),
-      unsolicited:    rptNumEl('rf_unsolicited'),
-      observations:   obs,
-      notes:          rptValEl('rf_notes')
-    };
-  } else if (meta.type === 'ventes') {
-    const overview = rptValEl('rf_overview');
-    if (!overview) { alert('Le champ Overview semaine est obligatoire.'); return null; }
-    formData = {
-      appels_1er:   rptNumEl('rf_appels_1er'),
-      appels_2e:    rptNumEl('rf_appels_2e'),
-      appels_3e:    rptNumEl('rf_appels_3e'),
-      heures:       rptNumEl('rf_heures'),
-      bsp:          rptNumEl('rf_bsp'),
-      secourisme:   rptNumEl('rf_secourisme'),
-      elite:        rptNumEl('rf_elite'),
-      ghl_compliant: rptRadioVal('rf_ghl'),
-      overview:     overview,
-      notes:        rptValEl('rf_notes')
-    };
-  } else if (meta.type === 'recrutement') {
-    formData = {
-      entrevues:      rptNumEl('rf_entrevues'),
-      retenus:        rptNumEl('rf_retenus'),
-      refuses:        rptNumEl('rf_refuses'),
-      appels_elite:   rptNumEl('rf_appels_elite'),
-      pipeline:       rptNumEl('rf_pipeline'),
-      cohortes:       rptNumEl('rf_cohortes'),
-      top5:           rptNumEl('rf_top5'),
-      top5_48h:       rptRadioVal('rf_top5_48h'),
-      demandes_alex:  rptNumEl('rf_demandes_alex'),
-      demandes_desc:  rptValEl('rf_demandes_desc'),
-      notes:          rptValEl('rf_notes')
-    };
-  } else if (meta.type === 'admin') {
-    formData = {
-      checklist_pascaline: rptRadioVal('rf_checklist_pascaline'),
-      checklist_salle:     rptRadioVal('rf_checklist_salle'),
-      nb_cours:            rptNumEl('rf_nb_cours'),
-      commissions:         rptRadioVal('rf_commissions'),
-      leads_recus:         rptNumEl('rf_leads_recus'),
-      leads_contactes:     rptNumEl('rf_leads_contactes'),
-      etat_bureau:         rptValEl('rf_etat_bureau'),
-      incidents:           rptValEl('rf_incidents'),
-      besoins:             rptValEl('rf_besoins'),
-      notes:               rptValEl('rf_notes')
-    };
+  // Required field validation
+  if (schema.requiredField) {
+    const val = rptValEl('rf_' + schema.requiredField.id);
+    if (!val) { alert('Le champ "' + schema.requiredField.label + '" est obligatoire.'); return null; }
   }
+
+  const formData = _rptCollectSchema(schema);
 
   return {
     person_id:   personId,
@@ -437,11 +485,21 @@ function rptCollectForm(personId) {
     week_end:    weekEnd || null,
     report_type: meta.type,
     data:        formData,
-    notes:       formData.notes || null
+    notes:       formData.notes || null,
   };
 }
 
-// ---- Submit ----
+// ============================================================
+// DETAIL HTML — generic, driven by schema
+// ============================================================
+
+function rptDetailHTML(r) {
+  return _rptDetailFromSchema(r);
+}
+
+// ============================================================
+// SUBMIT & DELETE
+// ============================================================
 
 async function rptSubmit(personId) {
   const payload = rptCollectForm(personId);
@@ -452,20 +510,13 @@ async function rptSubmit(personId) {
     await dbSaveReport(payload);
     _rptShowForm = false;
     await rptReloadAndRender(personId);
-    // Show flash confirmation
-    const flash = document.createElement('div');
-    flash.style.cssText = 'position:fixed;bottom:24px;right:24px;background:var(--g);color:#000;padding:12px 20px;border-radius:8px;font-weight:700;z-index:10000;font-size:13px;font-family:"DM Sans",sans-serif;';
-    flash.textContent = 'Rapport soumis avec succes';
-    document.body.appendChild(flash);
-    setTimeout(() => flash.remove(), 3000);
+    showFlash('Rapport soumis avec succes');
   } catch(e) {
     console.error('rptSubmit error:', e);
     alert('Erreur lors de la sauvegarde: ' + (e.message || e));
     if (btn) { btn.disabled = false; btn.textContent = 'Soumettre le rapport'; }
   }
 }
-
-// ---- Delete ----
 
 async function rptDelete(reportId) {
   if (!confirm('Supprimer ce rapport? Cette action est irreversible.')) return;
@@ -478,7 +529,9 @@ async function rptDelete(reportId) {
   }
 }
 
-// ---- Expand / collapse report cards ----
+// ============================================================
+// CARD & SIDEBAR HTML
+// ============================================================
 
 function rptToggleExpand(reportId) {
   const body = document.getElementById('rpt-body-' + reportId);
@@ -489,84 +542,11 @@ function rptToggleExpand(reportId) {
   if (btn) btn.textContent = isOpen ? 'Voir details' : 'Reduire';
 }
 
-// ---- Detail HTML per report type ----
-
-function rptDetailHTML(r) {
-  const d = r.data || {};
-  const row = (label, val) => '<div class="rpt-detail-row"><span class="rpt-detail-key">' + label + '</span><span>' + (val != null && val !== '' ? val : '—') + '</span></div>';
-  const section = (title, content) => '<div class="rpt-detail-section"><div class="rpt-detail-section-title">' + title + '</div><div class="rpt-detail-text">' + esc(content) + '</div></div>';
-
-  if (r.report_type === 'sac') {
-    return `
-      <table class="rp-table" style="margin-top:8px;">
-        <thead><tr><th>Agent</th><th>Entrants</th><th>Sortants</th><th>Taux rep.%</th></tr></thead>
-        <tbody>
-          <tr><td>Hamza</td><td>${d.hamza_in!=null?d.hamza_in:'—'}</td><td>${d.hamza_out!=null?d.hamza_out:'—'}</td><td>${d.hamza_rate!=null?d.hamza_rate:'—'}</td></tr>
-          <tr><td>Lilia</td><td>${d.lilia_in!=null?d.lilia_in:'—'}</td><td>${d.lilia_out!=null?d.lilia_out:'—'}</td><td>${d.lilia_rate!=null?d.lilia_rate:'—'}</td></tr>
-          <tr><td>Sekou</td><td>${d.sekou_in!=null?d.sekou_in:'—'}</td><td>${d.sekou_out!=null?d.sekou_out:'—'}</td><td>${d.sekou_rate!=null?d.sekou_rate:'—'}</td></tr>
-        </tbody>
-      </table>
-      ${row('Annulations', d.annulations)}
-      ${row('Dont ELITE (vers Jessica)', d.elite_jessica)}
-      ${row('Leads anglais (vers Mitchell)', d.leads_en)}
-      ${row('Appels non sollicites', d.unsolicited)}
-      ${d.observations ? section('Observations', d.observations) : ''}
-      ${d.notes ? section('Notes additionnelles', d.notes) : ''}
-    `;
-  }
-  if (r.report_type === 'ventes') {
-    return `
-      ${row('Appels 1ers', d.appels_1er)}
-      ${row('2e appels', d.appels_2e)}
-      ${row('3e appels+', d.appels_3e)}
-      ${row('Heures travaillees', d.heures)}
-      ${row('BSP Gardiennage', d.bsp)}
-      ${row('Secourisme', d.secourisme)}
-      ${row('Elite', d.elite)}
-      ${row('GHL compliant', d.ghl_compliant === 'yes' ? 'Oui' : (d.ghl_compliant === 'no' ? 'Non' : '—'))}
-      ${d.overview ? section('Overview semaine', d.overview) : ''}
-      ${d.notes ? section('Notes additionnelles', d.notes) : ''}
-    `;
-  }
-  if (r.report_type === 'recrutement') {
-    return `
-      ${row('Entrevues agents', d.entrevues)}
-      ${row('Retenus', d.retenus)}
-      ${row('Refuses', d.refuses)}
-      ${row('Appels Elite', d.appels_elite)}
-      ${row('Pipeline actifs', d.pipeline)}
-      ${row('Cohortes terminees', d.cohortes)}
-      ${row('Top 5 des profs', d.top5)}
-      ${row('Dans les 48h', d.top5_48h === 'yes' ? 'Oui' : (d.top5_48h === 'no' ? 'Non' : '—'))}
-      ${row('Demandes a Alex', (d.demandes_alex != null ? d.demandes_alex : '—') + (d.demandes_desc ? ' — ' + d.demandes_desc : ''))}
-      ${d.notes ? section('Notes additionnelles', d.notes) : ''}
-    `;
-  }
-  if (r.report_type === 'admin') {
-    return `
-      ${row('Checklist Pascaline', d.checklist_pascaline === 'yes' ? 'Oui' : (d.checklist_pascaline === 'no' ? 'Non' : '—'))}
-      ${row('Checklist salle', d.checklist_salle === 'yes' ? 'Oui' : (d.checklist_salle === 'no' ? 'Non' : '—'))}
-      ${row('Nombre de cours', d.nb_cours)}
-      ${row('Commissions a jour', d.commissions === 'yes' ? 'Oui' : (d.commissions === 'no' ? 'Non' : '—'))}
-      ${row('Leads recus', d.leads_recus)}
-      ${row('Contactes dans 24h', d.leads_contactes)}
-      ${d.etat_bureau ? section('Etat bureau', d.etat_bureau) : ''}
-      ${d.incidents ? section('Incidents', d.incidents) : ''}
-      ${d.besoins ? section('Besoins', d.besoins) : ''}
-      ${d.notes ? section('Notes additionnelles', d.notes) : ''}
-    `;
-  }
-  return '<div class="rpt-empty">Donnees non disponibles.</div>';
-}
-
-// ---- Report card HTML ----
-
 function rptCardHTML(r) {
   const submittedDate = r.created_at
     ? new Date(r.created_at).toLocaleDateString('fr-CA', {day:'numeric', month:'short', year:'numeric'})
     : '';
   const statsHtml = rptKeyStats(r.report_type, r.data || {});
-
   return `
     <div class="rpt-report-card">
       <div class="rpt-report-card-header">
@@ -587,8 +567,6 @@ function rptCardHTML(r) {
   `;
 }
 
-// ---- Sidebar person item ----
-
 function rptSidebarItem(pid, count) {
   const meta  = REPORT_PEOPLE[pid];
   const name  = rptPersonName(pid);
@@ -608,7 +586,9 @@ function rptSidebarItem(pid, count) {
   `;
 }
 
-// ---- Reload and re-render only the main area ----
+// ============================================================
+// RELOAD & RENDER
+// ============================================================
 
 async function rptReloadAndRender(personId) {
   _rptSelectedId = personId;
@@ -618,7 +598,6 @@ async function rptReloadAndRender(personId) {
   mainArea.innerHTML = '<div class="rpt-loading">Chargement...</div>';
   try {
     const reports = await dbGetReports(personId);
-    // Update sidebar count badge
     const badge = document.getElementById('rpt-sbadge-' + personId);
     if (badge) badge.textContent = reports.length;
     mainArea.innerHTML = rptBuildMainArea(personId, reports);
@@ -627,8 +606,6 @@ async function rptReloadAndRender(personId) {
     mainArea.innerHTML = '<div class="rpt-empty">Erreur de chargement: ' + esc(e.message || String(e)) + '</div>';
   }
 }
-
-// ---- Build main area HTML ----
 
 function rptBuildMainArea(personId, reports) {
   const meta = REPORT_PEOPLE[personId];
@@ -657,22 +634,17 @@ function rptBuildMainArea(personId, reports) {
   `;
 }
 
-// ---- User actions ----
-
 function rptSelectPerson(personId) {
   _rptSelectedId = personId;
   _rptShowForm = false;
-  // Update sidebar active states
   document.querySelectorAll('.rpt-sidebar-item').forEach(el => {
     el.classList.toggle('active', el.getAttribute('onclick') === "rptSelectPerson('" + personId + "')");
   });
-  // Update controls bar button
   const ctrlBtn = document.getElementById('rpt-ctrl-new-btn');
   if (ctrlBtn) {
     ctrlBtn.style.display = '';
     ctrlBtn.setAttribute('onclick', "rptOpenForm('" + personId + "')");
   }
-  // Load and render main area
   const mainArea = document.getElementById('rpt-main-area');
   if (!mainArea) return;
   mainArea.innerHTML = '<div class="rpt-loading">Chargement...</div>';
@@ -714,10 +686,11 @@ function rptFilterSelect(val) {
   render();
 }
 
-// ---- Main render entry point ----
+// ============================================================
+// MAIN RENDER ENTRY POINT
+// ============================================================
 
 async function renderReports(ct, cl) {
-  // Controls bar
   cl.innerHTML = `
     <select onchange="rptFilterSelect(this.value)" id="rpt-filter-select">
       <option value="">— Filtrer par personne —</option>
@@ -730,7 +703,6 @@ async function renderReports(ct, cl) {
     <button class="btn primary" id="rpt-ctrl-new-btn" style="${_rptSelectedId ? '' : 'display:none;'}" onclick="rptOpenForm('${_rptSelectedId || ''}')">+ Nouveau rapport</button>
   `;
 
-  // Load report counts for sidebar
   let countsByPerson = {};
   Object.keys(REPORT_PEOPLE).forEach(pid => { countsByPerson[pid] = 0; });
   try {
@@ -747,7 +719,6 @@ async function renderReports(ct, cl) {
     .join('');
 
   let mainHtml = '<div class="rpt-empty rpt-empty-select"><span>Selectionnez une personne dans la liste pour voir ses rapports.</span></div>';
-
   if (_rptSelectedId) {
     try {
       const reports = await dbGetReports(_rptSelectedId);
@@ -772,7 +743,6 @@ async function renderReports(ct, cl) {
 
 // ---- Legacy: keep openWeeklyReport for tasks.js compatibility ----
 function openWeeklyReport(pid) {
-  // Switch to reports view and select that person
   _rptSelectedId = pid;
   _rptShowForm = false;
   currentView = 'reports';
