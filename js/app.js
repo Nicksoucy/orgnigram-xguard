@@ -36,9 +36,20 @@ authInit().then(() => {
     return;
   }
 
-  // Logged in — if formateur, lock the trainer filter to their own profile
-  if (!authIsAdmin() && authTrainerId()) {
-    // Will be enforced in render() via _schedTrainer
+  // Logged in — apply role-based tab visibility
+  if (authIsHR()) {
+    // HR: only Canvas View visible, land on canvas
+    document.querySelectorAll('.vtab').forEach(btn => {
+      const view = btn.getAttribute('onclick').match(/'(\w+)'/)?.[1];
+      if (view !== 'canvas') btn.style.display = 'none';
+      else { btn.classList.add('active'); currentView = 'canvas'; }
+    });
+  } else if (authIsFormateur() && authTrainerId()) {
+    // Formateur: hide Rapports tab, lock trainer filter
+    document.querySelectorAll('.vtab').forEach(btn => {
+      const view = btn.getAttribute('onclick').match(/'(\w+)'/)?.[1];
+      if (view === 'reports') btn.style.display = 'none';
+    });
     window._schedTrainerLocked = authTrainerId();
   }
 

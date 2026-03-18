@@ -8,7 +8,9 @@ let _authTrainerId = null; // linked instructor id (for formateurs)
 /**
  * Returns true if the current user is an admin.
  */
-function authIsAdmin() { return _authRole === 'admin'; }
+function authIsAdmin()     { return _authRole === 'admin'; }
+function authIsHR()        { return _authRole === 'hr'; }
+function authIsFormateur() { return _authRole === 'formateur'; }
 
 /**
  * Returns true if logged in.
@@ -177,7 +179,7 @@ function authRenderUserChip() {
   chip.id = 'auth-user-chip';
   const email     = _authUser.email || '';
   const shortName = email.split('@')[0];
-  const roleLabel = _authRole === 'admin' ? '🔑 Admin' : '👤 Formateur';
+  const roleLabel = _authRole === 'admin' ? '🔑 Admin' : _authRole === 'hr' ? '🏢 RH' : '👤 Formateur';
 
   chip.innerHTML = `
     <span style="font-size:11px;color:var(--td);">${roleLabel}</span>
