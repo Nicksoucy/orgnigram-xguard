@@ -96,6 +96,8 @@ function schedCellBg(entry) {
   if (!entry) return '';
   const status = entry.status || 'scheduled';
   if (['holiday','unavailable','vacation','cancelled','replacement'].includes(status)) return '';
+  // BSP Weekend → cyan distinct from regular BSP blue (#3b82f6)
+  if (entry.program === 'BSP' && entry.quart === 'weekend') return '#0891b2';
   // RCR → orange
   if (entry.program === 'RCR') return '#f97316';
   const city = entry.locations && entry.locations.city;
