@@ -1,0 +1,4 @@
+.env
+scripts/
+*.sql
+index.html.bak

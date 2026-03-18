@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>XGuard — Org Chart + Future Planner</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/app.css">
+<script src="https://cdn.jsdelivr.net/npm/@daypilot/daypilot-lite-javascript@5.4.0/daypilot-all.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/dayjs@1/dayjs.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/dayjs@1/locale/fr.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/dayjs@1/plugin/isoWeek.js"></script>
+</head>
+<body>
+<div id="loading-screen" style="position:fixed;inset:0;background:#0c0c0f;display:flex;align-items:center;justify-content:center;z-index:9999;flex-direction:column;gap:16px;">
+  <div style="width:40px;height:40px;border:3px solid #2a2a32;border-top-color:#ff6b35;border-radius:50%;animation:spin 0.8s linear infinite;"></div>
+  <p style="color:#8b8a87;font-size:13px;font-family:'DM Sans',sans-serif;">Loading org chart...</p>
+</div>
+<div class="grain"></div>
+<header>
+  <div class="tag">Training Division — Org Chart</div>
+  <h1>XGuard</h1>
+  <p>22 team members. Three views: by department, by reporting hierarchy, and a future-state planner.</p>
+</header>
+
+<div class="view-tabs">
+  <button class="vtab active" onclick="switchView('dept',this)"><span class="tab-icon">📊</span>By Department</button>
+  <button class="vtab" onclick="switchView('tree',this)"><span class="tab-icon">🌳</span>Reporting Hierarchy</button>
+  <button class="vtab" onclick="switchView('future',this)"><span class="tab-icon">🚀</span>Future State</button>
+  <button class="vtab" onclick="switchView('canvas',this)"><span class="tab-icon">🗺️</span>Canvas View</button>
+  <button class="vtab" onclick="switchView('tasks',this)"><span class="tab-icon">✅</span>Tasks & Outcomes</button>
+  <button class="vtab" onclick="switchView('reports',this)"><span class="tab-icon">📊</span>Rapports</button>
+  <button class="vtab" onclick="switchView('horaires',this)"><span class="tab-icon">📅</span>Horaires</button>
+  <button class="vtab" onclick="switchView('schedule',this)"><span class="tab-icon">📆</span>Planning</button>
+</div>
+
+<div class="controls" id="controls"></div>
+<div class="content" id="content"></div>
+<div class="summary-bar" id="sum"></div>
+
+<!-- Edit Modal -->
+<div class="mo" id="mo">
+  <div class="modal">
+    <h2 id="mTitle">Edit</h2>
+    <label>Name</label><input id="fName"/>
+    <label>Email</label><input id="fEmail"/>
+    <label>Title / Role</label><input id="fRole"/>
+    <label>Type</label>
+    <select id="fType"><option value="contractor">Contractor</option><option value="employee">Employee</option><option value="lead">Lead</option></select>
+    <label>Department</label>
+    <select id="fDept"></select>
+    <label>Reports To</label>
+    <select id="fReports"></select>
+    <label>Programs</label>
+    <div class="cg" id="fProg">
+      <label><input type="checkbox" value="BSP"/>BSP</label><label><input type="checkbox" value="RCR"/>RCR</label>
+      <label><input type="checkbox" value="Élite"/>Élite</label><label><input type="checkbox" value="CV"/>CV</label>
+      <label><input type="checkbox" value="Drone"/>Drone</label><label><input type="checkbox" value="SAC"/>Svc Client</label>
+      <label><input type="checkbox" value="MKT"/>Marketing</label><label><input type="checkbox" value="Sales"/>Sales</label>
+    </div>
+    <label>Location(s)</label>
+    <div class="cg" id="fLoc">
+      <label><input type="checkbox" value="Montréal"/>Montréal</label>
+      <label><input type="checkbox" value="Ligne"/>En ligne</label>
+      <label><input type="checkbox" value="Québec"/>Québec</label>
+    </div>
+    <label>Schedule</label><input id="fSched"/>
+    <label>Notes</label><textarea id="fNotes"></textarea>
+    <label>Delegation Capacity</label>
+    <select id="fDel"><option value="unknown">Not assessed</option><option value="yes">🟢 Can take more</option>
+      <option value="partial">🟡 Partial</option><option value="no">🔴 Maxed out</option></select>
+    <div class="mbtn">
+      <button class="btn" onclick="closeM()">Cancel</button>
+      <button class="btn danger" id="bDel" onclick="delP()" style="display:none;">Delete</button>
+      <button class="btn primary" onclick="saveP()">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- Future Edit Modal -->
+<div class="mo" id="fmo">
+  <div class="modal">
+    <h2 id="fmTitle">Plan Future Change</h2>
+    <label>Person</label>
+    <select id="ffPerson"></select>
+    <label>Future Reports To</label>
+    <select id="ffReports"></select>
+    <label>Future Role / Title</label>
+    <input id="ffRole"/>
+    <label>Future Type</label>
+    <select id="ffType"><option value="contractor">Contractor</option><option value="employee">Employee</option><option value="lead">Lead</option></select>
+    <label>Notes / Rationale</label>
+    <textarea id="ffNotes" placeholder="Why this change? What outcome does it enable?"></textarea>
+    <div class="mbtn">
+      <button class="btn" onclick="closeFM()">Cancel</button>
+      <button class="btn danger" id="bFDel" onclick="delFChange()" style="display:none;">Remove Change</button>
+      <button class="btn future-btn" onclick="saveFChange()">Save Change</button>
+    </div>
+  </div>
+</div>
+
+<!-- Weekly Report Modal -->
+<div class="mo" id="rmo" style="display:none;"></div>
+
+<!-- Department Modal -->
+<div class="mo" id="dmo">
+  <div class="modal" style="max-width:400px;">
+    <h2 id="dmTitle">Add Department</h2>
+    <label>Department Name</label>
+    <input id="fdLabel" placeholder="e.g. Recrutement"/>
+    <label>Color</label>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px;" id="fdColors">
+      <label style="cursor:pointer;"><input type="radio" name="fdColor" value="#60a5fa" style="display:none;"/><span class="color-swatch" style="background:#60a5fa;"></span></label>
+      <label style="cursor:pointer;"><input type="radio" name="fdColor" value="#f472b6" style="display:none;"/><span class="color-swatch" style="background:#f472b6;"></span></label>
+      <label style="cursor:pointer;"><input type="radio" name="fdColor" value="#ff6b35" style="display:none;"/><span class="color-swatch" style="background:#ff6b35;"></span></label>
+      <label style="cursor:pointer;"><input type="radio" name="fdColor" value="#fbbf24" style="display:none;"/><span class="color-swatch" style="background:#fbbf24;"></span></label>
+      <label style="cursor:pointer;"><input type="radio" name="fdColor" value="#34d399" style="display:none;"/><span class="color-swatch" style="background:#34d399;"></span></label>
+      <label style="cursor:pointer;"><input type="radio" name="fdColor" value="#a78bfa" style="display:none;"/><span class="color-swatch" style="background:#a78bfa;"></span></label>
+      <label style="cursor:pointer;"><input type="radio" name="fdColor" value="#22d3ee" style="display:none;"/><span class="color-swatch" style="background:#22d3ee;"></span></label>
+      <label style="cursor:pointer;"><input type="radio" name="fdColor" value="#f87171" style="display:none;"/><span class="color-swatch" style="background:#f87171;"></span></label>
+      <label style="cursor:pointer;"><input type="radio" name="fdColor" value="#86efac" style="display:none;"/><span class="color-swatch" style="background:#86efac;"></span></label>
+      <label style="cursor:pointer;"><input type="radio" name="fdColor" value="#fdba74" style="display:none;"/><span class="color-swatch" style="background:#fdba74;"></span></label>
+    </div>
+    <div class="mbtn">
+      <button class="btn" onclick="closeDeptM()">Cancel</button>
+      <button class="btn danger" id="bDeptDel" onclick="delDept()" style="display:none;">Delete Department</button>
+      <button class="btn primary" onclick="saveDept()">Save</button>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="js/config.js?v=02a6159"></script>
+<script src="js/state.js?v=02a6159"></script>
+<script src="js/utils.js?v=02a6159"></script>
+<script src="js/db.js?v=02a6159"></script>
+<script src="js/render.js?v=02a6159"></script>
+<script src="js/views/dept.js?v=02a6159"></script>
+<script src="js/views/tree.js?v=02a6159"></script>
+<script src="js/views/canvas.js?v=02a6159"></script>
+<script src="js/views/future.js?v=02a6159"></script>
+<script src="js/views/tasks.js?v=02a6159"></script>
+<script src="js/views/reports.js?v=02a6159"></script>
+<script src="js/views/horaires.js?v=02a6159"></script>
+<script src="js/views/schedule/config.js?v=02a6159"></script>
+<script src="js/views/schedule/cohortDates.js?v=02a6159"></script>
+<script src="js/views/schedule/helpers.js?v=02a6159"></script>
+<script src="js/views/schedule/gridView.js?v=02a6159"></script>
+<script src="js/views/schedule/weekView.js?v=02a6159"></script>
+<script src="js/views/schedule/trainerView.js?v=02a6159"></script>
+<script src="js/views/schedule/seriesManager.js?v=02a6159"></script>
+<script src="js/views/schedule/shiftModal.js?v=02a6159"></script>
+<script src="js/views/schedule/main.js?v=02a6159"></script>
+<script src="js/views/schedule/autoRules.js?v=02a6159"></script>
+<script src="js/views/schedule/patternGenerator.js?v=02a6159"></script>
+<script src="js/modals.js?v=02a6159"></script>
+<script src="js/app.js?v=02a6159"></script>
+</body>
+</html>
