@@ -23,7 +23,15 @@ function schedSetView(v) {
   document.querySelectorAll('.sched-view-btn').forEach(b => {
     b.classList.toggle('active', b.dataset.view === v);
   });
-  schedRenderContent();
+  if (v === 'multimonth') schedMultiMonthInvalidate();
+  // Re-render controls bar so month-count buttons appear/disappear
+  renderSchedule(document.getElementById('content'), document.getElementById('controls'));
+}
+
+function schedSetMultiMonthCount(n) {
+  _schedMultiMonthCount = n;
+  schedMultiMonthInvalidate();
+  renderSchedule(document.getElementById('content'), document.getElementById('controls'));
 }
 
 function schedSetTrainerFilter(v) {
@@ -44,6 +52,7 @@ function schedSelectTrainer(id) {
 // ---- Reload ----
 
 async function schedReloadEntries() {
+  schedMultiMonthInvalidate(); // keep multi-month cache fresh
   try {
     _schedEntries = await dbGetScheduleEntries(_schedMonth, _schedYear);
   } catch(e) {
@@ -71,9 +80,13 @@ async function schedReloadAndRender() {
 function schedRenderContent() {
   const wrap = document.getElementById('sched-content-area');
   if (!wrap) return;
-  if (_schedView === 'grid')    wrap.innerHTML = schedBuildMonthGrid();
-  else if (_schedView === 'week') wrap.innerHTML = schedBuildWeekView();
+  if (_schedView === 'grid')         wrap.innerHTML = schedBuildMonthGrid();
+  else if (_schedView === 'week')    wrap.innerHTML = schedBuildWeekView();
   else if (_schedView === 'trainer') wrap.innerHTML = schedBuildTrainerView();
+  else if (_schedView === 'multimonth') {
+    wrap.innerHTML = `<div class="hor-loading">Chargement multi-mois...</div>`;
+    schedMultiMonthLoad().then(() => { wrap.innerHTML = schedBuildMultiMonthView(); });
+  }
 }
 
 
@@ -115,9 +128,20 @@ async function renderSchedule(ct, cl) {
           style="border-radius:0;border-right-width:0;font-size:11px;"
           onclick="schedSetView('week')">Hebdomadaire</button>
         <button class="btn sched-view-btn${_schedView === 'trainer' ? ' active' : ''}" data-view="trainer"
-          style="border-radius:0 6px 6px 0;font-size:11px;"
+          style="border-radius:0;border-right-width:0;font-size:11px;"
           onclick="schedSetView('trainer')">Par trainer</button>
+        <button class="btn sched-view-btn${_schedView === 'multimonth' ? ' active' : ''}" data-view="multimonth"
+          style="border-radius:0 6px 6px 0;font-size:11px;"
+          onclick="schedSetView('multimonth')">📅 Multi-mois</button>
       </div>
+
+      ${_schedView === 'multimonth' ? `
+      <div style="display:flex;align-items:center;gap:4px;flex-shrink:0;">
+        <span style="font-size:11px;color:var(--td);">Mois:</span>
+        ${[2,3,4,6].map(n =>
+          `<button class="mm-count-btn${_schedMultiMonthCount===n?' active':''}" onclick="schedSetMultiMonthCount(${n})">${n}</button>`
+        ).join('')}
+      </div>` : ''}
 
       <select onchange="schedSetTrainerFilter(this.value)"
         style="font-family:'DM Sans',sans-serif;font-size:12px;padding:7px 10px;border-radius:6px;border:1px solid var(--b);background:var(--s);color:var(--t);outline:none;cursor:pointer;">
