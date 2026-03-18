@@ -363,3 +363,26 @@ input[name="fdColor"]:checked+.color-swatch{border-color:#fff;transform:scale(1.
 .rpt-form .rp-num:focus{outline:none;border-color:var(--a);}
 .rpt-form .rp-textarea{width:100%;background:var(--bg);border:1px solid var(--b);color:var(--t);border-radius:8px;padding:10px 12px;font-size:13px;font-family:'DM Sans',sans-serif;resize:vertical;min-height:70px;box-sizing:border-box;}
 .rpt-form .rp-textarea:focus{outline:none;border-color:var(--a);}
+
+/* ============================================================
+   AUTH — LOGIN SCREEN + USER CHIP
+   ============================================================ */
+#auth-screen {
+  position:fixed;inset:0;background:var(--bg);z-index:10000;
+  display:flex;align-items:center;justify-content:center;
+}
+.auth-box {
+  background:var(--s);border:1px solid var(--b);border-radius:16px;
+  padding:36px 32px;width:100%;max-width:380px;
+  box-shadow:0 24px 48px rgba(0,0,0,0.5);
+}
+.auth-logo { text-align:center;margin-bottom:28px; }
+#auth-email:focus, #auth-password:focus { border-color:var(--a) !important; }
+#auth-btn:hover { opacity:0.88; }
+
+/* User chip in header */
+#auth-user-chip {
+  display:flex;align-items:center;gap:8px;margin-top:8px;
+  padding:5px 10px;background:var(--sh);border:1px solid var(--b);
+  border-radius:8px;width:fit-content;
+}
