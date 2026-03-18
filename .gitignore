@@ -2,3 +2,4 @@
 scripts/
 *.sql
 index.html.bak
+js/views/schedule.js
