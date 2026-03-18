@@ -208,113 +208,120 @@
 
 /* ==================== MULTI-MONTH VIEW ==================== */
 
-.sched-multimonth-wrap {
-  display: flex;
-  flex-direction: column;
-  gap: 28px;
-  padding-bottom: 32px;
-}
-
-.mm-month-block {
-  background: var(--s);
+/* Scrollable outer container */
+.mm-outer {
+  overflow-x: auto;
+  overflow-y: auto;
+  max-height: calc(100vh - 220px);
   border: 1px solid var(--b);
-  border-radius: 12px;
-  overflow: hidden;
-}
-
-.mm-month-title {
-  font-family: 'Space Mono', monospace;
-  font-size: 11px;
-  text-transform: uppercase;
-  letter-spacing: 2px;
-  color: var(--a);
-  padding: 10px 16px;
-  border-bottom: 1px solid var(--b);
-  background: rgba(255,107,53,0.06);
+  border-radius: 10px;
+  background: var(--s);
 }
 
 .mm-table {
-  width: 100%;
   border-collapse: collapse;
   font-size: 11px;
-}
-
-.mm-table thead tr {
-  border-bottom: 1px solid var(--b);
-  background: var(--sh);
-}
-
-.mm-table th {
-  padding: 6px 4px;
-  text-align: center;
-  font-weight: 600;
-  color: var(--td);
-  border-right: 1px solid var(--b);
-}
-
-.mm-table th:last-child { border-right: none; }
-
-.mm-day-col {
-  width: 44px;
-  min-width: 44px;
-  padding: 3px 6px !important;
-  text-align: center;
-  border-right: 1px solid var(--b);
   white-space: nowrap;
 }
 
-.mm-trainer-col {
-  min-width: 80px;
-  max-width: 120px;
+/* Sticky header rows */
+.mm-table thead { position: sticky; top: 0; z-index: 5; }
+
+/* Month group label row */
+.mm-month-row th { background: var(--s); }
+
+.mm-month-header {
+  font-family: 'Space Mono', monospace;
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: 1.5px;
+  color: var(--a);
+  text-align: left;
+  padding: 8px 6px 4px;
+  border-bottom: 1px solid var(--b);
+  border-right: 2px solid var(--b);
+  background: rgba(255,107,53,0.06);
 }
 
-.mm-table tbody tr {
-  border-bottom: 1px solid rgba(255,255,255,0.04);
-  transition: background 0.1s;
-}
+/* Day number row */
+.mm-daynum-row th { background: var(--sh); border-bottom: 1px solid var(--b); }
 
-.mm-table tbody tr:hover { background: var(--sh); }
-
-.mm-cell {
-  padding: 2px 3px;
-  vertical-align: middle;
+.mm-day-head {
   text-align: center;
-  border-right: 1px solid rgba(255,255,255,0.04);
-  cursor: pointer;
-  min-height: 20px;
-}
-
-.mm-cell:last-child { border-right: none; }
-
-.mm-empty {
+  padding: 3px 1px;
+  min-width: 28px;
+  max-width: 36px;
+  border-right: 1px solid rgba(255,255,255,0.05);
+  vertical-align: middle;
   cursor: default;
 }
 
-.mm-empty:hover {
-  background: rgba(255,107,53,0.06);
-  cursor: pointer;
+.mm-day-head.mm-we { opacity: 0.55; }
+
+/* Sticky trainer name column */
+.mm-name-col {
+  position: sticky;
+  left: 0;
+  z-index: 4;
+  min-width: 130px;
+  max-width: 160px;
+  padding: 0 10px;
+  border-right: 2px solid var(--b);
+  background: var(--s);
+  font-weight: 700;
+  text-align: left;
 }
 
+/* Override background for header corner cell */
+.mm-month-row .mm-name-col,
+.mm-daynum-row .mm-name-col { background: var(--sh); z-index: 6; }
+
+.mm-name-cell { padding: 5px 10px; border-bottom: 1px solid rgba(255,255,255,0.05); }
+
+/* Body rows */
+.mm-table tbody tr { border-bottom: 1px solid rgba(255,255,255,0.04); transition: background 0.1s; }
+.mm-table tbody tr:hover > td { background: rgba(255,255,255,0.03); }
+.mm-table tbody tr:hover .mm-name-col { background: var(--sh); }
+
+/* Data cells */
+.mm-cell {
+  padding: 2px 2px;
+  vertical-align: middle;
+  text-align: center;
+  border-right: 1px solid rgba(255,255,255,0.04);
+  min-width: 28px;
+  max-width: 36px;
+  height: 26px;
+}
+
+/* Last day of each month: strong separator */
+.mm-cell.mm-month-sep,
+.mm-day-head.mm-month-sep { border-right: 2px solid var(--b) !important; }
+
+.mm-cell.mm-empty { cursor: pointer; }
+.mm-cell.mm-empty:hover { background: rgba(255,107,53,0.07) !important; }
+.mm-cell.mm-dim { opacity: 0.3; cursor: default; }
+.mm-cell.mm-dim:hover { background: none !important; cursor: default; }
+
+/* Shift chips */
 .mm-chip {
   display: inline-block;
-  font-size: 9px;
+  font-size: 8px;
   font-weight: 700;
   color: #fff;
   border-radius: 3px;
-  padding: 1px 4px;
-  margin: 1px;
+  padding: 1px 3px;
   cursor: pointer;
   white-space: nowrap;
-  max-width: 100%;
   overflow: hidden;
   text-overflow: ellipsis;
-  line-height: 1.4;
+  max-width: 100%;
+  line-height: 1.5;
   transition: opacity 0.1s;
 }
+.mm-chip:hover { opacity: 0.75; }
 
-.mm-chip:hover { opacity: 0.8; }
-
-/* Month count selector */
+/* Month count selector buttons */
 .mm-count-btn {
   background: var(--s);
   border: 1px solid var(--b);
@@ -323,7 +330,7 @@
   padding: 4px 10px;
   font-size: 11px;
   cursor: pointer;
-  transition: background 0.15s;
+  transition: background 0.15s, border-color 0.15s;
 }
 .mm-count-btn.active, .mm-count-btn:hover {
   background: var(--sh);

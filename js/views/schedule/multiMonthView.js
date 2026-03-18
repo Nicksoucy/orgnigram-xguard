@@ -3,20 +3,11 @@
 // How many months to display (default 4)
 let _schedMultiMonthCount = 4;
 
-// Cache of entries keyed by "YYYY-MM" fetched for multi-month view
+// Cache of entries keyed by "YYYY-MM"
 let _schedMultiMonthCache = {}; // { 'YYYY-MM': [entries] }
 
 /**
- * Returns the start month/year for the multi-month view.
- * Shows current month as the first block.
- */
-function schedMultiMonthStartDate() {
-  return { month: _schedMonth, year: _schedYear };
-}
-
-/**
- * Fetches entries for all months in the multi-month range that aren't cached yet.
- * Populates _schedMultiMonthCache.
+ * Fetches entries for all months in the range that aren't cached yet.
  */
 async function schedMultiMonthLoad() {
   const fetches = [];
@@ -24,7 +15,7 @@ async function schedMultiMonthLoad() {
   for (let i = 0; i < _schedMultiMonthCount; i++) {
     const key = y + '-' + String(m).padStart(2, '0');
     if (!_schedMultiMonthCache[key]) {
-      const cm = m, cy = y; // capture for closure
+      const cm = m, cy = y;
       fetches.push(
         dbGetScheduleEntries(cm, cy).then(entries => {
           _schedMultiMonthCache[key] = entries;
@@ -39,22 +30,26 @@ async function schedMultiMonthLoad() {
 }
 
 /**
- * Clears the multi-month cache so next render re-fetches.
- * Called after any shift create/update/delete.
+ * Clears the cache — called after any shift save/delete.
  */
 function schedMultiMonthInvalidate() {
   _schedMultiMonthCache = {};
 }
 
 /**
- * Builds the full multi-month view HTML.
- * Layout: one compact month block per row, columns = trainers (or single trainer if filtered).
+ * Builds the full multi-month view.
+ *
+ * Layout (like the Google Sheet):
+ *   - LEFT sticky column: trainer name
+ *   - COLUMNS: months side by side, each month = its days as columns
+ *   - ROWS: one per trainer
+ *
+ * All months share a single table so scrolling is horizontal across all months at once.
  */
 function schedBuildMultiMonthView() {
-  const todayS = schedTodayStr();
+  const todayS   = schedTodayStr();
   const allTrainers = schedGetOrderedTrainers();
 
-  // Which trainers to show — respect filter
   const trainers = _schedTrainer
     ? allTrainers.filter(t => t.id === _schedTrainer)
     : allTrainers;
@@ -63,119 +58,132 @@ function schedBuildMultiMonthView() {
     return `<div class="hor-empty-state">Aucun formateur trouvé. Ajustez le filtre.</div>`;
   }
 
-  let html = '';
-
+  // Collect all month metadata + their entries
+  const months = [];
   let m = _schedMonth, y = _schedYear;
-  for (let mi = 0; mi < _schedMultiMonthCount; mi++) {
-    const key = y + '-' + String(m).padStart(2, '0');
-    let monthEntries = _schedMultiMonthCache[key] || [];
+  for (let i = 0; i < _schedMultiMonthCount; i++) {
+    const key  = y + '-' + String(m).padStart(2, '0');
+    let entries = _schedMultiMonthCache[key] || [];
+    if (_schedProgram) entries = entries.filter(e => e.program === _schedProgram);
 
-    // Apply program filter
-    if (_schedProgram) {
-      monthEntries = monthEntries.filter(e => e.program === _schedProgram);
-    }
+    // Index: instructor_id → date → [entries]
+    const byTrainerDate = {};
+    entries.forEach(e => {
+      if (!byTrainerDate[e.instructor_id]) byTrainerDate[e.instructor_id] = {};
+      if (!byTrainerDate[e.instructor_id][e.date]) byTrainerDate[e.instructor_id][e.date] = [];
+      byTrainerDate[e.instructor_id][e.date].push(e);
+    });
 
-    html += _schedBuildOneMonth(m, y, trainers, monthEntries, todayS);
+    const holidays = schedGetHolidaysQC(y);
+    schedGetHolidaysQC(y + 1).forEach(h => holidays.add(h));
+
+    months.push({
+      month: m, year: y,
+      label: SCHED_MONTHS_FR[m - 1] + ' ' + y,
+      days: schedDaysInMonth(m, y),
+      byTrainerDate, holidays
+    });
 
     m++; if (m > 12) { m = 1; y++; }
   }
 
-  return `<div class="sched-multimonth-wrap">${html}</div>`;
-}
-
-/**
- * Builds one month block.
- * Rows = days 1..N, columns = trainer cells.
- */
-function _schedBuildOneMonth(month, year, trainers, entries, todayS) {
-  const days = schedDaysInMonth(month, year);
-  const holidays = schedGetHolidaysQC(year);
-  schedGetHolidaysQC(year + 1).forEach(h => holidays.add(h));
-
-  const monthName = SCHED_MONTHS_FR[month - 1] + ' ' + year;
-
-  // Index entries: instructor_id → date → [entries]
-  const byTrainerDate = {};
-  entries.forEach(e => {
-    if (!byTrainerDate[e.instructor_id]) byTrainerDate[e.instructor_id] = {};
-    if (!byTrainerDate[e.instructor_id][e.date]) byTrainerDate[e.instructor_id][e.date] = [];
-    byTrainerDate[e.instructor_id][e.date].push(e);
+  // ---- Header row 1: month group labels ----
+  let hRow1 = `<th class="mm-name-col" rowspan="2">Formateur</th>`;
+  months.forEach(mo => {
+    hRow1 += `<th class="mm-month-header" colspan="${mo.days}">${esc(mo.label)}</th>`;
   });
 
-  // Header: month title + trainer columns
-  let headerCols = `<th class="mm-day-col">Jour</th>`;
-  trainers.forEach(t => {
-    const col = avatarColor(t.id);
-    const ini = initials(t.name);
-    const shortName = t.name.split(' ').slice(0, 2).join(' ');
-    headerCols += `<th class="mm-trainer-col" title="${esc(t.name)}">
-      <div style="display:flex;align-items:center;gap:4px;justify-content:center;">
-        <div style="width:16px;height:16px;border-radius:50%;background:${col};display:flex;align-items:center;justify-content:center;font-size:7px;font-weight:700;color:#fff;flex-shrink:0;">${esc(ini)}</div>
-        <span style="font-size:10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:80px;">${esc(shortName)}</span>
+  // ---- Header row 2: day numbers + day-of-week ----
+  let hRow2 = '';
+  months.forEach(mo => {
+    for (let d = 1; d <= mo.days; d++) {
+      const dateS    = schedDateStr(mo.year, mo.month, d);
+      const isToday  = dateS === todayS;
+      const isWe     = schedIsWeekend(mo.year, mo.month, d);
+      const isHol    = mo.holidays.has(dateS);
+      const isLast   = d === mo.days;
+      const dow      = SCHED_DAYS_FR[schedDayOfWeek(dateS)];
+
+      const col = isToday ? 'color:var(--a);' : isHol ? 'color:#93c5fd;' : isWe ? 'color:var(--td);opacity:0.6;' : '';
+      const bg  = isToday ? 'background:rgba(255,107,53,0.15);' : isHol ? 'background:rgba(147,197,253,0.12);' : '';
+      const cls = ['mm-day-head', isWe?'mm-we':'', isLast?'mm-month-sep':''].filter(Boolean).join(' ');
+
+      hRow2 += `<th class="${cls}" style="${col}${bg}" title="${isHol ? 'Jour férié' : dateS}">
+        <div style="font-size:8px;line-height:1;">${isHol ? '🏖' : dow}</div>
+        <div style="font-size:10px;font-weight:700;line-height:1.3;">${d}</div>
+      </th>`;
+    }
+  });
+
+  // ---- Body: one row per trainer ----
+  let bodyHTML = '';
+  trainers.forEach(trainer => {
+    const col = avatarColor(trainer.id);
+    const ini = initials(trainer.name);
+    const shortName = trainer.name.split(' ').slice(0, 2).join(' ');
+
+    let row = `<tr>`;
+    // Sticky trainer name cell
+    row += `<td class="mm-name-col mm-name-cell">
+      <div style="display:flex;align-items:center;gap:5px;">
+        <div style="width:20px;height:20px;border-radius:50%;background:${col};display:flex;align-items:center;justify-content:center;font-size:8px;font-weight:700;color:#fff;flex-shrink:0;">${esc(ini)}</div>
+        <span style="font-size:11px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${esc(shortName)}</span>
       </div>
-    </th>`;
-  });
-
-  // Body rows: one per day
-  let bodyRows = '';
-  for (let d = 1; d <= days; d++) {
-    const dateS = schedDateStr(year, month, d);
-    const isToday = dateS === todayS;
-    const isWe = schedIsWeekend(year, month, d);
-    const isHoliday = holidays.has(dateS);
-    const dow = SCHED_DAYS_FR[schedDayOfWeek(dateS)];
-
-    const rowBg = isToday
-      ? 'background:rgba(255,107,53,0.10);'
-      : isHoliday ? 'background:rgba(147,197,253,0.12);'
-      : isWe ? 'background:rgba(255,255,255,0.02);'
-      : '';
-
-    const dayColor = isToday ? 'color:var(--a);font-weight:800;'
-      : isHoliday ? 'color:#93c5fd;'
-      : isWe ? 'color:var(--td);opacity:0.7;'
-      : 'color:var(--t);';
-
-    let row = `<tr style="${rowBg}">`;
-    row += `<td class="mm-day-col" style="${dayColor}font-size:10px;white-space:nowrap;">
-      <span style="opacity:0.6;font-size:9px;">${isHoliday ? '🏖' : dow}</span>
-      <strong style="margin-left:2px;">${d}</strong>
     </td>`;
 
-    trainers.forEach(t => {
-      const dayEntries = (byTrainerDate[t.id] && byTrainerDate[t.id][dateS]) || [];
-      if (dayEntries.length === 0) {
-        const style = (isWe || isHoliday) ? 'opacity:0.3;' : '';
-        row += `<td class="mm-cell mm-empty" style="${style}" onclick="schedClickEmpty('${esc(t.id)}','${esc(dateS)}','',null)"></td>`;
-      } else {
-        const chips = dayEntries.map(entry => {
-          const bg = schedCellBg(entry);
-          const label = _schedMultiLabel(entry);
-          const tip = schedCellTooltip(entry);
-          return `<span class="mm-chip" style="background:${bg||'#3b82f6'};" title="${esc(tip)}" onclick="schedOpenPopup('${esc(entry.id)}',null)">${esc(label)}</span>`;
-        }).join('');
-        row += `<td class="mm-cell" style="${rowBg}">${chips}</td>`;
+    // Day cells across all months
+    months.forEach(mo => {
+      for (let d = 1; d <= mo.days; d++) {
+        const dateS     = schedDateStr(mo.year, mo.month, d);
+        const isToday   = dateS === todayS;
+        const isWe       = schedIsWeekend(mo.year, mo.month, d);
+        const isHol      = mo.holidays.has(dateS);
+        const isLast     = d === mo.days;
+        const dayEntries = (mo.byTrainerDate[trainer.id] && mo.byTrainerDate[trainer.id][dateS]) || [];
+        const sepCls     = isLast ? ' mm-month-sep' : '';
+
+        const bg = isToday ? 'background:rgba(255,107,53,0.10);'
+          : isHol ? 'background:rgba(147,197,253,0.10);'
+          : isWe  ? 'background:rgba(255,255,255,0.015);'
+          : '';
+
+        if (dayEntries.length === 0) {
+          const dimCls = (isWe || isHol) ? ' mm-dim' : ' mm-empty';
+          row += `<td class="mm-cell${dimCls}${sepCls}" style="${bg}"${!(isWe||isHol)?` onclick="schedClickEmpty('${esc(trainer.id)}','${esc(dateS)}','',null)"`:''  }></td>`;
+        } else {
+          const chips = dayEntries.map(entry => {
+            const chipBg = schedCellBg(entry) || '#3b82f6';
+            const label  = _schedMultiLabel(entry);
+            const tip    = schedCellTooltip(entry);
+            return `<span class="mm-chip" style="background:${chipBg};" title="${esc(tip)}"
+              onclick="schedOpenPopup('${esc(entry.id)}',null)">${esc(label)}</span>`;
+          }).join('');
+          row += `<td class="mm-cell${sepCls}" style="${bg}">${chips}</td>`;
+        }
       }
     });
 
     row += `</tr>`;
-    bodyRows += row;
-  }
+    bodyHTML += row;
+  });
 
   return `
-    <div class="mm-month-block">
-      <div class="mm-month-title">${esc(monthName)}</div>
-      <div style="overflow-x:auto;">
-        <table class="mm-table">
-          <thead><tr>${headerCols}</tr></thead>
-          <tbody>${bodyRows}</tbody>
-        </table>
-      </div>
+    <div class="mm-outer">
+      <table class="mm-table">
+        <thead>
+          <tr class="mm-month-row">${hRow1}</tr>
+          <tr class="mm-daynum-row">${hRow2}</tr>
+        </thead>
+        <tbody>${bodyHTML}</tbody>
+      </table>
+    </div>
+    <div style="margin-top:8px;font-size:11px;color:var(--td);opacity:0.6;">
+      💡 Cliquez sur une cellule vide pour ajouter un shift · sur un chip pour le modifier
     </div>`;
 }
 
 /**
- * Returns a very short label for a cell chip: code, session number, or program abbrev.
+ * Short chip label.
  */
 function _schedMultiLabel(entry) {
   if (!entry) return '';
