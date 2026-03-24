@@ -907,7 +907,7 @@ async function rptBuildCoachingSection(personId) {
     html += '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:12px;">';
     COACHING_DIMENSIONS.forEach(dim => {
       const score = scores[dim.key] != null ? scores[dim.key] : null;
-      const delta = comp[dim.key + '_delta'] || null;
+      const delta = comp[dim.key] != null ? comp[dim.key] : null;
       html += _coachingScoreCard(dim, score, delta);
     });
     html += '</div>';
@@ -916,7 +916,7 @@ async function rptBuildCoachingSection(personId) {
     const allScores = COACHING_DIMENSIONS.map(d => scores[d.key]).filter(v => v != null);
     if (allScores.length) {
       const globalScore = allScores.reduce((a,b) => a+b, 0) / allScores.length;
-      const globalDelta = comp.global_delta || null;
+      const globalDelta = comp.global != null ? comp.global : null;
       html += '<div style="text-align:center;padding:8px 0;border-top:1px solid var(--b);margin-top:8px;">';
       html += '<span style="font-size:13px;color:var(--td);">Score global</span> ';
       html += '<span style="font-size:24px;font-weight:700;color:' + _coachingScoreColor(globalScore) + ';">' + globalScore.toFixed(1) + '/10</span>';
