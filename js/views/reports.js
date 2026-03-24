@@ -970,9 +970,90 @@ async function rptBuildCoachingSection(personId) {
       html += '</div>';
     }
 
+    // Recommendations
+    const recs = coaching.recommendations || [];
+    if (recs.length) {
+      html += '<div style="margin-top:12px;background:rgba(96,165,250,0.08);border:1px solid rgba(96,165,250,0.2);border-radius:8px;padding:12px;">';
+      html += '<div style="font-weight:600;color:var(--cy);margin-bottom:6px;">💡 Recommandations</div>';
+      recs.forEach(r => {
+        const txt = typeof r === 'string' ? r : (r.text || JSON.stringify(r));
+        html += '<div style="font-size:12px;color:var(--t);padding:3px 0;line-height:1.5;">• ' + esc(txt) + '</div>';
+      });
+      html += '</div>';
+    }
+
+    // Raw summary (collapsible)
+    if (coaching.raw_summary) {
+      html += '<details style="margin-top:12px;">';
+      html += '<summary style="cursor:pointer;font-weight:600;color:var(--t);font-size:13px;">📝 Resume complet du rapport</summary>';
+      html += '<div style="margin-top:8px;font-size:12px;color:var(--t);line-height:1.6;padding:12px;background:var(--sh);border-radius:8px;white-space:pre-wrap;">' + esc(coaching.raw_summary) + '</div>';
+      html += '</details>';
+    }
+
     html += '</div>';
   } else if (!activeNitro) {
     html += '<div class="rpt-empty" style="margin-bottom:16px;">Aucune donnee de coaching disponible. Les rapports automatiques seront generes chaque vendredi a 15h.</div>';
+  }
+
+  // Score progression over time (all weeks)
+  let allReports = [];
+  try { allReports = await dbGetCoachingReports(personId, 12); } catch(e) { /* ignore */ }
+  if (allReports.length > 1) {
+    allReports = allReports.slice().reverse(); // oldest first
+    html += '<div style="background:var(--s);border:1px solid var(--b);border-radius:10px;padding:16px;margin-bottom:16px;">';
+    html += '<div style="font-weight:600;color:var(--t);margin-bottom:12px;font-size:15px;">📈 Progression dans le temps</div>';
+
+    // Mini bar chart for global score per week
+    const maxScore = 10;
+    html += '<div style="display:flex;gap:4px;align-items:flex-end;height:120px;margin-bottom:8px;">';
+    allReports.forEach(r => {
+      const scores = r.scores || {};
+      const vals = Object.values(scores).filter(v => typeof v === 'number');
+      const global = vals.length ? vals.reduce((a,b) => a+b, 0) / vals.length : 0;
+      const pct = (global / maxScore * 100).toFixed(0);
+      const color = _coachingScoreColor(global);
+      const weekLabel = r.week_start ? r.week_start.substring(5) : '';
+      html += '<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:2px;">';
+      html += '<div style="font-size:10px;font-weight:600;color:' + color + ';">' + global.toFixed(1) + '</div>';
+      html += '<div style="width:100%;background:var(--sh);border-radius:4px;position:relative;height:100px;">';
+      html += '<div style="position:absolute;bottom:0;width:100%;height:' + pct + '%;background:' + color + ';border-radius:4px;transition:height 0.3s;"></div>';
+      html += '</div>';
+      html += '<div style="font-size:9px;color:var(--td);white-space:nowrap;">' + esc(weekLabel) + '</div>';
+      html += '</div>';
+    });
+    html += '</div>';
+
+    // Dimension trend table
+    html += '<div style="overflow-x:auto;margin-top:12px;">';
+    html += '<table style="width:100%;font-size:11px;border-collapse:collapse;">';
+    html += '<tr><th style="text-align:left;color:var(--td);padding:4px 6px;border-bottom:1px solid var(--b);">Dimension</th>';
+    allReports.forEach(r => {
+      const wk = r.week_start ? r.week_start.substring(5) : '';
+      html += '<th style="text-align:center;color:var(--td);padding:4px 6px;border-bottom:1px solid var(--b);white-space:nowrap;">' + esc(wk) + '</th>';
+    });
+    html += '</tr>';
+    COACHING_DIMENSIONS.forEach(dim => {
+      html += '<tr>';
+      html += '<td style="padding:4px 6px;color:var(--t);border-bottom:1px solid var(--b);">' + dim.icon + ' ' + esc(dim.label) + '</td>';
+      allReports.forEach(r => {
+        const val = (r.scores || {})[dim.key];
+        const color = val != null ? _coachingScoreColor(val) : 'var(--td)';
+        html += '<td style="text-align:center;padding:4px 6px;color:' + color + ';font-weight:600;border-bottom:1px solid var(--b);">' + (val != null ? val.toFixed(1) : '—') + '</td>';
+      });
+      html += '</tr>';
+    });
+    // Global row
+    html += '<tr style="font-weight:700;">';
+    html += '<td style="padding:4px 6px;color:var(--t);border-top:2px solid var(--b);">Global</td>';
+    allReports.forEach(r => {
+      const scores = r.scores || {};
+      const vals = Object.values(scores).filter(v => typeof v === 'number');
+      const global = vals.length ? vals.reduce((a,b) => a+b, 0) / vals.length : 0;
+      const color = _coachingScoreColor(global);
+      html += '<td style="text-align:center;padding:4px 6px;color:' + color + ';border-top:2px solid var(--b);">' + global.toFixed(1) + '</td>';
+    });
+    html += '</tr></table></div>';
+    html += '</div>';
   }
 
   // Cron logs (admin only)
