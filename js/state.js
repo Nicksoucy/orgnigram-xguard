@@ -57,7 +57,8 @@ const REPORT_PEOPLE = {
   'L3': {type:'sac',        label:'SAC'},
   'v1': {type:'ventes',     label:'Ventes'},
   'r1': {type:'recrutement',label:'Recrutement'},
-  'L2': {type:'admin',      label:'Admin'}
+  'L2': {type:'admin',      label:'Admin'},
+  't11':{type:'ventes_drone',label:'Ventes Drone'}
 };
 let _rptSelectedId = null; // currently selected person in Reports view
 let _rptShowForm   = false; // is the new-report form open?

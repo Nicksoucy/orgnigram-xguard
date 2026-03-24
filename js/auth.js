@@ -2,7 +2,7 @@
 // Supabase Auth wrapper — login, logout, session, role
 
 let _authUser    = null; // supabase auth user object
-let _authRole    = null; // 'admin' | 'formateur'
+let _authRole    = null; // 'admin' | 'formateur' | 'hr' | 'agent'
 let _authTrainerId = null; // linked instructor id (for formateurs)
 
 /**
@@ -11,6 +11,7 @@ let _authTrainerId = null; // linked instructor id (for formateurs)
 function authIsAdmin()     { return _authRole === 'admin'; }
 function authIsHR()        { return _authRole === 'hr'; }
 function authIsFormateur() { return _authRole === 'formateur'; }
+function authIsAgent()     { return _authRole === 'agent'; }
 
 /**
  * Returns true if logged in.
@@ -180,7 +181,7 @@ function authRenderUserChip() {
   chip.id = 'auth-user-chip';
   const email     = _authUser.email || '';
   const shortName = email.split('@')[0];
-  const roleLabel = _authRole === 'admin' ? '🔑 Admin' : _authRole === 'hr' ? '🏢 RH' : '👤 Formateur';
+  const roleLabel = _authRole === 'admin' ? '🔑 Admin' : _authRole === 'hr' ? '🏢 RH' : _authRole === 'agent' ? '📞 Agent' : '👤 Formateur';
 
   chip.innerHTML = `
     <span style="font-size:11px;color:var(--td);">${roleLabel}</span>

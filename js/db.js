@@ -405,3 +405,108 @@ async function loadFromSupabase() {
     }
   }
 }
+
+// ==================== COACHING / NITRO DB ====================
+
+/**
+ * Fetches the last N days of coaching_data for a person, ordered by sync_date descending.
+ * @param {string} personId - Person ID to filter by.
+ * @param {number} [days=30] - Number of days to look back.
+ * @returns {Promise<Object[]>} Array of coaching_data rows.
+ * @throws {Error} Supabase error if query fails.
+ */
+async function dbGetCoachingData(personId, days=30) {
+  const since = dayjs().subtract(days,'day').format('YYYY-MM-DD');
+  const {data,error} = await db.from('coaching_data').select('*')
+    .eq('person_id', personId)
+    .gte('sync_date', since)
+    .order('sync_date', {ascending:false});
+  if(error) throw error;
+  return data||[];
+}
+
+/**
+ * Fetches coaching_reports for a person, ordered by week_start descending.
+ * @param {string} personId - Person ID to filter by.
+ * @param {number} [limit=12] - Maximum number of reports to return.
+ * @returns {Promise<Object[]>} Array of coaching_report rows.
+ * @throws {Error} Supabase error if query fails.
+ */
+async function dbGetCoachingReports(personId, limit=12) {
+  const {data,error} = await db.from('coaching_reports').select('*')
+    .eq('person_id', personId)
+    .order('week_start', {ascending:false})
+    .limit(limit);
+  if(error) throw error;
+  return data||[];
+}
+
+/**
+ * Fetches the most recent coaching_report for a person.
+ * @param {string} personId - Person ID to filter by.
+ * @returns {Promise<Object|null>} The latest coaching_report row, or null if none.
+ * @throws {Error} Supabase error if query fails.
+ */
+async function dbGetLatestCoachingReport(personId) {
+  const {data,error} = await db.from('coaching_reports').select('*')
+    .eq('person_id', personId)
+    .order('week_start', {ascending:false})
+    .limit(1)
+    .single();
+  if(error && error.code!=='PGRST116') throw error;
+  return data||null;
+}
+
+/**
+ * Fetches all nitro_status rows for a person (all task_types).
+ * @param {string} personId - Person ID to filter by.
+ * @returns {Promise<Object[]>} Array of nitro_status rows.
+ * @throws {Error} Supabase error if query fails.
+ */
+async function dbGetNitroStatus(personId) {
+  const {data,error} = await db.from('nitro_status').select('*')
+    .eq('person_id', personId);
+  if(error) throw error;
+  return data||[];
+}
+
+/**
+ * Fetches cron_logs for a person, ordered by started_at descending.
+ * @param {string} personId - Person ID to filter by.
+ * @param {number} [limit=20] - Maximum number of log entries to return.
+ * @returns {Promise<Object[]>} Array of cron_logs rows.
+ * @throws {Error} Supabase error if query fails.
+ */
+async function dbGetCronLogs(personId, limit=20) {
+  const {data,error} = await db.from('cron_logs').select('*')
+    .eq('person_id', personId)
+    .order('started_at', {ascending:false})
+    .limit(limit);
+  if(error) throw error;
+  return data||[];
+}
+
+/**
+ * Fetches ALL nitro_status rows (for admin dashboard).
+ * @returns {Promise<Object[]>} Array of all nitro_status rows.
+ * @throws {Error} Supabase error if query fails.
+ */
+async function dbGetAllNitroStatus() {
+  const {data,error} = await db.from('nitro_status').select('*');
+  if(error) throw error;
+  return data||[];
+}
+
+/**
+ * Fetches ALL cron_logs, ordered by started_at descending.
+ * @param {number} [limit=50] - Maximum number of log entries to return.
+ * @returns {Promise<Object[]>} Array of cron_logs rows.
+ * @throws {Error} Supabase error if query fails.
+ */
+async function dbGetAllCronLogs(limit=50) {
+  const {data,error} = await db.from('cron_logs').select('*')
+    .order('started_at', {ascending:false})
+    .limit(limit);
+  if(error) throw error;
+  return data||[];
+}
