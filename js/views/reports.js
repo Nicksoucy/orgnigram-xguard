@@ -141,6 +141,62 @@ const RPT_SCHEMA = {
     ],
   },
 
+  ventes_drone: {
+    requiredField: { id: 'rf_overview', label: 'Overview semaine' },
+    sections: [
+      {
+        title: 'Appels Drone',
+        type: 'fields',
+        fields: [
+          { id: 'drone_1er',   label: 'Appels 1ers (nouveaux leads drone)',    inputType: 'number' },
+          { id: 'drone_2e',    label: '2e appels drone (suivis)',              inputType: 'number' },
+          { id: 'drone_3e',    label: '3e appels+ drone',                     inputType: 'number' },
+        ],
+      },
+      {
+        title: 'Appels Elite',
+        type: 'fields',
+        fields: [
+          { id: 'elite_1er',   label: 'Appels 1ers Elite',                    inputType: 'number' },
+          { id: 'elite_2e',    label: '2e appels Elite (suivis)',              inputType: 'number' },
+        ],
+      },
+      {
+        title: 'Resultats',
+        type: 'fields',
+        fields: [
+          { id: 'ententes_drone', label: 'Ententes de paiement drone',        inputType: 'number' },
+          { id: 'ententes_elite', label: 'Ententes de paiement Elite',        inputType: 'number' },
+          { id: 'closed_drone',   label: 'Ventes fermees drone',              inputType: 'number' },
+          { id: 'closed_elite',   label: 'Ventes fermees Elite',              inputType: 'number' },
+          { id: 'heures',         label: 'Heures travaillees',                inputType: 'number', max: 168 },
+        ],
+      },
+      {
+        title: 'GHL Compliance',
+        type: 'radio',
+        name: 'ghl',
+        options: [
+          { value: 'yes', label: 'Oui — tous les appels logges dans GHL' },
+          { value: 'no',  label: 'Non' },
+        ],
+      },
+      { title: 'Overview semaine',     type: 'textarea', id: 'overview', required: true, placeholder: 'Resume general de la semaine (obligatoire)...' },
+      { title: 'Notes additionnelles', type: 'textarea', id: 'notes',    optional: true, placeholder: 'Notes additionnelles...' },
+    ],
+    keyStats: d => {
+      const droneAppels = (parseInt(d.drone_1er)||0) + (parseInt(d.drone_2e)||0) + (parseInt(d.drone_3e)||0);
+      const eliteAppels = (parseInt(d.elite_1er)||0) + (parseInt(d.elite_2e)||0);
+      const totalClosed = (parseInt(d.closed_drone)||0) + (parseInt(d.closed_elite)||0);
+      return [
+        { label: 'Appels drone',  val: droneAppels },
+        { label: 'Appels elite',  val: eliteAppels },
+        { label: 'Ventes',        val: totalClosed },
+        { label: 'Heures',        val: d.heures },
+      ];
+    },
+  },
+
   admin: {
     requiredField: null,
     sections: [
@@ -600,17 +656,20 @@ async function rptReloadAndRender(personId) {
     const reports = await dbGetReports(personId);
     const badge = document.getElementById('rpt-sbadge-' + personId);
     if (badge) badge.textContent = reports.length;
-    mainArea.innerHTML = rptBuildMainArea(personId, reports);
+    mainArea.innerHTML = await rptBuildMainArea(personId, reports);
   } catch(e) {
     console.error('rptReloadAndRender error:', e);
     mainArea.innerHTML = '<div class="rpt-empty">Erreur de chargement: ' + esc(e.message || String(e)) + '</div>';
   }
 }
 
-function rptBuildMainArea(personId, reports) {
+async function rptBuildMainArea(personId, reports) {
   const meta = REPORT_PEOPLE[personId];
   const name = rptPersonName(personId);
   const col  = avatarColor(personId);
+
+  // Coaching section (Heidys, Domingos) — shown above manual reports
+  const coachingHtml = await rptBuildCoachingSection(personId);
 
   const reportsHtml = reports.length
     ? reports.map(r => rptCardHTML(r)).join('')
@@ -627,6 +686,7 @@ function rptBuildMainArea(personId, reports) {
       </div>
       ${!_rptShowForm ? '<button class="btn primary" onclick="rptOpenForm(\'' + personId + '\')">+ Nouveau rapport</button>' : ''}
     </div>
+    ${coachingHtml}
     ${formHtml}
     <div class="rpt-reports-list">
       ${reportsHtml}
@@ -648,8 +708,8 @@ function rptSelectPerson(personId) {
   const mainArea = document.getElementById('rpt-main-area');
   if (!mainArea) return;
   mainArea.innerHTML = '<div class="rpt-loading">Chargement...</div>';
-  dbGetReports(personId).then(reports => {
-    mainArea.innerHTML = rptBuildMainArea(personId, reports);
+  dbGetReports(personId).then(async reports => {
+    mainArea.innerHTML = await rptBuildMainArea(personId, reports);
   }).catch(e => {
     mainArea.innerHTML = '<div class="rpt-empty">Erreur: ' + esc(e.message || String(e)) + '</div>';
   });
@@ -659,8 +719,8 @@ function rptOpenForm(personId) {
   _rptShowForm = true;
   const mainArea = document.getElementById('rpt-main-area');
   if (!mainArea) return;
-  dbGetReports(personId).then(reports => {
-    mainArea.innerHTML = rptBuildMainArea(personId, reports);
+  dbGetReports(personId).then(async reports => {
+    mainArea.innerHTML = await rptBuildMainArea(personId, reports);
     const form = document.getElementById('rpt-form-wrap');
     if (form) form.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }).catch(e => {
@@ -673,8 +733,8 @@ function rptCancelForm() {
   if (!_rptSelectedId) return;
   const mainArea = document.getElementById('rpt-main-area');
   if (!mainArea) return;
-  dbGetReports(_rptSelectedId).then(reports => {
-    mainArea.innerHTML = rptBuildMainArea(_rptSelectedId, reports);
+  dbGetReports(_rptSelectedId).then(async reports => {
+    mainArea.innerHTML = await rptBuildMainArea(_rptSelectedId, reports);
   }).catch(e => {
     mainArea.innerHTML = '<div class="rpt-empty">Erreur: ' + esc(e.message || String(e)) + '</div>';
   });
@@ -722,7 +782,7 @@ async function renderReports(ct, cl) {
   if (_rptSelectedId) {
     try {
       const reports = await dbGetReports(_rptSelectedId);
-      mainHtml = rptBuildMainArea(_rptSelectedId, reports);
+      mainHtml = await rptBuildMainArea(_rptSelectedId, reports);
     } catch(e) {
       mainHtml = '<div class="rpt-empty">Erreur: ' + esc(e.message || String(e)) + '</div>';
     }
@@ -739,6 +799,205 @@ async function renderReports(ct, cl) {
       </div>
     </div>
   `;
+}
+
+// ============================================================
+// COACHING VIEW — automated coaching data from Nitro
+// Shown above manual reports for agents with coaching data.
+// ============================================================
+
+const COACHING_PEOPLE = ['v1', 't11']; // Heidys, Domingos — people with coaching data
+
+const COACHING_DIMENSIONS = [
+  { key: 'intro',         label: 'Introduction',      icon: '👋' },
+  { key: 'qualification', label: 'Qualification',      icon: '🎯' },
+  { key: 'objections',    label: 'Gestion objections', icon: '🛡️' },
+  { key: 'closing',       label: 'Closing',            icon: '🤝' },
+  { key: 'empathy',       label: 'Empathie',           icon: '💬' },
+  { key: 'energy',        label: 'Energie',            icon: '⚡' },
+  { key: 'duration',      label: 'Duree appels',       icon: '⏱️' },
+  { key: 'engagement',    label: 'Engagement',         icon: '🔥' },
+];
+
+function _coachingScoreColor(score) {
+  if (score == null) return 'var(--td)';
+  if (score >= 8)   return 'var(--g)';
+  if (score >= 6)   return 'var(--y)';
+  if (score >= 4)   return 'var(--a)';
+  return 'var(--r)';
+}
+
+function _coachingDelta(val) {
+  if (val == null || val === 0) return '';
+  const sign = val > 0 ? '+' : '';
+  const color = val > 0 ? 'var(--g)' : 'var(--r)';
+  return ' <span style="color:' + color + ';font-size:11px;">' + sign + val.toFixed(1) + '</span>';
+}
+
+function _coachingProgressBar(pct, label) {
+  const clampPct = Math.min(100, Math.max(0, pct || 0));
+  const barColor = clampPct >= 100 ? 'var(--g)' : 'linear-gradient(90deg, var(--g), var(--cy))';
+  return `
+    <div style="margin:12px 0;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
+        <span style="font-size:13px;color:var(--t);">${esc(label)}</span>
+        <span style="font-size:14px;font-weight:600;color:${clampPct >= 100 ? 'var(--g)' : 'var(--cy)'};">${clampPct.toFixed(1)}%</span>
+      </div>
+      <div style="height:8px;background:var(--sh);border-radius:4px;overflow:hidden;">
+        <div style="height:100%;width:${clampPct}%;background:${barColor};border-radius:4px;transition:width 0.5s;"></div>
+      </div>
+    </div>
+  `;
+}
+
+function _coachingScoreCard(dim, score, delta) {
+  const color = _coachingScoreColor(score);
+  return `
+    <div style="background:var(--s);border:1px solid var(--b);border-radius:8px;padding:10px;text-align:center;min-width:90px;">
+      <div style="font-size:18px;margin-bottom:4px;">${dim.icon}</div>
+      <div style="font-size:22px;font-weight:700;color:${color};">${score != null ? score.toFixed(1) : '—'}${_coachingDelta(delta)}</div>
+      <div style="font-size:11px;color:var(--td);margin-top:2px;">${dim.label}</div>
+    </div>
+  `;
+}
+
+async function rptBuildCoachingSection(personId) {
+  if (!COACHING_PEOPLE.includes(personId)) return '';
+
+  let coaching = null;
+  let nitroArr = [];
+  let cronLogs = [];
+
+  try {
+    coaching = await dbGetLatestCoachingReport(personId);
+    nitroArr = await dbGetNitroStatus(personId);
+    if (authIsAdmin()) cronLogs = await dbGetCronLogs(personId, 5);
+  } catch(e) {
+    console.error('rptBuildCoachingSection error:', e);
+    return '<div class="rpt-empty">Erreur chargement coaching: ' + esc(e.message || String(e)) + '</div>';
+  }
+
+  let html = '<div style="margin-bottom:24px;">';
+
+  // Nitro progress (if any active task)
+  const activeNitro = nitroArr.find(n => n.status === 'running');
+  if (activeNitro) {
+    html += '<div style="background:var(--s);border:1px solid var(--b);border-radius:10px;padding:16px;margin-bottom:16px;">';
+    html += '<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;"><span style="font-size:16px;">⚡</span><span style="font-weight:600;color:var(--t);">Nitro GPU — Transcription en cours</span>';
+    if (activeNitro.gpu_active) html += '<span style="background:var(--g);color:#000;font-size:10px;padding:2px 6px;border-radius:4px;font-weight:600;">GPU ON</span>';
+    html += '</div>';
+    html += _coachingProgressBar(activeNitro.pct, activeNitro.done + ' / ' + activeNitro.total + ' fichiers');
+    if (activeNitro.eta_label) html += '<div style="font-size:12px;color:var(--td);">ETA: ' + esc(activeNitro.eta_label) + ' &middot; ' + activeNitro.avg_speed_sec.toFixed(1) + 's/appel</div>';
+    if (activeNitro.last_file) html += '<div style="font-size:11px;color:var(--td);margin-top:4px;">Dernier: ' + esc(activeNitro.last_file) + '</div>';
+    html += '</div>';
+  }
+
+  // Coaching scores
+  if (coaching) {
+    const scores = coaching.scores || {};
+    const comp = coaching.comparison || {};
+
+    html += '<div style="background:var(--s);border:1px solid var(--b);border-radius:10px;padding:16px;margin-bottom:16px;">';
+    html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">';
+    html += '<span style="font-weight:600;color:var(--t);font-size:15px;">📊 Score coaching — ' + rptWeekLabel(coaching.week_start, coaching.week_end) + '</span>';
+    html += '<span style="font-size:12px;color:var(--td);">' + (coaching.calls_analyzed || 0) + ' appels analyses</span>';
+    html += '</div>';
+
+    // Score grid
+    html += '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:12px;">';
+    COACHING_DIMENSIONS.forEach(dim => {
+      const score = scores[dim.key] != null ? scores[dim.key] : null;
+      const delta = comp[dim.key + '_delta'] || null;
+      html += _coachingScoreCard(dim, score, delta);
+    });
+    html += '</div>';
+
+    // Global score
+    const allScores = COACHING_DIMENSIONS.map(d => scores[d.key]).filter(v => v != null);
+    if (allScores.length) {
+      const globalScore = allScores.reduce((a,b) => a+b, 0) / allScores.length;
+      const globalDelta = comp.global_delta || null;
+      html += '<div style="text-align:center;padding:8px 0;border-top:1px solid var(--b);margin-top:8px;">';
+      html += '<span style="font-size:13px;color:var(--td);">Score global</span> ';
+      html += '<span style="font-size:24px;font-weight:700;color:' + _coachingScoreColor(globalScore) + ';">' + globalScore.toFixed(1) + '/10</span>';
+      html += _coachingDelta(globalDelta);
+      html += '</div>';
+    }
+
+    // Strengths & improvements
+    const strengths = coaching.strengths || [];
+    const improvements = coaching.improvements || [];
+    if (strengths.length || improvements.length) {
+      html += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:12px;">';
+      if (strengths.length) {
+        html += '<div style="background:rgba(52,211,153,0.08);border:1px solid rgba(52,211,153,0.2);border-radius:8px;padding:12px;">';
+        html += '<div style="font-weight:600;color:var(--g);margin-bottom:6px;">✅ Forces</div>';
+        strengths.forEach(s => { html += '<div style="font-size:12px;color:var(--t);padding:2px 0;">• ' + esc(s) + '</div>'; });
+        html += '</div>';
+      }
+      if (improvements.length) {
+        html += '<div style="background:rgba(251,191,36,0.08);border:1px solid rgba(251,191,36,0.2);border-radius:8px;padding:12px;">';
+        html += '<div style="font-weight:600;color:var(--y);margin-bottom:6px;">⚠️ A ameliorer</div>';
+        improvements.forEach(s => { html += '<div style="font-size:12px;color:var(--t);padding:2px 0;">• ' + esc(s) + '</div>'; });
+        html += '</div>';
+      }
+      html += '</div>';
+    }
+
+    // Top objections
+    const objections = coaching.top_objections || [];
+    if (objections.length) {
+      html += '<div style="margin-top:12px;">';
+      html += '<div style="font-weight:600;color:var(--t);margin-bottom:6px;font-size:13px;">🗣️ Objections frequentes</div>';
+      objections.forEach(o => {
+        const obj = typeof o === 'string' ? { text: o } : o;
+        html += '<div style="font-size:12px;color:var(--t);padding:2px 0;">• ' + esc(obj.text || obj) + (obj.count ? ' <span style="color:var(--td);">(' + obj.count + 'x)</span>' : '') + '</div>';
+      });
+      html += '</div>';
+    }
+
+    // Call breakdown (drone vs elite for Domingos)
+    const breakdown = coaching.call_breakdown || {};
+    if (Object.keys(breakdown).length > 0) {
+      html += '<div style="margin-top:12px;display:flex;gap:12px;">';
+      Object.entries(breakdown).forEach(([key, val]) => {
+        const colors = { drone: 'var(--cy)', elite: 'var(--p)', autre: 'var(--td)' };
+        html += '<div style="background:var(--sh);border-radius:6px;padding:8px 14px;text-align:center;">';
+        html += '<div style="font-size:18px;font-weight:700;color:' + (colors[key] || 'var(--t)') + ';">' + val + '</div>';
+        html += '<div style="font-size:11px;color:var(--td);text-transform:capitalize;">' + esc(key) + '</div>';
+        html += '</div>';
+      });
+      html += '</div>';
+    }
+
+    html += '</div>';
+  } else if (!activeNitro) {
+    html += '<div class="rpt-empty" style="margin-bottom:16px;">Aucune donnee de coaching disponible. Les rapports automatiques seront generes chaque vendredi a 15h.</div>';
+  }
+
+  // Cron logs (admin only)
+  if (authIsAdmin() && cronLogs.length) {
+    html += '<div style="background:var(--s);border:1px solid var(--b);border-radius:10px;padding:16px;margin-bottom:16px;">';
+    html += '<div style="font-weight:600;color:var(--t);margin-bottom:8px;font-size:13px;">⚙️ Historique des crons <span style="font-size:11px;color:var(--td);">(admin)</span></div>';
+    cronLogs.forEach(log => {
+      const statusIcon = log.status === 'success' ? '✅' : (log.status === 'error' ? '❌' : '⏳');
+      const date = log.started_at ? new Date(log.started_at).toLocaleDateString('fr-CA', { day:'numeric', month:'short', hour:'2-digit', minute:'2-digit' }) : '—';
+      const dur = log.duration_sec ? log.duration_sec + 's' : '';
+      html += '<div style="font-size:12px;color:var(--t);padding:3px 0;display:flex;gap:8px;align-items:center;">';
+      html += '<span>' + statusIcon + '</span>';
+      html += '<span style="color:var(--td);min-width:110px;">' + esc(date) + '</span>';
+      html += '<span style="text-transform:capitalize;">' + esc(log.cron_type.replace('_',' ')) + '</span>';
+      if (log.calls_processed) html += '<span style="color:var(--td);">' + log.calls_processed + ' appels</span>';
+      if (log.transcripts_new) html += '<span style="color:var(--g);">+' + log.transcripts_new + ' transcripts</span>';
+      if (dur) html += '<span style="color:var(--td);">' + dur + '</span>';
+      if (log.error_msg) html += '<span style="color:var(--r);font-size:11px;">' + esc(log.error_msg.substring(0, 60)) + '</span>';
+      html += '</div>';
+    });
+    html += '</div>';
+  }
+
+  html += '</div>';
+  return html;
 }
 
 // ---- Legacy: keep openWeeklyReport for tasks.js compatibility ----
