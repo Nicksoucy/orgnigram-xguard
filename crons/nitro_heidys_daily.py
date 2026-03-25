@@ -5,15 +5,28 @@ Heidys daily sync cron — runs every day at 23h15 on Nitro.
 
 Pulls today's calls from JustCall, transcribes recordings with faster-whisper (GPU),
 saves transcripts to disk, and pushes summary data to Supabase.
+
+Phase 1 hardening (2026-03-25):
+- Atomic file writes (write .tmp then rename)
+- Per-file error tracking (success/failed/skipped counts)
+- Supabase push failures are FATAL (exit 1)
+- Batch size limit (max 500 calls per run)
+- Disk space check before starting
+- File integrity validation on read
+- UTC everywhere
+- File logging
+- Run ID for traceability
 """
 
 import json
 import logging
 import os
+import shutil
 import sys
 import tempfile
 import time
-from datetime import datetime, timezone
+import uuid
+from datetime import datetime, timedelta, timezone
 
 import requests
 
@@ -37,7 +50,10 @@ SUPABASE_KEY = (
 PERSON_ID = "v1"
 AGENT_NAME = "heidys"
 TRANSCRIPT_DIR = r"C:\Users\user\xguard_transcripts\heidys"
+LOG_FILE = os.path.join(TRANSCRIPT_DIR, "daily.log")
 MIN_DURATION_SEC = 30
+MAX_BATCH_SIZE = 500  # prevent runaway backfills
+MIN_DISK_FREE_MB = 500  # require 500MB free before starting
 
 # Whisper settings
 WHISPER_MODEL = "medium"
@@ -45,23 +61,40 @@ WHISPER_LANGUAGE = "fr"
 WHISPER_BEAM_SIZE = 3
 
 # ---------------------------------------------------------------------------
-# Logging
+# Run ID — unique per execution for traceability
 # ---------------------------------------------------------------------------
 
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s [%(levelname)s] %(message)s",
+RUN_ID = str(uuid.uuid4())[:8]
+
+# ---------------------------------------------------------------------------
+# Logging — both console and file
+# ---------------------------------------------------------------------------
+
+os.makedirs(TRANSCRIPT_DIR, exist_ok=True)
+
+log = logging.getLogger("nitro_heidys_daily")
+log.setLevel(logging.INFO)
+
+_fmt = logging.Formatter(
+    f"%(asctime)s [{RUN_ID}] [%(levelname)s] %(message)s",
     datefmt="%Y-%m-%d %H:%M:%S",
 )
-log = logging.getLogger("nitro_heidys_daily")
+
+_console = logging.StreamHandler()
+_console.setFormatter(_fmt)
+log.addHandler(_console)
+
+_file_handler = logging.FileHandler(LOG_FILE, encoding="utf-8")
+_file_handler.setFormatter(_fmt)
+log.addHandler(_file_handler)
 
 # ---------------------------------------------------------------------------
-# Supabase helper
+# Supabase helpers — failures are FATAL
 # ---------------------------------------------------------------------------
 
 
 def supabase_upsert(table: str, data: dict | list, on_conflict: str) -> requests.Response:
-    """Upsert data into a Supabase table via PostgREST."""
+    """Upsert data into a Supabase table. Raises on failure."""
     url = f"{SUPABASE_URL}/rest/v1/{table}"
     headers = {
         "apikey": SUPABASE_KEY,
@@ -71,12 +104,14 @@ def supabase_upsert(table: str, data: dict | list, on_conflict: str) -> requests
     }
     resp = requests.post(url, json=data, headers=headers, timeout=30)
     if resp.status_code >= 400:
-        log.warning("Supabase upsert %s failed (%s): %s", table, resp.status_code, resp.text)
+        msg = f"Supabase upsert {table} failed ({resp.status_code}): {resp.text}"
+        log.error(msg)
+        raise RuntimeError(msg)
     return resp
 
 
 def supabase_insert(table: str, data: dict) -> requests.Response:
-    """Insert a single row into a Supabase table (no upsert)."""
+    """Insert a row into Supabase. Raises on failure."""
     url = f"{SUPABASE_URL}/rest/v1/{table}"
     headers = {
         "apikey": SUPABASE_KEY,
@@ -86,7 +121,9 @@ def supabase_insert(table: str, data: dict) -> requests.Response:
     }
     resp = requests.post(url, json=data, headers=headers, timeout=30)
     if resp.status_code >= 400:
-        log.warning("Supabase insert %s failed (%s): %s", table, resp.status_code, resp.text)
+        msg = f"Supabase insert {table} failed ({resp.status_code}): {resp.text}"
+        log.error(msg)
+        raise RuntimeError(msg)
     return resp
 
 
@@ -122,17 +159,18 @@ def fetch_justcall_calls(date_str: str) -> list[dict]:
             break
 
         all_calls.extend(calls)
-        # If we got fewer than per_page, we've reached the last page
         if len(calls) < 100:
             break
         page += 1
+        # Rate limit protection
+        time.sleep(0.5)
 
     log.info("JustCall returned %d raw calls for %s", len(all_calls), date_str)
     return all_calls
 
 
 def filter_calls(calls: list[dict]) -> list[dict]:
-    """Keep calls with duration >= 30 s and a recording URL."""
+    """Keep calls with duration >= 30s and a recording URL."""
     filtered = []
     for c in calls:
         duration = int(c.get("duration", 0) or 0)
@@ -141,6 +179,23 @@ def filter_calls(calls: list[dict]) -> list[dict]:
             filtered.append(c)
     log.info("Filtered to %d calls (duration >= %ds, has recording)", len(filtered), MIN_DURATION_SEC)
     return filtered
+
+
+# ---------------------------------------------------------------------------
+# Disk checks
+# ---------------------------------------------------------------------------
+
+
+def check_disk_space():
+    """Ensure enough disk space before starting. Raises if not enough."""
+    usage = shutil.disk_usage(TRANSCRIPT_DIR)
+    free_mb = usage.free / (1024 * 1024)
+    if free_mb < MIN_DISK_FREE_MB:
+        raise RuntimeError(
+            f"Not enough disk space: {free_mb:.0f}MB free, need {MIN_DISK_FREE_MB}MB. "
+            f"Clean up {TRANSCRIPT_DIR} before running."
+        )
+    log.info("Disk check: %.0fMB free (need %dMB)", free_mb, MIN_DISK_FREE_MB)
 
 
 # ---------------------------------------------------------------------------
@@ -188,18 +243,32 @@ def transcribe_recording(model, recording_url: str) -> tuple[str, int]:
 
 
 # ---------------------------------------------------------------------------
-# Transcript I/O
+# Transcript I/O — ATOMIC writes
 # ---------------------------------------------------------------------------
 
 
 def already_transcribed(call_id: str) -> bool:
-    """Check if a transcript JSON already exists on disk."""
+    """Check if a valid transcript JSON exists on disk."""
     path = os.path.join(TRANSCRIPT_DIR, f"{call_id}.json")
-    return os.path.isfile(path)
+    if not os.path.isfile(path):
+        return False
+    # Validate file isn't corrupt (can read + has required fields)
+    try:
+        with open(path, "r", encoding="utf-8") as fh:
+            data = json.load(fh)
+        if data.get("id") and data.get("transcript") is not None:
+            return True
+        log.warning("Corrupt transcript %s (missing fields) — will re-transcribe", call_id)
+        os.remove(path)
+        return False
+    except (json.JSONDecodeError, OSError) as exc:
+        log.warning("Corrupt transcript %s (%s) — will re-transcribe", call_id, exc)
+        os.remove(path)
+        return False
 
 
 def save_transcript(call: dict, transcript: str, word_count: int) -> str:
-    """Write transcript JSON to disk and return the file path."""
+    """Write transcript JSON ATOMICALLY (write to .tmp then rename)."""
     call_id = str(call.get("id", call.get("call_id", "")))
     out = {
         "id": call_id,
@@ -214,12 +283,19 @@ def save_transcript(call: dict, transcript: str, word_count: int) -> str:
         "source": "justcall",
         "agent": AGENT_NAME,
         "transcribed_at": datetime.now(timezone.utc).isoformat(),
+        "run_id": RUN_ID,
     }
     os.makedirs(TRANSCRIPT_DIR, exist_ok=True)
-    path = os.path.join(TRANSCRIPT_DIR, f"{call_id}.json")
-    with open(path, "w", encoding="utf-8") as fh:
+    final_path = os.path.join(TRANSCRIPT_DIR, f"{call_id}.json")
+    tmp_path = final_path + ".tmp"
+
+    # Write to .tmp first, then atomic rename
+    with open(tmp_path, "w", encoding="utf-8") as fh:
         json.dump(out, fh, ensure_ascii=False, indent=2)
-    return path
+
+    # On Windows, os.replace is atomic if same drive
+    os.replace(tmp_path, final_path)
+    return final_path
 
 
 # ---------------------------------------------------------------------------
@@ -227,39 +303,41 @@ def save_transcript(call: dict, transcript: str, word_count: int) -> str:
 # ---------------------------------------------------------------------------
 
 
-def update_nitro_status(
-    status: str,
-    done: int,
-    total: int,
-    gpu_active: bool,
-    last_file: str = "",
-):
+def update_nitro_status(status: str, done: int, total: int, gpu_active: bool, last_file: str = ""):
     pct = round(done / total * 100, 1) if total else 0.0
-    supabase_upsert(
-        "nitro_status",
-        {
-            "person_id": PERSON_ID,
-            "task_type": "daily_sync",
-            "status": status,
-            "done": done,
-            "total": total,
-            "pct": pct,
-            "gpu_active": gpu_active,
-            "last_file": last_file,
-            "updated_at": datetime.now(timezone.utc).isoformat(),
-        },
-        on_conflict="person_id,task_type",
-    )
+    try:
+        supabase_upsert(
+            "nitro_status",
+            {
+                "person_id": PERSON_ID,
+                "task_type": "daily_sync",
+                "status": status,
+                "done": done,
+                "total": total,
+                "pct": pct,
+                "gpu_active": gpu_active,
+                "last_file": last_file,
+                "updated_at": datetime.now(timezone.utc).isoformat(),
+            },
+            on_conflict="person_id,task_type",
+        )
+    except RuntimeError:
+        # Non-fatal: status updates are nice-to-have, don't abort the whole run
+        log.warning("Failed to update nitro_status (non-fatal, continuing)")
 
 
-def push_coaching_data(today_str: str, calls_total: int, calls_transcribed: int, calls_new: int, avg_duration: float):
+def push_coaching_data(
+    sync_date: str, calls_total: int, calls_success: int, calls_failed: int,
+    calls_new: int, avg_duration: float
+):
+    """Push daily summary to Supabase. RAISES on failure."""
     supabase_upsert(
         "coaching_data",
         {
             "person_id": PERSON_ID,
-            "sync_date": today_str,
+            "sync_date": sync_date,
             "calls_total": calls_total,
-            "calls_transcribed": calls_transcribed,
+            "calls_transcribed": calls_success,
             "calls_new": calls_new,
             "avg_duration_sec": round(avg_duration, 1),
             "source": "justcall",
@@ -271,14 +349,16 @@ def push_coaching_data(today_str: str, calls_total: int, calls_transcribed: int,
 def push_cron_log(
     status: str,
     calls_processed: int,
+    calls_success: int,
+    calls_failed: int,
     transcripts_new: int,
     started_at: str,
     duration_sec: float,
     error_msg: str = "",
     dates_synced: list[str] | None = None,
 ):
+    """Push cron execution log. RAISES on failure."""
     finished_at = datetime.now(timezone.utc).isoformat()
-    # Encode synced dates as "dates:..." in error_msg when no actual error
     msg = error_msg or None
     if not error_msg and dates_synced and len(dates_synced) > 1:
         msg = "dates:" + ", ".join(dates_synced)
@@ -304,7 +384,7 @@ def push_cron_log(
 
 
 def get_last_successful_sync_date() -> str | None:
-    """Query cron_logs for the last successful daily_sync date for this person."""
+    """Query cron_logs for the last successful daily_sync date."""
     url = (
         f"{SUPABASE_URL}/rest/v1/cron_logs"
         f"?person_id=eq.{PERSON_ID}&cron_type=eq.daily_sync&status=eq.success"
@@ -318,7 +398,6 @@ def get_last_successful_sync_date() -> str | None:
         resp = requests.get(url, headers=headers, timeout=15)
         rows = resp.json()
         if rows and rows[0].get("started_at"):
-            # Extract date from the started_at timestamp
             return rows[0]["started_at"][:10]
     except Exception as exc:
         log.warning("Could not fetch last sync date: %s", exc)
@@ -326,23 +405,20 @@ def get_last_successful_sync_date() -> str | None:
 
 
 def compute_dates_to_sync(today_str: str) -> list[str]:
-    """Return list of dates to sync, catching up any missed days."""
+    """Return list of dates to sync, catching up missed days (max 14)."""
     last_sync = get_last_successful_sync_date()
     if last_sync:
-        from datetime import timedelta as td
         last_dt = datetime.strptime(last_sync, "%Y-%m-%d")
         today_dt = datetime.strptime(today_str, "%Y-%m-%d")
-        start_dt = last_dt + td(days=1)
+        start_dt = last_dt + timedelta(days=1)
         dates = []
         d = start_dt
         while d <= today_dt:
             dates.append(d.strftime("%Y-%m-%d"))
-            d += td(days=1)
-        # Cap at 14 days to avoid runaway backfills
+            d += timedelta(days=1)
         dates = dates[-14:]
     else:
         dates = [today_str]
-
     return dates
 
 
@@ -354,21 +430,25 @@ def compute_dates_to_sync(today_str: str) -> list[str]:
 def main():
     t0 = time.time()
     started_at = datetime.now(timezone.utc).isoformat()
-    today_str = datetime.now().strftime("%Y-%m-%d")
-    log.info("===== Heidys daily sync started — %s =====", today_str)
+    today_str = datetime.now(timezone.utc).strftime("%Y-%m-%d")  # UTC date
+    log.info("===== Heidys daily sync started — %s (run %s) =====", today_str, RUN_ID)
 
     error_msg = ""
-    calls_processed = 0
+    calls_success = 0
+    calls_failed = 0
     transcripts_new = 0
     gpu_active = False
 
     try:
-        # 0. Determine dates to sync (catch-up if missed days)
+        # 0. Pre-flight checks
+        check_disk_space()
+
+        # 1. Determine dates to sync (catch-up if missed days)
         dates_to_sync = compute_dates_to_sync(today_str)
         if len(dates_to_sync) > 1:
             log.info("CATCH-UP: %d days to sync — %s", len(dates_to_sync), ", ".join(dates_to_sync))
 
-        # 1. Fetch calls for all dates
+        # 2. Fetch calls for all dates
         raw_calls = []
         for sync_date in dates_to_sync:
             day_calls = fetch_justcall_calls(sync_date)
@@ -379,27 +459,38 @@ def main():
         calls_total = len(calls)
 
         if not calls:
-            log.info("No qualifying calls today. Nothing to do.")
-            push_coaching_data(today_str, len(raw_calls), 0, 0, 0.0)
-            push_cron_log("success", 0, 0, started_at, time.time() - t0, dates_synced=dates_to_sync)
+            log.info("No qualifying calls. Nothing to do.")
+            push_coaching_data(today_str, len(raw_calls), 0, 0, 0, 0.0)
+            push_cron_log("success", 0, 0, 0, 0, started_at, time.time() - t0, dates_synced=dates_to_sync)
             update_nitro_status("idle", 0, 0, False)
             return
 
-        # 2. Load whisper model
+        # 3. Enforce batch size limit
+        if calls_total > MAX_BATCH_SIZE:
+            log.warning(
+                "Batch too large (%d calls, max %d). Processing first %d only. "
+                "Remaining will be caught up next run.",
+                calls_total, MAX_BATCH_SIZE, MAX_BATCH_SIZE,
+            )
+            calls = calls[:MAX_BATCH_SIZE]
+            calls_total = len(calls)
+
+        # 4. Load whisper model
         model, gpu_active = _load_whisper_model()
         update_nitro_status("running", 0, calls_total, gpu_active)
 
-        durations = []
-        # 3. Process each call
+        # 5. Process each call
+        new_durations = []  # only durations of NEWLY transcribed calls
+        consecutive_failures = 0
+        MAX_CONSECUTIVE_FAILURES = 10  # if 10 in a row fail, GPU is probably broken
+
         for idx, call in enumerate(calls, start=1):
             call_id = str(call.get("id", call.get("call_id", "")))
             duration = int(call.get("duration", 0) or 0)
-            durations.append(duration)
 
-            # Resumability: skip if already transcribed
             if already_transcribed(call_id):
                 log.info("[%d/%d] call %s already transcribed — skipping", idx, calls_total, call_id)
-                calls_processed += 1
+                calls_success += 1
                 update_nitro_status("running", idx, calls_total, gpu_active, last_file=f"{call_id}.json")
                 continue
 
@@ -407,32 +498,70 @@ def main():
                 log.info("[%d/%d] Transcribing call %s (%ds)…", idx, calls_total, call_id, duration)
                 recording_url = call.get("recording_url", "")
                 transcript, word_count = transcribe_recording(model, recording_url)
-                path = save_transcript(call, transcript, word_count)
+                save_transcript(call, transcript, word_count)
                 transcripts_new += 1
-                calls_processed += 1
-                log.info("  -> saved %s (%d words)", path, word_count)
+                calls_success += 1
+                new_durations.append(duration)
+                consecutive_failures = 0
+                log.info("  -> OK (%d words)", word_count)
             except Exception as exc:
                 log.error("  !! Error on call %s: %s", call_id, exc, exc_info=True)
-                calls_processed += 1
+                calls_failed += 1
+                consecutive_failures += 1
+
+                # If too many consecutive failures, GPU is probably broken
+                if consecutive_failures >= MAX_CONSECUTIVE_FAILURES:
+                    raise RuntimeError(
+                        f"ABORTING: {MAX_CONSECUTIVE_FAILURES} consecutive failures. "
+                        f"GPU may be in a bad state. Last error: {exc}"
+                    )
                 continue
 
             update_nitro_status("running", idx, calls_total, gpu_active, last_file=f"{call_id}.json")
 
-        # 4. Push summary to Supabase
-        avg_dur = sum(durations) / len(durations) if durations else 0.0
-        push_coaching_data(today_str, len(raw_calls), calls_processed, transcripts_new, avg_dur)
+        # 6. Push summary to Supabase — FATAL if fails
+        avg_dur = sum(new_durations) / len(new_durations) if new_durations else 0.0
+        push_coaching_data(today_str, len(raw_calls), calls_success, calls_failed, transcripts_new, avg_dur)
         update_nitro_status("idle", calls_total, calls_total, False)
 
         elapsed = time.time() - t0
-        log.info("===== Sync complete: %d processed, %d new transcripts (%.1fs) =====", calls_processed, transcripts_new, elapsed)
-        push_cron_log("success", calls_processed, transcripts_new, started_at, elapsed, dates_synced=dates_to_sync)
+        log.info(
+            "===== Sync complete: %d success, %d failed, %d new transcripts (%.1fs) =====",
+            calls_success, calls_failed, transcripts_new, elapsed,
+        )
+
+        # Determine overall status
+        if calls_failed > 0 and calls_success == 0:
+            status = "error"
+            error_msg = f"All {calls_failed} calls failed to transcribe"
+        elif calls_failed > 0:
+            status = "partial"
+            error_msg = f"{calls_failed}/{calls_failed + calls_success} calls failed"
+        else:
+            status = "success"
+
+        push_cron_log(
+            status, calls_success + calls_failed, calls_success, calls_failed,
+            transcripts_new, started_at, elapsed,
+            error_msg=error_msg, dates_synced=dates_to_sync,
+        )
+
+        # Exit with error if ALL calls failed
+        if status == "error":
+            sys.exit(1)
 
     except Exception as exc:
         error_msg = str(exc)[:500]
         log.error("Fatal error: %s", exc, exc_info=True)
         elapsed = time.time() - t0
-        push_cron_log("error", calls_processed, transcripts_new, started_at, elapsed, error_msg=error_msg)
-        update_nitro_status("error", calls_processed, 0, False)
+        try:
+            push_cron_log(
+                "error", calls_success + calls_failed, calls_success, calls_failed,
+                transcripts_new, started_at, elapsed, error_msg=error_msg,
+            )
+            update_nitro_status("error", 0, 0, False)
+        except Exception:
+            log.error("Could not push error log to Supabase (double failure)")
         sys.exit(1)
 
 

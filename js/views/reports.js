@@ -1011,6 +1011,39 @@ async function rptBuildCoachingSection(personId) {
   if (trendLabel) html += '<div style="flex:1;background:var(--s);padding:14px 12px;text-align:center;"><div style="font-size:18px;font-weight:700;">' + trendLabel + '</div><div style="font-size:11px;color:var(--td);margin-top:2px;">vs semaine prec.</div></div>';
   html += '</div>';
 
+  // ── Sync Health Warning ──
+  if (cronLogs.length) {
+    const lastCron = cronLogs[0];
+    const lastCronDate = lastCron.started_at ? new Date(lastCron.started_at) : null;
+    const hoursSince = lastCronDate ? (Date.now() - lastCronDate.getTime()) / (1000 * 60 * 60) : 999;
+
+    if (hoursSince > 48) {
+      html += '<div style="background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.3);border-radius:10px;padding:12px 16px;margin-bottom:16px;display:flex;align-items:center;gap:10px;">';
+      html += '<span style="font-size:20px;">🚨</span>';
+      html += '<div><div style="font-weight:600;color:var(--r);font-size:13px;">Sync manquant depuis ' + Math.round(hoursSince) + 'h</div>';
+      html += '<div style="font-size:11px;color:var(--td);">Le dernier cron a tourne le ' + (lastCronDate ? lastCronDate.toLocaleDateString('fr-CA', {day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}) : '?') + '. Verifier que NITRO est allume et Tailscale connecte.</div>';
+      html += '</div></div>';
+    } else if (lastCron.status === 'error') {
+      html += '<div style="background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.3);border-radius:10px;padding:12px 16px;margin-bottom:16px;display:flex;align-items:center;gap:10px;">';
+      html += '<span style="font-size:20px;">❌</span>';
+      html += '<div><div style="font-weight:600;color:var(--r);font-size:13px;">Dernier sync en erreur</div>';
+      html += '<div style="font-size:11px;color:var(--td);">' + esc(lastCron.error_msg || 'Erreur inconnue') + '</div>';
+      html += '</div></div>';
+    } else if (lastCron.status === 'partial') {
+      html += '<div style="background:rgba(251,191,36,0.1);border:1px solid rgba(251,191,36,0.3);border-radius:10px;padding:12px 16px;margin-bottom:16px;display:flex;align-items:center;gap:10px;">';
+      html += '<span style="font-size:20px;">⚠️</span>';
+      html += '<div><div style="font-weight:600;color:var(--y);font-size:13px;">Sync partiel</div>';
+      html += '<div style="font-size:11px;color:var(--td);">' + esc(lastCron.error_msg || 'Certains appels ont echoue') + '</div>';
+      html += '</div></div>';
+    }
+  } else if (coachingData.length === 0) {
+    html += '<div style="background:rgba(251,191,36,0.1);border:1px solid rgba(251,191,36,0.3);border-radius:10px;padding:12px 16px;margin-bottom:16px;display:flex;align-items:center;gap:10px;">';
+    html += '<span style="font-size:20px;">📡</span>';
+    html += '<div><div style="font-weight:600;color:var(--y);font-size:13px;">Aucun sync detecte</div>';
+    html += '<div style="font-size:11px;color:var(--td);">Le cron quotidien n\'a jamais tourne avec succes pour cette personne.</div>';
+    html += '</div></div>';
+  }
+
   // ── Period Filter Pills ──
   const periods = [
     { key: '1sem', label: 'Cette semaine', weeks: 1 },
@@ -1241,7 +1274,7 @@ async function rptBuildCoachingSection(personId) {
     html += '<div style="background:var(--s);border:1px solid var(--b);border-radius:10px;padding:16px;margin-bottom:16px;">';
     html += '<div style="font-weight:600;color:var(--t);margin-bottom:8px;font-size:13px;">⚙️ Crons <span style="font-size:11px;color:var(--td);">(admin)</span></div>';
     cronLogs.forEach(log => {
-      const statusIcon = log.status === 'success' ? '✅' : (log.status === 'error' ? '❌' : '⏳');
+      const statusIcon = log.status === 'success' ? '✅' : log.status === 'error' ? '❌' : log.status === 'partial' ? '⚠️' : '⏳';
       const date = log.started_at ? new Date(log.started_at).toLocaleDateString('fr-CA', { day:'numeric', month:'short', hour:'2-digit', minute:'2-digit' }) : '—';
       const dur = log.duration_sec != null ? log.duration_sec + 's' : '';
       const calls = log.calls_processed != null ? log.calls_processed : null;
