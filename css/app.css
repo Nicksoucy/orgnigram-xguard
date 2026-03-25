@@ -386,3 +386,36 @@ input[name="fdColor"]:checked+.color-swatch{border-color:#fff;transform:scale(1.
   padding:5px 10px;background:var(--sh);border:1px solid var(--b);
   border-radius:8px;width:fit-content;
 }
+
+/* ── Coaching Dashboard — Responsive ── */
+.coaching-grid-2col { display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:16px; }
+.coaching-grid-4col { display:grid; grid-template-columns:repeat(4,1fr); gap:6px; }
+
+@media (max-width: 768px) {
+  .coaching-grid-2col { grid-template-columns: 1fr !important; }
+  .coaching-grid-4col { grid-template-columns: repeat(2, 1fr) !important; }
+}
+
+/* ── Loading Skeleton ── */
+@keyframes coaching-shimmer {
+  0% { background-position: -200px 0; }
+  100% { background-position: 200px 0; }
+}
+.coaching-skeleton {
+  background: linear-gradient(90deg, var(--sh) 25%, var(--b) 50%, var(--sh) 75%);
+  background-size: 400px 100%;
+  animation: coaching-shimmer 1.5s infinite;
+  border-radius: 8px;
+}
+.coaching-skeleton-card {
+  height: 120px;
+  margin-bottom: 12px;
+}
+.coaching-skeleton-bar {
+  height: 60px;
+  margin-bottom: 12px;
+}
+.coaching-skeleton-radar {
+  height: 300px;
+  margin-bottom: 12px;
+}
