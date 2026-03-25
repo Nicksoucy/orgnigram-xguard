@@ -13,7 +13,7 @@ import logging
 import os
 import re
 import time
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import requests
@@ -66,6 +66,18 @@ def supabase_upsert(table: str, data: dict | list) -> requests.Response:
         "Authorization": f"Bearer {SUPABASE_KEY}",
         "Content-Type": "application/json",
         "Prefer": "resolution=merge-duplicates",
+    }
+    return requests.post(url, json=data, headers=headers)
+
+
+def supabase_insert(table: str, data: dict) -> requests.Response:
+    """Insert a single row (no upsert)."""
+    url = f"{SUPABASE_URL}/rest/v1/{table}"
+    headers = {
+        "apikey": SUPABASE_KEY,
+        "Authorization": f"Bearer {SUPABASE_KEY}",
+        "Content-Type": "application/json",
+        "Prefer": "return=minimal",
     }
     return requests.post(url, json=data, headers=headers)
 
@@ -314,28 +326,47 @@ def score_call(transcript: dict) -> dict:
 # Objection extraction
 # ---------------------------------------------------------------------------
 
-OBJECTION_PATTERNS = [
-    (r"\bc'est trop cher\b", "C'est trop cher"),
-    (r"\bpas intéressé\b", "Pas intéressé"),
-    (r"\bpas le temps\b", "Pas le temps"),
-    (r"\bje vais réfléchir\b", "Je vais réfléchir"),
-    (r"\bj'ai déjà\b", "J'ai déjà un fournisseur"),
-    (r"\bpas besoin\b", "Pas besoin"),
-    (r"\brappeler plus tard\b", "Rappeler plus tard"),
-    (r"\bpas le budget\b", "Pas le budget"),
-    (r"\bje ne suis pas\b", "Je ne suis pas décideur"),
-    (r"\benvoyez[- ]moi\b", "Envoyez-moi de l'info"),
-    (r"\bpas le bon moment\b", "Pas le bon moment"),
-    (r"\bon verra\b", "On verra"),
+# Objection patterns per report type — tuned to each sales context
+OBJECTION_PATTERNS_VENTES = [
+    # Formation gardiennage (Heidys) — relevant objections for training sales
+    (r"c'est trop cher|trop dispendieux|trop d'argent", "C'est trop cher"),
+    (r"pas le budget|pas les moyens|pas capable de payer", "Pas le budget"),
+    (r"c'est combien|le prix|ça coûte combien", "Question sur le prix"),
+    (r"je vais réfléchir|je vais y penser|laisser.*réfléchir", "Je vais reflechir"),
+    (r"pas le temps|pas disponible|trop occup", "Pas le temps"),
+    (r"pas intéressé|ça m'intéresse pas|non merci", "Pas interesse"),
+    (r"pas le bon moment|pas maintenant|plus tard", "Pas le bon moment"),
+    (r"je ne suis pas.*décideur|en parler à|demander à|mon (mari|conjoint|patron|boss)", "Doit consulter quelqu'un"),
+    (r"envoyez[- ]moi|envoie[- ]moi.*info|par courriel|par email", "Envoyez-moi de l'info"),
+    (r"c'est quand|prochaine cohorte|prochaine date|quand ça commence", "Quand est la prochaine cohorte"),
+    (r"est-ce que c'est reconnu|accrédité|valide|BSP.*reconnu", "Est-ce reconnu/accredite"),
+    (r"rappeler plus tard|rappelle[- ]moi", "Rappeler plus tard"),
+]
+
+OBJECTION_PATTERNS_DRONE = [
+    # Formation drone (Domingos) — relevant for drone pilot training
+    (r"c'est trop cher|trop dispendieux|trop d'argent", "C'est trop cher"),
+    (r"pas le budget|pas les moyens|pas capable de payer", "Pas le budget"),
+    (r"c'est combien|le prix|ça coûte combien", "Question sur le prix"),
+    (r"je vais réfléchir|je vais y penser|laisser.*réfléchir", "Je vais reflechir"),
+    (r"pas intéressé|ça m'intéresse pas|non merci", "Pas interesse"),
+    (r"transport canada|TC|réglementation|légal", "Questions reglementation TC"),
+    (r"est-ce que c'est reconnu|accrédité|certifi", "Est-ce reconnu/certifie"),
+    (r"déjà.*licen|déjà.*brevet|déjà.*formation", "Deja une formation/licence"),
+    (r"envoyez[- ]moi|envoie[- ]moi.*info|par courriel", "Envoyez-moi de l'info"),
+    (r"pas le temps|pas disponible|trop occup", "Pas le temps"),
+    (r"c'est quand|prochaine.*date|quand ça commence", "Quand est la prochaine session"),
+    (r"rappeler plus tard|rappelle[- ]moi", "Rappeler plus tard"),
 ]
 
 
-def extract_objections(transcripts: list[dict]) -> list[dict]:
+def extract_objections(transcripts: list[dict], report_type: str = "ventes") -> list[dict]:
     """Return top objections as [{text, count}], sorted by count desc."""
+    patterns = OBJECTION_PATTERNS_DRONE if report_type == "ventes_drone" else OBJECTION_PATTERNS_VENTES
     counts: dict[str, int] = {}
     for t in transcripts:
         text = t.get("transcript", "") or ""
-        for pattern, label in OBJECTION_PATTERNS:
+        for pattern, label in patterns:
             if re.search(pattern, text, re.IGNORECASE):
                 counts[label] = counts.get(label, 0) + 1
 
@@ -399,7 +430,7 @@ def compute_weekly_summary(
     improvements = [d[0] for d in sorted_dims[-3:]]
 
     # Objections
-    top_objections = extract_objections(transcripts)
+    top_objections = extract_objections(transcripts, report_type)
 
     # Recommendations
     recommendations = generate_recommendations(avg_scores)
@@ -565,18 +596,21 @@ def push_to_supabase(report: dict) -> bool:
         return False
 
 
-def log_cron(person_id: str, status: str, calls_processed: int, duration_sec: float):
+def log_cron(person_id: str, status: str, calls_processed: int, started_at: str, duration_sec: float, error_msg: str = ""):
     """Log execution to cron_logs table."""
     entry = {
         "person_id": person_id,
         "cron_type": "weekly_report",
         "status": status,
         "calls_processed": calls_processed,
-        "duration_sec": round(duration_sec, 2),
-        "created_at": datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "transcripts_new": 0,
+        "duration_sec": round(duration_sec),
+        "error_msg": error_msg or None,
+        "started_at": started_at,
+        "finished_at": datetime.now(timezone.utc).isoformat(),
     }
     try:
-        resp = supabase_upsert("cron_logs", entry)
+        resp = supabase_insert("cron_logs", entry)
         if resp.status_code not in (200, 201):
             log.warning("cron_logs insert failed: %s %s", resp.status_code, resp.text)
     except Exception as exc:
@@ -607,13 +641,14 @@ def run():
 
     for agent_name, config in AGENTS.items():
         t0 = time.time()
+        agent_started_at = datetime.now(timezone.utc).isoformat()
         log.info("Processing agent: %s", agent_name)
 
         transcripts = load_transcripts(config["transcript_dir"], week_start, week_end)
 
         if not transcripts:
             log.info("No transcripts for %s this week — skipping.", agent_name)
-            log_cron(config["person_id"], "skipped_no_data", 0, time.time() - t0)
+            log_cron(config["person_id"], "success", 0, agent_started_at, time.time() - t0)
             continue
 
         report = compute_weekly_summary(
@@ -627,18 +662,19 @@ def run():
 
         if not report:
             log.warning("Empty report for %s — skipping.", agent_name)
-            log_cron(config["person_id"], "error_empty_report", 0, time.time() - t0)
+            log_cron(config["person_id"], "error", 0, agent_started_at, time.time() - t0, error_msg="empty report")
             continue
 
         # Push to Supabase
         success = push_to_supabase(report)
-        status = "success" if success else "error_supabase"
+        status = "success" if success else "error"
 
         # Save local backup
         save_local_report(report, agent_name)
 
         elapsed = time.time() - t0
-        log_cron(config["person_id"], status, len(transcripts), elapsed)
+        err = "" if success else "supabase push failed"
+        log_cron(config["person_id"], status, len(transcripts), agent_started_at, elapsed, error_msg=err)
         log.info("Done with %s: %d calls, %.1fs", agent_name, len(transcripts), elapsed)
 
     log.info("=== nitro_weekly_report complete ===")

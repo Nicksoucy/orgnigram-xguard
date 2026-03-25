@@ -852,11 +852,13 @@ function _coachingProgressBar(pct, label) {
 
 function _coachingScoreCard(dim, score, delta) {
   const color = _coachingScoreColor(score);
+  const bgAlpha = score == null ? '0' : score >= 8 ? '0.06' : score >= 6 ? '0.05' : score >= 4 ? '0.04' : '0.04';
+  const bgColor = score == null ? 'transparent' : color.replace('var(', '').replace(')', '');
   return `
-    <div style="background:var(--s);border:1px solid var(--b);border-radius:8px;padding:10px;text-align:center;min-width:90px;">
-      <div style="font-size:18px;margin-bottom:4px;">${dim.icon}</div>
-      <div style="font-size:22px;font-weight:700;color:${color};">${score != null ? score.toFixed(1) : '—'}${_coachingDelta(delta)}</div>
-      <div style="font-size:11px;color:var(--td);margin-top:2px;">${dim.label}</div>
+    <div style="background:color-mix(in srgb, ${color} ${Math.round(bgAlpha*100*10)}%, var(--s));border:1px solid var(--b);border-radius:10px;padding:12px 8px;text-align:center;min-width:90px;">
+      <div style="font-size:16px;margin-bottom:2px;">${dim.icon}</div>
+      <div style="font-size:24px;font-weight:700;color:${color};line-height:1.2;">${score != null ? score.toFixed(1) : '—'}${_coachingDelta(delta)}</div>
+      <div style="font-size:11px;color:var(--td);margin-top:4px;">${dim.label}</div>
     </div>
   `;
 }
@@ -892,19 +894,40 @@ async function rptBuildCoachingSection(personId) {
     html += '</div>';
   }
 
+  // Helper: map dimension key to French label
+  const _dimLabel = key => {
+    const dim = COACHING_DIMENSIONS.find(d => d.key === key);
+    return dim ? dim.icon + ' ' + dim.label : key;
+  };
+
   // Coaching scores
   if (coaching) {
     const scores = coaching.scores || {};
     const comp = coaching.comparison || {};
 
-    html += '<div style="background:var(--s);border:1px solid var(--b);border-radius:10px;padding:16px;margin-bottom:16px;">';
-    html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">';
-    html += '<span style="font-weight:600;color:var(--t);font-size:15px;">📊 Score coaching — ' + rptWeekLabel(coaching.week_start, coaching.week_end) + '</span>';
-    html += '<span style="font-size:12px;color:var(--td);">' + (coaching.calls_analyzed || 0) + ' appels analyses</span>';
+    // ── CARD 1: Scores ──
+    html += '<div style="background:var(--s);border:1px solid var(--b);border-radius:12px;padding:20px;margin-bottom:16px;">';
+
+    // Header
+    html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">';
+    html += '<div>';
+    html += '<div style="font-weight:700;color:var(--t);font-size:16px;">📊 Score coaching</div>';
+    html += '<div style="font-size:12px;color:var(--td);margin-top:2px;">' + rptWeekLabel(coaching.week_start, coaching.week_end) + '</div>';
+    html += '</div>';
+    html += '<div style="text-align:right;">';
+    html += '<div style="font-size:11px;color:var(--td);">' + (coaching.calls_analyzed || 0) + ' appels</div>';
+    // Global score in header
+    const allScores = COACHING_DIMENSIONS.map(d => scores[d.key]).filter(v => v != null);
+    if (allScores.length) {
+      const globalScore = allScores.reduce((a,b) => a+b, 0) / allScores.length;
+      const globalDelta = comp.global != null ? comp.global : null;
+      html += '<div style="font-size:28px;font-weight:800;color:' + _coachingScoreColor(globalScore) + ';line-height:1;">' + globalScore.toFixed(1) + '<span style="font-size:14px;font-weight:400;color:var(--td);">/10</span>' + _coachingDelta(globalDelta) + '</div>';
+    }
+    html += '</div>';
     html += '</div>';
 
     // Score grid
-    html += '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:12px;">';
+    html += '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;">';
     COACHING_DIMENSIONS.forEach(dim => {
       const score = scores[dim.key] != null ? scores[dim.key] : null;
       const delta = comp[dim.key] != null ? comp[dim.key] : null;
@@ -912,85 +935,91 @@ async function rptBuildCoachingSection(personId) {
     });
     html += '</div>';
 
-    // Global score
-    const allScores = COACHING_DIMENSIONS.map(d => scores[d.key]).filter(v => v != null);
-    if (allScores.length) {
-      const globalScore = allScores.reduce((a,b) => a+b, 0) / allScores.length;
-      const globalDelta = comp.global != null ? comp.global : null;
-      html += '<div style="text-align:center;padding:8px 0;border-top:1px solid var(--b);margin-top:8px;">';
-      html += '<span style="font-size:13px;color:var(--td);">Score global</span> ';
-      html += '<span style="font-size:24px;font-weight:700;color:' + _coachingScoreColor(globalScore) + ';">' + globalScore.toFixed(1) + '/10</span>';
-      html += _coachingDelta(globalDelta);
-      html += '</div>';
-    }
+    html += '</div>';
 
-    // Strengths & improvements
+    // ── CARD 2: Forces & Améliorations ──
     const strengths = coaching.strengths || [];
     const improvements = coaching.improvements || [];
     if (strengths.length || improvements.length) {
-      html += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:12px;">';
+      html += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px;">';
       if (strengths.length) {
-        html += '<div style="background:rgba(52,211,153,0.08);border:1px solid rgba(52,211,153,0.2);border-radius:8px;padding:12px;">';
-        html += '<div style="font-weight:600;color:var(--g);margin-bottom:6px;">✅ Forces</div>';
-        strengths.forEach(s => { html += '<div style="font-size:12px;color:var(--t);padding:2px 0;">• ' + esc(s) + '</div>'; });
+        html += '<div style="background:rgba(52,211,153,0.06);border:1px solid rgba(52,211,153,0.15);border-radius:12px;padding:16px;">';
+        html += '<div style="font-weight:700;color:var(--g);margin-bottom:10px;font-size:14px;">✅ Forces</div>';
+        strengths.forEach(s => { html += '<div style="font-size:13px;color:var(--t);padding:3px 0;">• ' + esc(_dimLabel(s)) + '</div>'; });
         html += '</div>';
       }
       if (improvements.length) {
-        html += '<div style="background:rgba(251,191,36,0.08);border:1px solid rgba(251,191,36,0.2);border-radius:8px;padding:12px;">';
-        html += '<div style="font-weight:600;color:var(--y);margin-bottom:6px;">⚠️ A ameliorer</div>';
-        improvements.forEach(s => { html += '<div style="font-size:12px;color:var(--t);padding:2px 0;">• ' + esc(s) + '</div>'; });
+        html += '<div style="background:rgba(251,191,36,0.06);border:1px solid rgba(251,191,36,0.15);border-radius:12px;padding:16px;">';
+        html += '<div style="font-weight:700;color:var(--y);margin-bottom:10px;font-size:14px;">⚠️ A ameliorer</div>';
+        improvements.forEach(s => { html += '<div style="font-size:13px;color:var(--t);padding:3px 0;">• ' + esc(_dimLabel(s)) + '</div>'; });
         html += '</div>';
       }
       html += '</div>';
     }
 
-    // Top objections
+    // ── CARD 3: Objections + Call breakdown (side by side) ──
     const objections = coaching.top_objections || [];
-    if (objections.length) {
-      html += '<div style="margin-top:12px;">';
-      html += '<div style="font-weight:600;color:var(--t);margin-bottom:6px;font-size:13px;">🗣️ Objections frequentes</div>';
-      objections.forEach(o => {
-        const obj = typeof o === 'string' ? { text: o } : o;
-        html += '<div style="font-size:12px;color:var(--t);padding:2px 0;">• ' + esc(obj.text || obj) + (obj.count ? ' <span style="color:var(--td);">(' + obj.count + 'x)</span>' : '') + '</div>';
-      });
-      html += '</div>';
-    }
-
-    // Call breakdown (drone vs elite for Domingos)
     const breakdown = coaching.call_breakdown || {};
-    if (Object.keys(breakdown).length > 0) {
-      html += '<div style="margin-top:12px;display:flex;gap:12px;">';
-      Object.entries(breakdown).forEach(([key, val]) => {
-        const colors = { drone: 'var(--cy)', elite: 'var(--p)', autre: 'var(--td)' };
-        html += '<div style="background:var(--sh);border-radius:6px;padding:8px 14px;text-align:center;">';
-        html += '<div style="font-size:18px;font-weight:700;color:' + (colors[key] || 'var(--t)') + ';">' + val + '</div>';
-        html += '<div style="font-size:11px;color:var(--td);text-transform:capitalize;">' + esc(key) + '</div>';
+    const hasBreakdown = Object.keys(breakdown).length > 0;
+    if (objections.length || hasBreakdown) {
+      html += '<div style="display:grid;grid-template-columns:' + (hasBreakdown ? '1fr auto' : '1fr') + ';gap:12px;margin-bottom:16px;">';
+
+      // Objections
+      if (objections.length) {
+        html += '<div style="background:var(--s);border:1px solid var(--b);border-radius:12px;padding:16px;">';
+        html += '<div style="font-weight:700;color:var(--t);margin-bottom:10px;font-size:14px;">🗣️ Objections frequentes</div>';
+        objections.forEach(o => {
+          const obj = typeof o === 'string' ? { text: o } : o;
+          const count = obj.count || 0;
+          const maxCount = objections[0] ? (typeof objections[0] === 'object' ? objections[0].count || 1 : 1) : 1;
+          const pct = Math.round((count / maxCount) * 100);
+          html += '<div style="display:flex;align-items:center;gap:8px;padding:4px 0;">';
+          html += '<div style="flex:1;font-size:13px;color:var(--t);">' + esc(obj.text || obj) + '</div>';
+          html += '<div style="min-width:80px;display:flex;align-items:center;gap:6px;">';
+          html += '<div style="flex:1;height:4px;background:var(--sh);border-radius:2px;"><div style="height:100%;width:' + pct + '%;background:var(--a);border-radius:2px;"></div></div>';
+          html += '<span style="font-size:11px;color:var(--td);min-width:20px;text-align:right;">' + count + 'x</span>';
+          html += '</div></div>';
+        });
         html += '</div>';
-      });
+      }
+
+      // Call breakdown (Domingos)
+      if (hasBreakdown) {
+        html += '<div style="background:var(--s);border:1px solid var(--b);border-radius:12px;padding:16px;min-width:140px;">';
+        html += '<div style="font-weight:700;color:var(--t);margin-bottom:10px;font-size:14px;">📞 Repartition</div>';
+        Object.entries(breakdown).forEach(([key, val]) => {
+          const colors = { drone: 'var(--cy)', elite: 'var(--p)', autre: 'var(--td)' };
+          html += '<div style="text-align:center;padding:8px 0;">';
+          html += '<div style="font-size:22px;font-weight:700;color:' + (colors[key] || 'var(--t)') + ';">' + val + '</div>';
+          html += '<div style="font-size:11px;color:var(--td);text-transform:capitalize;">' + esc(key) + '</div>';
+          html += '</div>';
+        });
+        html += '</div>';
+      }
+
       html += '</div>';
     }
 
-    // Recommendations
+    // ── CARD 4: Recommandations ──
     const recs = coaching.recommendations || [];
     if (recs.length) {
-      html += '<div style="margin-top:12px;background:rgba(96,165,250,0.08);border:1px solid rgba(96,165,250,0.2);border-radius:8px;padding:12px;">';
-      html += '<div style="font-weight:600;color:var(--cy);margin-bottom:6px;">💡 Recommandations</div>';
+      html += '<div style="background:rgba(96,165,250,0.05);border:1px solid rgba(96,165,250,0.15);border-radius:12px;padding:16px;margin-bottom:16px;">';
+      html += '<div style="font-weight:700;color:var(--bl);margin-bottom:10px;font-size:14px;">💡 Recommandations</div>';
       recs.forEach(r => {
         const txt = typeof r === 'string' ? r : (r.text || JSON.stringify(r));
-        html += '<div style="font-size:12px;color:var(--t);padding:3px 0;line-height:1.5;">• ' + esc(txt) + '</div>';
+        html += '<div style="font-size:13px;color:var(--t);padding:4px 0;line-height:1.5;">• ' + esc(txt) + '</div>';
       });
       html += '</div>';
     }
 
     // Raw summary (collapsible)
     if (coaching.raw_summary) {
-      html += '<details style="margin-top:12px;">';
-      html += '<summary style="cursor:pointer;font-weight:600;color:var(--t);font-size:13px;">📝 Resume complet du rapport</summary>';
+      html += '<details style="margin-bottom:16px;">';
+      html += '<summary style="cursor:pointer;font-weight:600;color:var(--td);font-size:12px;padding:8px 0;">📝 Resume complet du rapport</summary>';
       html += '<div style="margin-top:8px;font-size:12px;color:var(--t);line-height:1.6;padding:12px;background:var(--sh);border-radius:8px;white-space:pre-wrap;">' + esc(coaching.raw_summary) + '</div>';
       html += '</details>';
     }
 
-    html += '</div>';
   } else if (!activeNitro) {
     html += '<div class="rpt-empty" style="margin-bottom:16px;">Aucune donnee de coaching disponible. Les rapports automatiques seront generes chaque vendredi a 15h.</div>';
   }
@@ -1063,15 +1092,23 @@ async function rptBuildCoachingSection(personId) {
     cronLogs.forEach(log => {
       const statusIcon = log.status === 'success' ? '✅' : (log.status === 'error' ? '❌' : '⏳');
       const date = log.started_at ? new Date(log.started_at).toLocaleDateString('fr-CA', { day:'numeric', month:'short', hour:'2-digit', minute:'2-digit' }) : '—';
-      const dur = log.duration_sec ? log.duration_sec + 's' : '';
-      html += '<div style="font-size:12px;color:var(--t);padding:3px 0;display:flex;gap:8px;align-items:center;">';
+      const dur = log.duration_sec != null ? log.duration_sec + 's' : '';
+      const calls = log.calls_processed != null ? log.calls_processed : null;
+      const newT = log.transcripts_new || 0;
+      html += '<div style="font-size:12px;color:var(--t);padding:4px 0;display:flex;gap:8px;align-items:center;flex-wrap:wrap;">';
       html += '<span>' + statusIcon + '</span>';
-      html += '<span style="color:var(--td);min-width:110px;">' + esc(date) + '</span>';
-      html += '<span style="text-transform:capitalize;">' + esc(log.cron_type.replace('_',' ')) + '</span>';
-      if (log.calls_processed) html += '<span style="color:var(--td);">' + log.calls_processed + ' appels</span>';
-      if (log.transcripts_new) html += '<span style="color:var(--g);">+' + log.transcripts_new + ' transcripts</span>';
+      html += '<span style="color:var(--td);min-width:120px;">' + esc(date) + '</span>';
+      html += '<span style="text-transform:capitalize;font-weight:500;">' + esc(log.cron_type.replace('_',' ')) + '</span>';
+      // Always show call count (even 0)
+      if (calls != null) html += '<span style="color:var(--td);">' + calls + ' appel' + (calls !== 1 ? 's' : '') + '</span>';
+      if (newT > 0) html += '<span style="color:var(--g);font-weight:600;">+' + newT + ' transcript' + (newT !== 1 ? 's' : '') + '</span>';
       if (dur) html += '<span style="color:var(--td);">' + dur + '</span>';
-      if (log.error_msg) html += '<span style="color:var(--r);font-size:11px;">' + esc(log.error_msg.substring(0, 60)) + '</span>';
+      // Show dates synced if present in error_msg as "dates:..." convention
+      if (log.error_msg && log.error_msg.startsWith('dates:')) {
+        html += '<span style="color:var(--cy);font-size:11px;">📅 ' + esc(log.error_msg.substring(6)) + '</span>';
+      } else if (log.error_msg) {
+        html += '<span style="color:var(--r);font-size:11px;">' + esc(log.error_msg.substring(0, 80)) + '</span>';
+      }
       html += '</div>';
     });
     html += '</div>';

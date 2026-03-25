@@ -75,6 +75,21 @@ def supabase_upsert(table: str, data: dict | list, on_conflict: str) -> requests
     return resp
 
 
+def supabase_insert(table: str, data: dict) -> requests.Response:
+    """Insert a single row into a Supabase table (no upsert)."""
+    url = f"{SUPABASE_URL}/rest/v1/{table}"
+    headers = {
+        "apikey": SUPABASE_KEY,
+        "Authorization": f"Bearer {SUPABASE_KEY}",
+        "Content-Type": "application/json",
+        "Prefer": "return=minimal",
+    }
+    resp = requests.post(url, json=data, headers=headers, timeout=30)
+    if resp.status_code >= 400:
+        log.warning("Supabase insert %s failed (%s): %s", table, resp.status_code, resp.text)
+    return resp
+
+
 # ---------------------------------------------------------------------------
 # JustCall helpers
 # ---------------------------------------------------------------------------
@@ -257,10 +272,17 @@ def push_cron_log(
     status: str,
     calls_processed: int,
     transcripts_new: int,
+    started_at: str,
     duration_sec: float,
     error_msg: str = "",
+    dates_synced: list[str] | None = None,
 ):
-    supabase_upsert(
+    finished_at = datetime.now(timezone.utc).isoformat()
+    # Encode synced dates as "dates:..." in error_msg when no actual error
+    msg = error_msg or None
+    if not error_msg and dates_synced and len(dates_synced) > 1:
+        msg = "dates:" + ", ".join(dates_synced)
+    supabase_insert(
         "cron_logs",
         {
             "person_id": PERSON_ID,
@@ -268,12 +290,60 @@ def push_cron_log(
             "status": status,
             "calls_processed": calls_processed,
             "transcripts_new": transcripts_new,
-            "duration_sec": round(duration_sec, 1),
-            "error_msg": error_msg,
-            "created_at": datetime.now(timezone.utc).isoformat(),
+            "duration_sec": round(duration_sec),
+            "error_msg": msg,
+            "started_at": started_at,
+            "finished_at": finished_at,
         },
-        on_conflict="person_id,cron_type,created_at",
     )
+
+
+# ---------------------------------------------------------------------------
+# Catch-up: determine dates to sync
+# ---------------------------------------------------------------------------
+
+
+def get_last_successful_sync_date() -> str | None:
+    """Query cron_logs for the last successful daily_sync date for this person."""
+    url = (
+        f"{SUPABASE_URL}/rest/v1/cron_logs"
+        f"?person_id=eq.{PERSON_ID}&cron_type=eq.daily_sync&status=eq.success"
+        f"&order=started_at.desc&limit=1"
+    )
+    headers = {
+        "apikey": SUPABASE_KEY,
+        "Authorization": f"Bearer {SUPABASE_KEY}",
+    }
+    try:
+        resp = requests.get(url, headers=headers, timeout=15)
+        rows = resp.json()
+        if rows and rows[0].get("started_at"):
+            # Extract date from the started_at timestamp
+            return rows[0]["started_at"][:10]
+    except Exception as exc:
+        log.warning("Could not fetch last sync date: %s", exc)
+    return None
+
+
+def compute_dates_to_sync(today_str: str) -> list[str]:
+    """Return list of dates to sync, catching up any missed days."""
+    last_sync = get_last_successful_sync_date()
+    if last_sync:
+        from datetime import timedelta as td
+        last_dt = datetime.strptime(last_sync, "%Y-%m-%d")
+        today_dt = datetime.strptime(today_str, "%Y-%m-%d")
+        start_dt = last_dt + td(days=1)
+        dates = []
+        d = start_dt
+        while d <= today_dt:
+            dates.append(d.strftime("%Y-%m-%d"))
+            d += td(days=1)
+        # Cap at 14 days to avoid runaway backfills
+        dates = dates[-14:]
+    else:
+        dates = [today_str]
+
+    return dates
 
 
 # ---------------------------------------------------------------------------
@@ -283,6 +353,7 @@ def push_cron_log(
 
 def main():
     t0 = time.time()
+    started_at = datetime.now(timezone.utc).isoformat()
     today_str = datetime.now().strftime("%Y-%m-%d")
     log.info("===== Heidys daily sync started — %s =====", today_str)
 
@@ -292,15 +363,25 @@ def main():
     gpu_active = False
 
     try:
-        # 1. Fetch calls
-        raw_calls = fetch_justcall_calls(today_str)
+        # 0. Determine dates to sync (catch-up if missed days)
+        dates_to_sync = compute_dates_to_sync(today_str)
+        if len(dates_to_sync) > 1:
+            log.info("CATCH-UP: %d days to sync — %s", len(dates_to_sync), ", ".join(dates_to_sync))
+
+        # 1. Fetch calls for all dates
+        raw_calls = []
+        for sync_date in dates_to_sync:
+            day_calls = fetch_justcall_calls(sync_date)
+            log.info("  %s: %d raw calls", sync_date, len(day_calls))
+            raw_calls.extend(day_calls)
+
         calls = filter_calls(raw_calls)
         calls_total = len(calls)
 
         if not calls:
             log.info("No qualifying calls today. Nothing to do.")
             push_coaching_data(today_str, len(raw_calls), 0, 0, 0.0)
-            push_cron_log("ok", 0, 0, time.time() - t0)
+            push_cron_log("success", 0, 0, started_at, time.time() - t0, dates_synced=dates_to_sync)
             update_nitro_status("idle", 0, 0, False)
             return
 
@@ -344,13 +425,13 @@ def main():
 
         elapsed = time.time() - t0
         log.info("===== Sync complete: %d processed, %d new transcripts (%.1fs) =====", calls_processed, transcripts_new, elapsed)
-        push_cron_log("ok", calls_processed, transcripts_new, elapsed)
+        push_cron_log("success", calls_processed, transcripts_new, started_at, elapsed, dates_synced=dates_to_sync)
 
     except Exception as exc:
         error_msg = str(exc)[:500]
         log.error("Fatal error: %s", exc, exc_info=True)
         elapsed = time.time() - t0
-        push_cron_log("error", calls_processed, transcripts_new, elapsed, error_msg=error_msg)
+        push_cron_log("error", calls_processed, transcripts_new, started_at, elapsed, error_msg=error_msg)
         update_nitro_status("error", calls_processed, 0, False)
         sys.exit(1)
 
