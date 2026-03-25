@@ -1111,12 +1111,14 @@ async function rptBuildCoachingSection(personId) {
   let coachingData = [];
   let nitroArr = [];
   let cronLogs = [];
+  let allCalls = [];
 
   try {
-    [allReports, coachingData, nitroArr] = await Promise.all([
+    [allReports, coachingData, nitroArr, allCalls] = await Promise.all([
       dbGetCoachingReports(personId, 52),
       dbGetCoachingData(personId, 365),
       dbGetNitroStatus(personId),
+      dbGetCalls(personId),
     ]);
     if (authIsAdmin()) cronLogs = await dbGetCronLogs(personId, 5);
   } catch(e) {
@@ -1152,32 +1154,31 @@ async function rptBuildCoachingSection(personId) {
     html += '</div>';
   }
 
-  // ── Stats Summary Bar ──
-  const totalCalls = coachingData.reduce((s, r) => s + (r.calls_transcribed || 0), 0);
-  const weeksAnalyzed = allReports.length;
-  const avgPerWeek = weeksAnalyzed ? Math.round(totalCalls / weeksAnalyzed) : 0;
-  const lastSync = coachingData.length ? coachingData[0].sync_date : null;
-  const lastSyncLabel = lastSync ? new Date(lastSync + 'T12:00:00').toLocaleDateString('fr-CA', { day:'numeric', month:'short' }) : '—';
+  // ── Stats Summary Bar (from real calls data) ──
+  const totalCalls = allCalls.length;
+  const now = new Date();
+  const thisWeekStart = new Date(now); thisWeekStart.setDate(now.getDate() - now.getDay() + 1); thisWeekStart.setHours(0,0,0,0);
+  const callsThisWeek = allCalls.filter(c => new Date(c.call_time) >= thisWeekStart).length;
+  const lastCallDate = allCalls.length ? allCalls[0].call_time : null;
+  const lastCallLabel = lastCallDate ? new Date(lastCallDate).toLocaleDateString('fr-CA', { day:'numeric', month:'short' }) : '—';
 
-  // Trend: compare last 2 coaching_data entries
+  // Trend: this week vs last week
+  const lastWeekStart = new Date(thisWeekStart); lastWeekStart.setDate(lastWeekStart.getDate() - 7);
+  const callsLastWeek = allCalls.filter(c => { const d = new Date(c.call_time); return d >= lastWeekStart && d < thisWeekStart; }).length;
   let trendLabel = '';
-  if (coachingData.length >= 2) {
-    const recent = coachingData[0].calls_transcribed || 0;
-    const prev = coachingData[1].calls_transcribed || 0;
-    if (prev > 0) {
-      const pctChange = Math.round(((recent - prev) / prev) * 100);
-      if (pctChange > 0) trendLabel = '<span style="color:var(--g);">↑ +' + pctChange + '%</span>';
-      else if (pctChange < 0) trendLabel = '<span style="color:var(--r);">↓ ' + pctChange + '%</span>';
-      else trendLabel = '<span style="color:var(--td);">→ stable</span>';
-    }
+  if (callsLastWeek > 0) {
+    const pctChange = Math.round(((callsThisWeek - callsLastWeek) / callsLastWeek) * 100);
+    if (pctChange > 0) trendLabel = '<span style="color:var(--g);">↑ +' + pctChange + '%</span>';
+    else if (pctChange < 0) trendLabel = '<span style="color:var(--r);">↓ ' + pctChange + '%</span>';
+    else trendLabel = '<span style="color:var(--td);">→ stable</span>';
   }
 
   html += '<div style="display:flex;gap:1px;margin-bottom:16px;border-radius:12px;overflow:hidden;">';
   const statBox = (icon, val, label) => '<div style="flex:1;background:var(--s);padding:14px 12px;text-align:center;"><div style="font-size:20px;font-weight:700;color:var(--t);">' + icon + ' ' + val + '</div><div style="font-size:11px;color:var(--td);margin-top:2px;">' + label + '</div></div>';
   html += statBox('📞', totalCalls, 'Appels transcrits');
-  html += statBox('📊', avgPerWeek + '/sem', weeksAnalyzed + ' semaines');
-  html += statBox('🔄', lastSyncLabel, 'Dernier sync');
-  if (trendLabel) html += '<div style="flex:1;background:var(--s);padding:14px 12px;text-align:center;"><div style="font-size:18px;font-weight:700;">' + trendLabel + '</div><div style="font-size:11px;color:var(--td);margin-top:2px;">vs semaine prec.</div></div>';
+  html += statBox('📊', callsThisWeek, 'Cette semaine');
+  html += statBox('🔄', lastCallLabel, 'Dernier appel');
+  if (trendLabel) html += '<div style="flex:1;background:var(--s);padding:14px 12px;text-align:center;"><div style="font-size:18px;font-weight:700;">' + trendLabel + '</div><div style="font-size:11px;color:var(--td);margin-top:2px;">vs sem. prec.</div></div>';
   html += '</div>';
 
   // ── Sync Health Warning ──
@@ -1213,19 +1214,21 @@ async function rptBuildCoachingSection(personId) {
     html += '</div></div>';
   }
 
-  // ── Period Filter Pills ──
+  // ── Period Filter Pills (with real call counts) ──
+  const _daysAgo = (d) => { const dt = new Date(); dt.setDate(dt.getDate() - d); dt.setHours(0,0,0,0); return dt; };
   const periods = [
-    { key: '1sem', label: 'Cette semaine', weeks: 1 },
-    { key: '2sem', label: '2 semaines', weeks: 2 },
-    { key: '1mois', label: '1 mois', weeks: 4 },
-    { key: '3mois', label: '3 mois', weeks: 13 },
-    { key: 'tout', label: 'Tout', weeks: 999 },
+    { key: '1sem', label: 'Cette semaine', weeks: 1, since: thisWeekStart },
+    { key: '2sem', label: '2 semaines', weeks: 2, since: _daysAgo(14) },
+    { key: '1mois', label: '1 mois', weeks: 4, since: _daysAgo(30) },
+    { key: '3mois', label: '3 mois', weeks: 13, since: _daysAgo(90) },
+    { key: 'tout', label: 'Tout', weeks: 999, since: null },
   ];
 
   html += '<div style="display:flex;gap:6px;margin-bottom:16px;flex-wrap:wrap;">';
   periods.forEach(p => {
     const active = p.key === _coachingPeriod;
-    html += '<button onclick="_coachingPeriod=\'' + p.key + '\';render();" style="padding:6px 14px;border-radius:20px;border:1px solid ' + (active ? 'var(--a)' : 'var(--b)') + ';background:' + (active ? 'var(--a)' : 'var(--s)') + ';color:' + (active ? '#fff' : 'var(--td)') + ';font-size:12px;font-weight:' + (active ? '600' : '400') + ';cursor:pointer;">' + p.label + '</button>';
+    const count = p.since ? allCalls.filter(c => new Date(c.call_time) >= p.since).length : allCalls.length;
+    html += '<button onclick="_coachingPeriod=\'' + p.key + '\';render();" style="padding:6px 14px;border-radius:20px;border:1px solid ' + (active ? 'var(--a)' : 'var(--b)') + ';background:' + (active ? 'var(--a)' : 'var(--s)') + ';color:' + (active ? '#fff' : 'var(--td)') + ';font-size:12px;font-weight:' + (active ? '600' : '400') + ';cursor:pointer;">' + p.label + ' <span style="opacity:0.7;">(' + count + ')</span></button>';
   });
   html += '</div>';
 

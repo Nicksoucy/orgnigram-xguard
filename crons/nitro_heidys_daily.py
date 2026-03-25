@@ -299,6 +299,36 @@ def save_transcript(call: dict, transcript: str, word_count: int) -> str:
 
 
 # ---------------------------------------------------------------------------
+# Push individual call metadata to Supabase `calls` table
+# ---------------------------------------------------------------------------
+
+
+def push_call(call: dict, word_count: int):
+    """Push a single call's metadata to the calls table (non-fatal)."""
+    call_id = str(call.get("id", call.get("call_id", "")))
+    call_time = call.get("call_time", call.get("datetime", ""))
+    try:
+        supabase_upsert(
+            "calls",
+            {
+                "id": call_id,
+                "person_id": PERSON_ID,
+                "call_time": call_time,
+                "duration_s": int(call.get("duration", 0) or 0),
+                "contact_name": (call.get("contact_name", "") or "")[:200],
+                "contact_number": (call.get("contact_number", "") or "")[:50],
+                "word_count": word_count,
+                "language": WHISPER_LANGUAGE,
+                "recording_url": (call.get("recording_url", "") or "")[:500],
+                "source": "justcall",
+            },
+            on_conflict="id",
+        )
+    except RuntimeError:
+        log.warning("Failed to push call %s to calls table (non-fatal)", call_id)
+
+
+# ---------------------------------------------------------------------------
 # Supabase status updates
 # ---------------------------------------------------------------------------
 
@@ -499,6 +529,7 @@ def main():
                 recording_url = call.get("recording_url", "")
                 transcript, word_count = transcribe_recording(model, recording_url)
                 save_transcript(call, transcript, word_count)
+                push_call(call, word_count)
                 transcripts_new += 1
                 calls_success += 1
                 new_durations.append(duration)
