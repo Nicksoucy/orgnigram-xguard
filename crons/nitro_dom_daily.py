@@ -94,6 +94,21 @@ def supabase_upsert(table, data, on_conflict="person_id"):
     return resp
 
 
+def supabase_insert(table, data):
+    """Insert a single row (no upsert)."""
+    url = f"{SUPABASE_URL}/rest/v1/{table}"
+    headers = {
+        "apikey": SUPABASE_KEY,
+        "Authorization": f"Bearer {SUPABASE_KEY}",
+        "Content-Type": "application/json",
+        "Prefer": "return=minimal",
+    }
+    resp = requests.post(url, json=data, headers=headers)
+    if resp.status_code not in (200, 201, 204):
+        log.error("Supabase insert %s failed (%s): %s", table, resp.status_code, resp.text)
+    return resp
+
+
 def update_nitro_status(**kwargs):
     """Push a status row to nitro_status."""
     payload = {"person_id": PERSON_ID, "task_type": "daily_sync", **kwargs}
@@ -119,11 +134,10 @@ def ghl_post(endpoint, payload=None):
     return resp.json()
 
 
-def fetch_todays_conversations():
-    """Search GHL conversations for today with cursor pagination."""
-    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
-    start = f"{today}T00:00:00Z"
-    end = f"{today}T23:59:59Z"
+def fetch_conversations_for_date(date_str: str):
+    """Search GHL conversations for a single date (YYYY-MM-DD) with cursor pagination."""
+    start = f"{date_str}T00:00:00Z"
+    end = f"{date_str}T23:59:59Z"
 
     conversations = []
     cursor = None
@@ -141,13 +155,52 @@ def fetch_todays_conversations():
         data = ghl_post("/conversations/search", payload)
         convos = data.get("conversations", [])
         conversations.extend(convos)
-        log.info("Fetched %d conversations (total so far: %d)", len(convos), len(conversations))
+        log.info("  %s: fetched %d conversations (total so far: %d)", date_str, len(convos), len(conversations))
 
         cursor = data.get("nextCursor") or data.get("cursor")
         if not cursor or not convos:
             break
 
     return conversations
+
+
+def get_last_successful_sync_date() -> str | None:
+    """Query cron_logs for the last successful daily_sync for Domingos."""
+    url = (
+        f"{SUPABASE_URL}/rest/v1/cron_logs"
+        f"?person_id=eq.{PERSON_ID}&cron_type=eq.daily_sync&status=eq.success"
+        f"&order=started_at.desc&limit=1"
+    )
+    headers = {
+        "apikey": SUPABASE_KEY,
+        "Authorization": f"Bearer {SUPABASE_KEY}",
+    }
+    try:
+        resp = requests.get(url, headers=headers, timeout=15)
+        rows = resp.json()
+        if rows and rows[0].get("started_at"):
+            return rows[0]["started_at"][:10]
+    except Exception as exc:
+        log.warning("Could not fetch last sync date: %s", exc)
+    return None
+
+
+def compute_dates_to_sync(today_str: str) -> list[str]:
+    """Return list of dates to sync, catching up any missed days."""
+    last_sync = get_last_successful_sync_date()
+    if last_sync:
+        last_dt = datetime.strptime(last_sync, "%Y-%m-%d")
+        today_dt = datetime.strptime(today_str, "%Y-%m-%d")
+        start_dt = last_dt + timedelta(days=1)
+        dates = []
+        d = start_dt
+        while d <= today_dt:
+            dates.append(d.strftime("%Y-%m-%d"))
+            d += timedelta(days=1)
+        dates = dates[-14:]  # cap at 14 days
+    else:
+        dates = [today_str]
+    return dates
 
 
 def fetch_call_messages(conversation_id):
@@ -282,26 +335,37 @@ def save_transcript(msg, transcript_text, word_count, language, classification):
 # ---------------------------------------------------------------------------
 def main():
     t_start = time.time()
+    started_at = datetime.now(timezone.utc).isoformat()
     today_str = datetime.now(timezone.utc).strftime("%Y-%m-%d")
     log.info("=== nitro_dom_daily — sync for %s ===", today_str)
 
     update_nitro_status(status="running", gpu_active=False, last_file="")
 
-    # ------ Step 1: Pull conversations from GHL ------
+    # ------ Step 0: Determine dates to sync (catch-up if missed days) ------
+    dates_to_sync = compute_dates_to_sync(today_str)
+    if len(dates_to_sync) > 1:
+        log.info("CATCH-UP: %d days to sync — %s", len(dates_to_sync), ", ".join(dates_to_sync))
+
+    # ------ Step 1: Pull conversations from GHL for all dates ------
     try:
-        conversations = fetch_todays_conversations()
+        conversations = []
+        for sync_date in dates_to_sync:
+            day_convos = fetch_conversations_for_date(sync_date)
+            conversations.extend(day_convos)
     except Exception as exc:
         log.error("Failed to fetch conversations: %s", exc)
         update_nitro_status(status="error")
-        supabase_upsert("cron_logs", {
+        supabase_insert("cron_logs", {
             "person_id": PERSON_ID,
             "cron_type": "daily_sync",
             "status": "error",
             "calls_processed": 0,
             "transcripts_new": 0,
             "duration_sec": int(time.time() - t_start),
-            "error_msg": str(exc),
-        }, on_conflict="person_id,cron_type")
+            "error_msg": str(exc)[:500],
+            "started_at": started_at,
+            "finished_at": datetime.now(timezone.utc).isoformat(),
+        })
         return
 
     # ------ Step 2: Collect qualifying call messages ------
@@ -411,7 +475,7 @@ def main():
     )
 
     elapsed = int(time.time() - t_start)
-    final_status = "error" if errors else "done"
+    final_status = "error" if errors else "success"
 
     update_nitro_status(
         status=final_status,
@@ -422,7 +486,7 @@ def main():
         last_file="",
     )
 
-    supabase_upsert(
+    supabase_insert(
         "cron_logs",
         {
             "person_id": PERSON_ID,
@@ -431,9 +495,10 @@ def main():
             "calls_processed": len(all_calls),
             "transcripts_new": calls_new,
             "duration_sec": elapsed,
-            "error_msg": "; ".join(errors) if errors else None,
+            "error_msg": ("; ".join(errors))[:500] if errors else None,
+            "started_at": started_at,
+            "finished_at": datetime.now(timezone.utc).isoformat(),
         },
-        on_conflict="person_id,cron_type",
     )
 
     log.info(
