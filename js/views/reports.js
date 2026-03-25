@@ -1467,25 +1467,55 @@ async function rptBuildCoachingSection(personId) {
     html += '</tr></table></div></div>';
   }
 
-  // ── Cron logs (admin only) ──
+  // ── Cron logs (admin only) — with progress bars ──
   if (authIsAdmin() && cronLogs.length) {
     html += '<div style="background:var(--s);border:1px solid var(--b);border-radius:10px;padding:16px;margin-bottom:16px;">';
-    html += '<div style="font-weight:600;color:var(--t);margin-bottom:8px;font-size:13px;">⚙️ Crons <span style="font-size:11px;color:var(--td);">(admin)</span></div>';
+    html += '<div style="font-weight:600;color:var(--t);margin-bottom:10px;font-size:13px;">⚙️ Crons <span style="font-size:11px;color:var(--td);">(admin)</span></div>';
     cronLogs.forEach(log => {
-      const statusIcon = log.status === 'success' ? '✅' : log.status === 'error' ? '❌' : log.status === 'partial' ? '⚠️' : '⏳';
+      const isSuccess = log.status === 'success';
+      const isError = log.status === 'error';
+      const isPartial = log.status === 'partial';
+      const isRunning = log.status === 'running';
+      const statusIcon = isSuccess ? '✅' : isError ? '❌' : isPartial ? '⚠️' : '⏳';
       const date = log.started_at ? new Date(log.started_at).toLocaleDateString('fr-CA', { day:'numeric', month:'short', hour:'2-digit', minute:'2-digit' }) : '—';
       const dur = log.duration_sec != null ? log.duration_sec + 's' : '';
-      const calls = log.calls_processed != null ? log.calls_processed : null;
+      const calls = log.calls_processed != null ? log.calls_processed : 0;
       const newT = log.transcripts_new || 0;
-      html += '<div style="font-size:12px;color:var(--t);padding:3px 0;display:flex;gap:8px;align-items:center;flex-wrap:wrap;">';
-      html += statusIcon + ' ';
+
+      // Progress calculation: success=100%, error/partial based on calls vs expected
+      let pct = 100;
+      let barColor = 'var(--g)';
+      if (isError) { pct = calls > 0 ? Math.min(90, Math.round(calls / Math.max(calls + 5, 10) * 100)) : 0; barColor = 'var(--r)'; }
+      else if (isPartial) { pct = 85; barColor = 'var(--y)'; }
+      else if (isRunning) { pct = 50; barColor = 'var(--cy)'; }
+
+      html += '<div style="padding:8px 0;border-bottom:1px solid var(--sh);">';
+
+      // Row 1: status, date, type, stats
+      html += '<div style="font-size:12px;color:var(--t);display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:6px;">';
+      html += '<span>' + statusIcon + '</span>';
       html += '<span style="color:var(--td);min-width:110px;">' + esc(date) + '</span>';
-      html += '<span style="text-transform:capitalize;">' + esc(log.cron_type.replace('_',' ')) + '</span>';
-      if (calls != null) html += '<span style="color:var(--td);">' + calls + ' appels</span>';
-      if (newT > 0) html += '<span style="color:var(--g);font-weight:600;">+' + newT + '</span>';
+      html += '<span style="text-transform:capitalize;font-weight:500;">' + esc(log.cron_type.replace('_',' ')) + '</span>';
+      if (calls > 0) html += '<span style="color:var(--td);">' + calls + ' appels</span>';
+      if (newT > 0) html += '<span style="color:var(--g);font-weight:600;">+' + newT + ' transcripts</span>';
       if (dur) html += '<span style="color:var(--td);">' + dur + '</span>';
-      if (log.error_msg && log.error_msg.startsWith('dates:')) html += '<span style="color:var(--cy);font-size:11px;">📅 ' + esc(log.error_msg.substring(6)) + '</span>';
-      else if (log.error_msg) html += '<span style="color:var(--r);font-size:11px;">' + esc(log.error_msg.substring(0, 80)) + '</span>';
+      html += '</div>';
+
+      // Row 2: progress bar
+      html += '<div style="display:flex;align-items:center;gap:8px;">';
+      html += '<div style="flex:1;height:6px;background:var(--sh);border-radius:3px;overflow:hidden;">';
+      html += '<div style="height:100%;width:' + pct + '%;background:' + barColor + ';border-radius:3px;transition:width 0.3s;"></div>';
+      html += '</div>';
+      html += '<span style="font-size:10px;color:' + barColor + ';font-weight:600;min-width:32px;text-align:right;">' + pct + '%</span>';
+      html += '</div>';
+
+      // Row 3: error message if any
+      if (log.error_msg && log.error_msg.startsWith('dates:')) {
+        html += '<div style="font-size:10px;color:var(--cy);margin-top:4px;">📅 ' + esc(log.error_msg.substring(6)) + '</div>';
+      } else if (log.error_msg) {
+        html += '<div style="font-size:10px;color:var(--r);margin-top:4px;">❌ ' + esc(log.error_msg.substring(0, 120)) + '</div>';
+      }
+
       html += '</div>';
     });
     html += '</div>';
