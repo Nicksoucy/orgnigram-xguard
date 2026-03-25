@@ -376,6 +376,28 @@ def push_coaching_data(
     )
 
 
+def push_call_activity(
+    activity_date: str, total_dials: int, answered: int, not_answered: int,
+    short_calls: int, qualified_calls: int, transcribed: int, avg_duration: float
+):
+    """Push daily activity funnel to Supabase. RAISES on failure."""
+    supabase_upsert(
+        "call_activity",
+        {
+            "person_id": PERSON_ID,
+            "activity_date": activity_date,
+            "total_dials": total_dials,
+            "answered": answered,
+            "not_answered": not_answered,
+            "short_calls": short_calls,
+            "qualified_calls": qualified_calls,
+            "transcribed": transcribed,
+            "avg_duration_sec": round(avg_duration, 1),
+        },
+        on_conflict="person_id,activity_date",
+    )
+
+
 def push_cron_log(
     status: str,
     calls_processed: int,
@@ -484,6 +506,33 @@ def main():
             day_calls = fetch_justcall_calls(sync_date)
             log.info("  %s: %d raw calls", sync_date, len(day_calls))
             raw_calls.extend(day_calls)
+
+        # 2b. Compute funnel stats from ALL calls (before filtering)
+        funnel_total = len(raw_calls)
+        funnel_answered = sum(1 for c in raw_calls if int(c.get("duration", 0) or 0) > 0)
+        funnel_not_answered = funnel_total - funnel_answered
+        funnel_short = sum(1 for c in raw_calls if 0 < int(c.get("duration", 0) or 0) < MIN_DURATION_SEC)
+        funnel_qualified = sum(1 for c in raw_calls if int(c.get("duration", 0) or 0) >= MIN_DURATION_SEC)
+        funnel_durations = [int(c.get("duration", 0) or 0) for c in raw_calls if int(c.get("duration", 0) or 0) >= MIN_DURATION_SEC]
+        funnel_avg_dur = sum(funnel_durations) / len(funnel_durations) if funnel_durations else 0
+        log.info("Funnel: %d dials, %d answered, %d short, %d qualified", funnel_total, funnel_answered, funnel_short, funnel_qualified)
+
+        # Push funnel per date
+        for sync_date in dates_to_sync:
+            day_raw = [c for c in raw_calls if (c.get("call_time") or c.get("datetime") or "")[:10] == sync_date
+                       or (c.get("time_utc") or c.get("time") or "")[:10] == sync_date]
+            if not day_raw:
+                continue
+            d_total = len(day_raw)
+            d_answered = sum(1 for c in day_raw if int(c.get("duration", 0) or 0) > 0)
+            d_short = sum(1 for c in day_raw if 0 < int(c.get("duration", 0) or 0) < MIN_DURATION_SEC)
+            d_qualified = sum(1 for c in day_raw if int(c.get("duration", 0) or 0) >= MIN_DURATION_SEC)
+            d_durs = [int(c.get("duration", 0) or 0) for c in day_raw if int(c.get("duration", 0) or 0) >= MIN_DURATION_SEC]
+            d_avg = sum(d_durs) / len(d_durs) if d_durs else 0
+            try:
+                push_call_activity(sync_date, d_total, d_answered, d_total - d_answered, d_short, d_qualified, 0, d_avg)
+            except RuntimeError:
+                log.warning("Failed to push call_activity for %s (non-fatal)", sync_date)
 
         calls = filter_calls(raw_calls)
         calls_total = len(calls)
