@@ -950,6 +950,148 @@ function _coachingAggregate(reports) {
 }
 
 // ── Main coaching section builder ──
+// ── Radar chart renderer (uses Chart.js) ──
+let _radarChartInstance = null;
+function _renderRadarChart(canvasId, scores, prevScores) {
+  setTimeout(() => {
+    const canvas = document.getElementById(canvasId);
+    if (!canvas || typeof Chart === 'undefined') return;
+    if (_radarChartInstance) { _radarChartInstance.destroy(); _radarChartInstance = null; }
+    const labels = COACHING_DIMENSIONS.map(d => d.label);
+    const data = COACHING_DIMENSIONS.map(d => scores[d.key] != null ? scores[d.key] : 0);
+    const prev = prevScores ? COACHING_DIMENSIONS.map(d => prevScores[d.key] != null ? prevScores[d.key] : 0) : null;
+
+    const datasets = [{
+      label: 'Score actuel',
+      data: data,
+      backgroundColor: 'rgba(251,146,60,0.15)',
+      borderColor: 'rgba(251,146,60,0.8)',
+      borderWidth: 2,
+      pointBackgroundColor: 'rgba(251,146,60,1)',
+      pointRadius: 4,
+    }];
+    if (prev) {
+      datasets.push({
+        label: 'Semaine prec.',
+        data: prev,
+        backgroundColor: 'rgba(148,163,184,0.08)',
+        borderColor: 'rgba(148,163,184,0.4)',
+        borderWidth: 1,
+        borderDash: [4, 4],
+        pointRadius: 2,
+      });
+    }
+    // Benchmark line at 7
+    datasets.push({
+      label: 'Objectif (7)',
+      data: Array(8).fill(7),
+      backgroundColor: 'transparent',
+      borderColor: 'rgba(52,211,153,0.25)',
+      borderWidth: 1,
+      borderDash: [2, 2],
+      pointRadius: 0,
+    });
+
+    _radarChartInstance = new Chart(canvas, {
+      type: 'radar',
+      data: { labels, datasets },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        scales: {
+          r: {
+            min: 0, max: 10,
+            ticks: { stepSize: 2, font: { size: 10 }, color: '#6b7280', backdropColor: 'transparent' },
+            grid: { color: 'rgba(148,163,184,0.15)' },
+            pointLabels: { font: { size: 11, weight: '500' }, color: '#94a3b8' },
+            angleLines: { color: 'rgba(148,163,184,0.1)' },
+          },
+        },
+        plugins: {
+          legend: { display: true, position: 'bottom', labels: { font: { size: 10 }, color: '#94a3b8', boxWidth: 12 } },
+        },
+      },
+    });
+  }, 50);
+}
+
+// ── Auto-coaching insights generator ──
+function _generateCoachingInsights(allReports) {
+  const insights = [];
+  if (allReports.length < 1) return insights;
+
+  const latest = allReports[0];
+  const latestScores = latest.scores || {};
+  const comp = latest.comparison || {};
+
+  // 1. Biggest drop this week
+  let biggestDrop = null;
+  COACHING_DIMENSIONS.forEach(d => {
+    const delta = comp[d.key];
+    if (delta != null && delta < -0.5 && (!biggestDrop || delta < biggestDrop.delta)) {
+      biggestDrop = { dim: d, delta, score: latestScores[d.key] };
+    }
+  });
+  if (biggestDrop) {
+    insights.push({
+      type: 'drop',
+      icon: '📉',
+      title: biggestDrop.dim.icon + ' ' + biggestDrop.dim.label + ': ' + biggestDrop.delta.toFixed(1) + ' cette semaine',
+      detail: 'Score actuel: ' + (biggestDrop.score != null ? biggestDrop.score.toFixed(1) : '?') + '/10. Focus sur cette dimension cette semaine.',
+    });
+  }
+
+  // 2. Consistent weakness (below 5.0 for 3+ weeks)
+  if (allReports.length >= 3) {
+    COACHING_DIMENSIONS.forEach(d => {
+      const last3 = allReports.slice(0, 3).map(r => (r.scores || {})[d.key]).filter(v => v != null);
+      if (last3.length === 3 && last3.every(v => v < 5.0)) {
+        const avg = (last3.reduce((a,b) => a+b, 0) / 3).toFixed(1);
+        insights.push({
+          type: 'weakness',
+          icon: '🔴',
+          title: d.icon + ' ' + d.label + ' en dessous de 5.0 depuis 3 semaines',
+          detail: 'Moyenne: ' + avg + '/10. Priorite de coaching cette semaine.',
+        });
+      }
+    });
+  }
+
+  // 3. Biggest improvement
+  let biggestGain = null;
+  COACHING_DIMENSIONS.forEach(d => {
+    const delta = comp[d.key];
+    if (delta != null && delta > 0.5 && (!biggestGain || delta > biggestGain.delta)) {
+      biggestGain = { dim: d, delta, score: latestScores[d.key] };
+    }
+  });
+  if (biggestGain) {
+    insights.push({
+      type: 'gain',
+      icon: '🟢',
+      title: biggestGain.dim.icon + ' ' + biggestGain.dim.label + ': +' + biggestGain.delta.toFixed(1) + ' cette semaine',
+      detail: 'Bon progres! Score actuel: ' + (biggestGain.score != null ? biggestGain.score.toFixed(1) : '?') + '/10.',
+    });
+  }
+
+  // 4. Improving streak (3+ weeks up)
+  if (allReports.length >= 3) {
+    COACHING_DIMENSIONS.forEach(d => {
+      const last3 = allReports.slice(0, 3).map(r => (r.scores || {})[d.key]).filter(v => v != null);
+      if (last3.length === 3 && last3[0] > last3[1] && last3[1] > last3[2]) {
+        insights.push({
+          type: 'streak',
+          icon: '🔥',
+          title: d.icon + ' ' + d.label + ' en progression depuis 3 semaines',
+          detail: last3[2].toFixed(1) + ' → ' + last3[1].toFixed(1) + ' → ' + last3[0].toFixed(1) + '. Continuer!',
+        });
+      }
+    });
+  }
+
+  return insights.slice(0, 4); // max 4 insights
+}
+
 async function rptBuildCoachingSection(personId) {
   if (!COACHING_PEOPLE.includes(personId)) return '';
 
@@ -1065,6 +1207,23 @@ async function rptBuildCoachingSection(personId) {
   const filteredReports = allReports.slice(0, periodConfig.weeks);
   const coaching = filteredReports.length ? _coachingAggregate(filteredReports) : null;
 
+  // ── ROW 2: Auto-Coaching Insights ──
+  const insights = _generateCoachingInsights(allReports);
+  if (insights.length) {
+    html += '<div style="background:var(--s);border:1px solid var(--b);border-radius:12px;padding:16px;margin-bottom:16px;">';
+    html += '<div style="font-weight:700;color:var(--t);margin-bottom:10px;font-size:14px;">🎯 Cette semaine en coaching</div>';
+    html += '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px;">';
+    insights.forEach(ins => {
+      const bgMap = { drop: 'rgba(239,68,68,0.06)', weakness: 'rgba(239,68,68,0.06)', gain: 'rgba(52,211,153,0.06)', streak: 'rgba(251,146,60,0.06)' };
+      const borderMap = { drop: 'rgba(239,68,68,0.15)', weakness: 'rgba(239,68,68,0.15)', gain: 'rgba(52,211,153,0.15)', streak: 'rgba(251,146,60,0.15)' };
+      html += '<div style="background:' + (bgMap[ins.type] || 'var(--sh)') + ';border:1px solid ' + (borderMap[ins.type] || 'var(--b)') + ';border-radius:10px;padding:12px;">';
+      html += '<div style="font-size:13px;font-weight:600;color:var(--t);margin-bottom:4px;">' + ins.icon + ' ' + esc(ins.title) + '</div>';
+      html += '<div style="font-size:11px;color:var(--td);line-height:1.4;">' + esc(ins.detail) + '</div>';
+      html += '</div>';
+    });
+    html += '</div></div>';
+  }
+
   if (coaching) {
     const scores = coaching.scores || {};
     const comp = coaching.comparison || {};
@@ -1076,20 +1235,21 @@ async function rptBuildCoachingSection(personId) {
       .sort((a, b) => a.score - b.score);
     const weakest3 = ranked.slice(0, 3).map(d => d.key);
 
-    // ── CARD: Scores ──
-    const periodLabel = filteredReports.length === 1
-      ? rptWeekLabel(coaching.week_start, coaching.week_end)
-      : rptWeekLabel(coaching.week_start, coaching.week_end);
-    html += '<div style="background:var(--s);border:1px solid var(--b);border-radius:12px;padding:20px;margin-bottom:16px;">';
+    // ── ROW 3: Radar Chart + Score Cards (side by side) ──
+    const periodLabel = rptWeekLabel(coaching.week_start, coaching.week_end);
+    html += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px;">';
 
-    // Header with global score
-    html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">';
-    html += '<div>';
-    html += '<div style="font-weight:700;color:var(--t);font-size:16px;">📊 Score coaching</div>';
-    html += '<div style="font-size:12px;color:var(--td);margin-top:2px;">' + periodLabel + ' &middot; ' + (coaching.calls_analyzed || 0) + ' appels</div>';
+    // LEFT: Radar Chart
+    const radarId = 'radar-' + personId + '-' + Date.now();
+    html += '<div style="background:var(--s);border:1px solid var(--b);border-radius:12px;padding:16px;">';
+    html += '<div style="font-weight:700;color:var(--t);margin-bottom:8px;font-size:14px;">🕸️ Profil de competences</div>';
+    html += '<div style="height:280px;position:relative;"><canvas id="' + radarId + '"></canvas></div>';
     html += '</div>';
 
-    // Global score — circular ring
+    // RIGHT: Global score + score cards
+    html += '<div>';
+    // Global score header
+    html += '<div style="background:var(--s);border:1px solid var(--b);border-radius:12px;padding:16px;margin-bottom:12px;display:flex;align-items:center;gap:16px;">';
     const allScoreVals = COACHING_DIMENSIONS.map(d => scores[d.key]).filter(v => v != null);
     if (allScoreVals.length) {
       const globalScore = allScoreVals.reduce((a,b) => a+b, 0) / allScoreVals.length;
@@ -1098,20 +1258,24 @@ async function rptBuildCoachingSection(personId) {
       const circumference = 2 * Math.PI * 38;
       const offset = circumference - (pct / 100) * circumference;
       const gColor = _coachingScoreColor(globalScore);
-      html += '<div style="position:relative;width:90px;height:90px;">';
-      html += '<svg width="90" height="90" viewBox="0 0 90 90">';
-      html += '<circle cx="45" cy="45" r="38" fill="none" stroke="var(--sh)" stroke-width="6"/>';
-      html += '<circle cx="45" cy="45" r="38" fill="none" stroke="' + gColor + '" stroke-width="6" stroke-linecap="round" stroke-dasharray="' + circumference.toFixed(1) + '" stroke-dashoffset="' + offset.toFixed(1) + '" transform="rotate(-90 45 45)" style="transition:stroke-dashoffset 0.6s;"/>';
+      html += '<div style="position:relative;width:80px;height:80px;flex-shrink:0;">';
+      html += '<svg width="80" height="80" viewBox="0 0 80 80">';
+      html += '<circle cx="40" cy="40" r="34" fill="none" stroke="var(--sh)" stroke-width="5"/>';
+      html += '<circle cx="40" cy="40" r="34" fill="none" stroke="' + gColor + '" stroke-width="5" stroke-linecap="round" stroke-dasharray="' + (2*Math.PI*34).toFixed(1) + '" stroke-dashoffset="' + ((2*Math.PI*34) - (pct/100)*(2*Math.PI*34)).toFixed(1) + '" transform="rotate(-90 40 40)" style="transition:stroke-dashoffset 0.6s;"/>';
       html += '</svg>';
       html += '<div style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;">';
-      html += '<div style="font-size:22px;font-weight:800;color:' + gColor + ';line-height:1;">' + globalScore.toFixed(1) + '</div>';
-      html += '<div style="font-size:9px;color:var(--td);">/10' + _coachingDelta(globalDelta) + '</div>';
+      html += '<div style="font-size:20px;font-weight:800;color:' + gColor + ';line-height:1;">' + globalScore.toFixed(1) + '</div>';
+      html += '<div style="font-size:9px;color:var(--td);">/10</div>';
       html += '</div></div>';
+      html += '<div>';
+      html += '<div style="font-weight:700;color:var(--t);font-size:15px;">Score global' + _coachingDelta(globalDelta) + '</div>';
+      html += '<div style="font-size:12px;color:var(--td);">' + periodLabel + ' &middot; ' + (coaching.calls_analyzed || 0) + ' appels</div>';
+      html += '</div>';
     }
     html += '</div>';
 
-    // Score grid with rank badges on weakest
-    html += '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;">';
+    // Score grid (4x2)
+    html += '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;">';
     COACHING_DIMENSIONS.forEach(dim => {
       const score = scores[dim.key] != null ? scores[dim.key] : null;
       const delta = comp[dim.key] != null ? comp[dim.key] : null;
@@ -1120,9 +1284,14 @@ async function rptBuildCoachingSection(personId) {
       html += _coachingScoreCard(dim, score, delta, badge);
     });
     html += '</div>';
-    html += '</div>';
+    html += '</div>'; // end right column
+    html += '</div>'; // end grid row
 
-    // ── CARD: Forces & Améliorations ──
+    // Render radar chart after DOM is ready
+    const prevScores = allReports.length >= 2 ? allReports[1].scores : null;
+    _renderRadarChart(radarId, scores, prevScores);
+
+    // ── ROW 4: Forces + Ameliorations ──
     const strengths = coaching.strengths || [];
     const improvements = coaching.improvements || [];
     if (strengths.length || improvements.length) {
@@ -1142,13 +1311,16 @@ async function rptBuildCoachingSection(personId) {
       html += '</div>';
     }
 
-    // ── CARD: Objections with coaching tips ──
+    // ── ROW 5: Objections + Recommendations side by side ──
     const objections = coaching.top_objections || [];
+    const recs = coaching.recommendations || [];
     const breakdown = coaching.call_breakdown || {};
     const hasBreakdown = Object.keys(breakdown).length > 0;
-    if (objections.length || hasBreakdown) {
-      html += '<div style="display:grid;grid-template-columns:' + (hasBreakdown ? '1fr auto' : '1fr') + ';gap:12px;margin-bottom:16px;">';
 
+    if (objections.length || recs.length) {
+      html += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px;">';
+
+      // LEFT: Objections
       if (objections.length) {
         html += '<div style="background:var(--s);border:1px solid var(--b);border-radius:12px;padding:16px;">';
         html += '<div style="font-weight:700;color:var(--t);margin-bottom:12px;font-size:14px;">🗣️ Objections frequentes</div>';
@@ -1157,31 +1329,31 @@ async function rptBuildCoachingSection(personId) {
           const count = obj.count || 0;
           const maxCount = objections[0] ? (typeof objections[0] === 'object' ? objections[0].count || 1 : 1) : 1;
           const pct = Math.round((count / maxCount) * 100);
-          // Find coaching tip
           const tipKey = Object.keys(OBJECTION_TIPS).find(k => (obj.text || '').toLowerCase().includes(k.toLowerCase().substring(0, 10)));
-          html += '<div style="padding:6px 0;border-bottom:1px solid var(--sh);">';
+          html += '<div style="padding:5px 0;border-bottom:1px solid var(--sh);">';
           html += '<div style="display:flex;align-items:center;gap:8px;">';
-          html += '<div style="flex:1;font-size:13px;color:var(--t);font-weight:500;">' + esc(obj.text || obj) + '</div>';
-          html += '<div style="min-width:90px;display:flex;align-items:center;gap:6px;">';
-          html += '<div style="flex:1;height:4px;background:var(--sh);border-radius:2px;"><div style="height:100%;width:' + pct + '%;background:var(--a);border-radius:2px;"></div></div>';
-          html += '<span style="font-size:11px;color:var(--td);min-width:24px;text-align:right;font-weight:600;">' + count + 'x</span>';
+          html += '<div style="flex:1;font-size:12px;color:var(--t);font-weight:500;">' + esc(obj.text || obj) + '</div>';
+          html += '<div style="min-width:80px;display:flex;align-items:center;gap:4px;">';
+          html += '<div style="flex:1;height:3px;background:var(--sh);border-radius:2px;"><div style="height:100%;width:' + pct + '%;background:var(--a);border-radius:2px;"></div></div>';
+          html += '<span style="font-size:10px;color:var(--td);min-width:20px;text-align:right;">' + count + 'x</span>';
           html += '</div></div>';
           if (tipKey && OBJECTION_TIPS[tipKey]) {
-            html += '<div style="font-size:11px;color:var(--cy);margin-top:3px;padding-left:4px;">💡 ' + esc(OBJECTION_TIPS[tipKey]) + '</div>';
+            html += '<div style="font-size:10px;color:var(--cy);margin-top:2px;padding-left:4px;">💡 ' + esc(OBJECTION_TIPS[tipKey]) + '</div>';
           }
           html += '</div>';
         });
         html += '</div>';
       }
 
-      if (hasBreakdown) {
-        html += '<div style="background:var(--s);border:1px solid var(--b);border-radius:12px;padding:16px;min-width:140px;">';
-        html += '<div style="font-weight:700;color:var(--t);margin-bottom:10px;font-size:14px;">📞 Repartition</div>';
-        Object.entries(breakdown).forEach(([key, val]) => {
-          const colors = { drone: 'var(--cy)', elite: 'var(--p)', autre: 'var(--td)' };
-          html += '<div style="text-align:center;padding:8px 0;">';
-          html += '<div style="font-size:22px;font-weight:700;color:' + (colors[key] || 'var(--t)') + ';">' + val + '</div>';
-          html += '<div style="font-size:11px;color:var(--td);text-transform:capitalize;">' + esc(key) + '</div>';
+      // RIGHT: Recommendations
+      if (recs.length) {
+        html += '<div style="background:rgba(96,165,250,0.05);border:1px solid rgba(96,165,250,0.15);border-radius:12px;padding:16px;">';
+        html += '<div style="font-weight:700;color:var(--bl);margin-bottom:12px;font-size:14px;">💡 Recommandations</div>';
+        recs.forEach((r, i) => {
+          const txt = typeof r === 'string' ? r : (r.text || JSON.stringify(r));
+          html += '<div style="display:flex;gap:8px;padding:5px 0;align-items:flex-start;">';
+          html += '<div style="background:var(--bl);color:#fff;font-size:10px;font-weight:700;width:20px;height:20px;border-radius:50%;display:flex;align-items:center;justify-content:center;flex-shrink:0;">' + (i + 1) + '</div>';
+          html += '<div style="font-size:12px;color:var(--t);line-height:1.5;">' + esc(txt) + '</div>';
           html += '</div>';
         });
         html += '</div>';
@@ -1189,16 +1361,15 @@ async function rptBuildCoachingSection(personId) {
       html += '</div>';
     }
 
-    // ── CARD: Recommendations (numbered) ──
-    const recs = coaching.recommendations || [];
-    if (recs.length) {
-      html += '<div style="background:rgba(96,165,250,0.05);border:1px solid rgba(96,165,250,0.15);border-radius:12px;padding:16px;margin-bottom:16px;">';
-      html += '<div style="font-weight:700;color:var(--bl);margin-bottom:12px;font-size:14px;">💡 Recommandations prioritaires</div>';
-      recs.forEach((r, i) => {
-        const txt = typeof r === 'string' ? r : (r.text || JSON.stringify(r));
-        html += '<div style="display:flex;gap:10px;padding:6px 0;align-items:flex-start;">';
-        html += '<div style="background:var(--bl);color:#fff;font-size:11px;font-weight:700;width:22px;height:22px;border-radius:50%;display:flex;align-items:center;justify-content:center;flex-shrink:0;">' + (i + 1) + '</div>';
-        html += '<div style="font-size:13px;color:var(--t);line-height:1.5;">' + esc(txt) + '</div>';
+    // Call breakdown (Domingos only)
+    if (hasBreakdown) {
+      html += '<div style="background:var(--s);border:1px solid var(--b);border-radius:12px;padding:16px;margin-bottom:16px;display:flex;gap:24px;justify-content:center;">';
+      html += '<div style="font-weight:700;color:var(--t);font-size:14px;align-self:center;">📞 Repartition</div>';
+      Object.entries(breakdown).forEach(([key, val]) => {
+        const colors = { drone: 'var(--cy)', elite: 'var(--p)', autre: 'var(--td)' };
+        html += '<div style="text-align:center;padding:4px 16px;">';
+        html += '<div style="font-size:24px;font-weight:700;color:' + (colors[key] || 'var(--t)') + ';">' + val + '</div>';
+        html += '<div style="font-size:11px;color:var(--td);text-transform:capitalize;">' + esc(key) + '</div>';
         html += '</div>';
       });
       html += '</div>';
