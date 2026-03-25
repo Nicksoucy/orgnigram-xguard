@@ -806,7 +806,7 @@ async function renderReports(ct, cl) {
 // Shown above manual reports for agents with coaching data.
 // ============================================================
 
-const COACHING_PEOPLE = ['v1', 't11']; // Heidys, Domingos — people with coaching data
+const COACHING_PEOPLE = ['v1', 't11'];
 
 const COACHING_DIMENSIONS = [
   { key: 'intro',         label: 'Introduction',      icon: '👋' },
@@ -818,6 +818,8 @@ const COACHING_DIMENSIONS = [
   { key: 'duration',      label: 'Duree appels',       icon: '⏱️' },
   { key: 'engagement',    label: 'Engagement',         icon: '🔥' },
 ];
+
+// ── Coaching helpers ──
 
 function _coachingScoreColor(score) {
   if (score == null) return 'var(--td)';
@@ -831,113 +833,263 @@ function _coachingDelta(val) {
   if (val == null || val === 0) return '';
   const sign = val > 0 ? '+' : '';
   const color = val > 0 ? 'var(--g)' : 'var(--r)';
-  return ' <span style="color:' + color + ';font-size:11px;">' + sign + val.toFixed(1) + '</span>';
+  return ' <span style="color:' + color + ';font-size:11px;font-weight:600;">' + sign + val.toFixed(1) + '</span>';
 }
 
 function _coachingProgressBar(pct, label) {
   const clampPct = Math.min(100, Math.max(0, pct || 0));
   const barColor = clampPct >= 100 ? 'var(--g)' : 'linear-gradient(90deg, var(--g), var(--cy))';
-  return `
-    <div style="margin:12px 0;">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
-        <span style="font-size:13px;color:var(--t);">${esc(label)}</span>
-        <span style="font-size:14px;font-weight:600;color:${clampPct >= 100 ? 'var(--g)' : 'var(--cy)'};">${clampPct.toFixed(1)}%</span>
-      </div>
-      <div style="height:8px;background:var(--sh);border-radius:4px;overflow:hidden;">
-        <div style="height:100%;width:${clampPct}%;background:${barColor};border-radius:4px;transition:width 0.5s;"></div>
-      </div>
+  return `<div style="margin:12px 0;">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
+      <span style="font-size:13px;color:var(--t);">${esc(label)}</span>
+      <span style="font-size:14px;font-weight:600;color:${clampPct >= 100 ? 'var(--g)' : 'var(--cy)'};">${clampPct.toFixed(1)}%</span>
     </div>
-  `;
+    <div style="height:8px;background:var(--sh);border-radius:4px;overflow:hidden;">
+      <div style="height:100%;width:${clampPct}%;background:${barColor};border-radius:4px;transition:width 0.5s;"></div>
+    </div>
+  </div>`;
 }
 
-function _coachingScoreCard(dim, score, delta) {
+function _coachingScoreCard(dim, score, delta, rankBadge) {
   const color = _coachingScoreColor(score);
-  const bgAlpha = score == null ? '0' : score >= 8 ? '0.06' : score >= 6 ? '0.05' : score >= 4 ? '0.04' : '0.04';
-  const bgColor = score == null ? 'transparent' : color.replace('var(', '').replace(')', '');
-  return `
-    <div style="background:color-mix(in srgb, ${color} ${Math.round(bgAlpha*100*10)}%, var(--s));border:1px solid var(--b);border-radius:10px;padding:12px 8px;text-align:center;min-width:90px;">
-      <div style="font-size:16px;margin-bottom:2px;">${dim.icon}</div>
-      <div style="font-size:24px;font-weight:700;color:${color};line-height:1.2;">${score != null ? score.toFixed(1) : '—'}${_coachingDelta(delta)}</div>
-      <div style="font-size:11px;color:var(--td);margin-top:4px;">${dim.label}</div>
-    </div>
-  `;
+  const badge = rankBadge ? '<div style="position:absolute;top:-6px;right:-6px;background:var(--r);color:#fff;font-size:9px;font-weight:700;width:18px;height:18px;border-radius:50%;display:flex;align-items:center;justify-content:center;">' + rankBadge + '</div>' : '';
+  return `<div style="position:relative;background:color-mix(in srgb, ${color} 6%, var(--s));border:1px solid var(--b);border-radius:10px;padding:12px 8px;text-align:center;min-width:90px;">
+    ${badge}
+    <div style="font-size:16px;margin-bottom:2px;">${dim.icon}</div>
+    <div style="font-size:24px;font-weight:700;color:${color};line-height:1.2;">${score != null ? score.toFixed(1) : '—'}${_coachingDelta(delta)}</div>
+    <div style="font-size:11px;color:var(--td);margin-top:4px;">${dim.label}</div>
+  </div>`;
 }
 
+function _dimLabel(key) {
+  const dim = COACHING_DIMENSIONS.find(d => d.key === key);
+  return dim ? dim.icon + ' ' + dim.label : key;
+}
+
+// ── Objection coaching tips (mapped per objection text) ──
+const OBJECTION_TIPS = {
+  "C'est trop cher": "Recadrer vers la valeur: 'C'est un investissement — le BSP ouvre la porte a des emplois a 25$+/h'",
+  "Pas le budget": "Proposer le plan de paiement ou les subventions disponibles",
+  "Question sur le prix": "Ne pas donner le prix tout de suite — qualifier d'abord, puis presenter la valeur",
+  "Je vais reflechir": "Creer l'urgence: 'Les places sont limitees, la prochaine cohorte est dans X jours'",
+  "Pas le temps": "Offrir les horaires flexibles (soir/fin de semaine) et la duree courte de la formation",
+  "Pas interesse": "Creuser: 'Qu'est-ce qui vous avait pousse a nous contacter au depart?'",
+  "Pas le bon moment": "Ancrer une date: 'Quand serait le bon moment? On peut vous reserver une place'",
+  "Doit consulter quelqu'un": "Proposer un appel a 3: 'On peut faire un appel ensemble avec votre...'",
+  "Envoyez-moi de l'info": "Accepter mais fixer un rappel: 'Je vous envoie ca — on se reparle jeudi pour en discuter?'",
+  "Quand est la prochaine cohorte": "Signal d'interet! Donner la date et enchainer: 'Il reste X places, je peux vous inscrire?'",
+  "Est-ce reconnu/accredite": "Rassurer avec les accreditations BSP et confirmer la validite legale",
+  "Rappeler plus tard": "Fixer un RDV precis: 'Parfait — mardi a 14h ca vous va?'",
+  "Je ne suis pas decideur": "Identifier le decideur: 'Qui serait la bonne personne? Je peux l'appeler directement'",
+  "J'ai deja un fournisseur": "Differenciateur: 'Qu'est-ce qui vous plait chez eux? On offre X en plus...'",
+};
+
+// ── Period filter state ──
+let _coachingPeriod = '1sem'; // '1sem', '2sem', '1mois', '3mois', 'tout'
+
+// ── Aggregate multiple coaching reports into one view ──
+function _coachingAggregate(reports) {
+  if (!reports.length) return null;
+  if (reports.length === 1) return reports[0];
+
+  const avgScores = {};
+  COACHING_DIMENSIONS.forEach(dim => {
+    const vals = reports.map(r => (r.scores || {})[dim.key]).filter(v => v != null);
+    avgScores[dim.key] = vals.length ? vals.reduce((a,b) => a+b, 0) / vals.length : null;
+  });
+
+  // Merge objections across all reports
+  const objMap = {};
+  reports.forEach(r => {
+    (r.top_objections || []).forEach(o => {
+      const obj = typeof o === 'string' ? { text: o, count: 1 } : o;
+      const key = obj.text || '';
+      objMap[key] = (objMap[key] || 0) + (obj.count || 1);
+    });
+  });
+  const mergedObjections = Object.entries(objMap)
+    .sort((a,b) => b[1] - a[1])
+    .slice(0, 10)
+    .map(([text, count]) => ({ text, count }));
+
+  // Merge strengths/improvements from averaged scores
+  const sorted = Object.entries(avgScores).filter(([,v]) => v != null).sort((a,b) => b[1] - a[1]);
+  const strengths = sorted.slice(0, 3).map(([k]) => k);
+  const improvements = sorted.slice(-3).reverse().map(([k]) => k);
+
+  // Merge recommendations (deduplicate)
+  const recsSet = new Set();
+  reports.forEach(r => (r.recommendations || []).forEach(rec => {
+    const txt = typeof rec === 'string' ? rec : (rec.text || '');
+    if (txt) recsSet.add(txt);
+  }));
+
+  // Merge call breakdown
+  const breakdown = {};
+  reports.forEach(r => {
+    Object.entries(r.call_breakdown || {}).forEach(([k, v]) => {
+      breakdown[k] = (breakdown[k] || 0) + v;
+    });
+  });
+
+  const totalCalls = reports.reduce((s, r) => s + (r.calls_analyzed || 0), 0);
+
+  return {
+    scores: avgScores,
+    comparison: reports[0].comparison || {},
+    top_objections: mergedObjections,
+    strengths,
+    improvements,
+    recommendations: [...recsSet].slice(0, 5),
+    call_breakdown: breakdown,
+    calls_analyzed: totalCalls,
+    week_start: reports[reports.length - 1].week_start,
+    week_end: reports[0].week_end,
+    raw_summary: null, // no raw summary for aggregate
+  };
+}
+
+// ── Main coaching section builder ──
 async function rptBuildCoachingSection(personId) {
   if (!COACHING_PEOPLE.includes(personId)) return '';
 
-  let coaching = null;
+  let allReports = [];
+  let coachingData = [];
   let nitroArr = [];
   let cronLogs = [];
 
   try {
-    coaching = await dbGetLatestCoachingReport(personId);
-    nitroArr = await dbGetNitroStatus(personId);
+    [allReports, coachingData, nitroArr] = await Promise.all([
+      dbGetCoachingReports(personId, 52),
+      dbGetCoachingData(personId, 365),
+      dbGetNitroStatus(personId),
+    ]);
     if (authIsAdmin()) cronLogs = await dbGetCronLogs(personId, 5);
   } catch(e) {
     console.error('rptBuildCoachingSection error:', e);
     return '<div class="rpt-empty">Erreur chargement coaching: ' + esc(e.message || String(e)) + '</div>';
   }
 
-  let html = '<div style="margin-bottom:24px;">';
+  let html = '<div style="margin-bottom:24px;" id="coaching-section-' + personId + '">';
 
-  // Nitro progress (if any active task)
+  // ── Nitro progress ──
   const activeNitro = nitroArr.find(n => n.status === 'running');
   if (activeNitro) {
     html += '<div style="background:var(--s);border:1px solid var(--b);border-radius:10px;padding:16px;margin-bottom:16px;">';
-    html += '<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;"><span style="font-size:16px;">⚡</span><span style="font-weight:600;color:var(--t);">Nitro GPU — Transcription en cours</span>';
-    if (activeNitro.gpu_active) html += '<span style="background:var(--g);color:#000;font-size:10px;padding:2px 6px;border-radius:4px;font-weight:600;">GPU ON</span>';
+    html += '<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;"><span style="font-size:16px;">⚡</span><span style="font-weight:600;color:var(--t);">Transcription en cours</span>';
+    if (activeNitro.gpu_active) html += '<span style="background:var(--g);color:#000;font-size:10px;padding:2px 6px;border-radius:4px;font-weight:600;">GPU</span>';
     html += '</div>';
     html += _coachingProgressBar(activeNitro.pct, activeNitro.done + ' / ' + activeNitro.total + ' fichiers');
-    if (activeNitro.eta_label) html += '<div style="font-size:12px;color:var(--td);">ETA: ' + esc(activeNitro.eta_label) + ' &middot; ' + activeNitro.avg_speed_sec.toFixed(1) + 's/appel</div>';
-    if (activeNitro.last_file) html += '<div style="font-size:11px;color:var(--td);margin-top:4px;">Dernier: ' + esc(activeNitro.last_file) + '</div>';
     html += '</div>';
   }
 
-  // Helper: map dimension key to French label
-  const _dimLabel = key => {
-    const dim = COACHING_DIMENSIONS.find(d => d.key === key);
-    return dim ? dim.icon + ' ' + dim.label : key;
-  };
+  // ── Stats Summary Bar ──
+  const totalCalls = coachingData.reduce((s, r) => s + (r.calls_transcribed || 0), 0);
+  const weeksAnalyzed = allReports.length;
+  const avgPerWeek = weeksAnalyzed ? Math.round(totalCalls / weeksAnalyzed) : 0;
+  const lastSync = coachingData.length ? coachingData[0].sync_date : null;
+  const lastSyncLabel = lastSync ? new Date(lastSync + 'T12:00:00').toLocaleDateString('fr-CA', { day:'numeric', month:'short' }) : '—';
 
-  // Coaching scores
+  // Trend: compare last 2 coaching_data entries
+  let trendLabel = '';
+  if (coachingData.length >= 2) {
+    const recent = coachingData[0].calls_transcribed || 0;
+    const prev = coachingData[1].calls_transcribed || 0;
+    if (prev > 0) {
+      const pctChange = Math.round(((recent - prev) / prev) * 100);
+      if (pctChange > 0) trendLabel = '<span style="color:var(--g);">↑ +' + pctChange + '%</span>';
+      else if (pctChange < 0) trendLabel = '<span style="color:var(--r);">↓ ' + pctChange + '%</span>';
+      else trendLabel = '<span style="color:var(--td);">→ stable</span>';
+    }
+  }
+
+  html += '<div style="display:flex;gap:1px;margin-bottom:16px;border-radius:12px;overflow:hidden;">';
+  const statBox = (icon, val, label) => '<div style="flex:1;background:var(--s);padding:14px 12px;text-align:center;"><div style="font-size:20px;font-weight:700;color:var(--t);">' + icon + ' ' + val + '</div><div style="font-size:11px;color:var(--td);margin-top:2px;">' + label + '</div></div>';
+  html += statBox('📞', totalCalls, 'Appels transcrits');
+  html += statBox('📊', avgPerWeek + '/sem', weeksAnalyzed + ' semaines');
+  html += statBox('🔄', lastSyncLabel, 'Dernier sync');
+  if (trendLabel) html += '<div style="flex:1;background:var(--s);padding:14px 12px;text-align:center;"><div style="font-size:18px;font-weight:700;">' + trendLabel + '</div><div style="font-size:11px;color:var(--td);margin-top:2px;">vs semaine prec.</div></div>';
+  html += '</div>';
+
+  // ── Period Filter Pills ──
+  const periods = [
+    { key: '1sem', label: 'Cette semaine', weeks: 1 },
+    { key: '2sem', label: '2 semaines', weeks: 2 },
+    { key: '1mois', label: '1 mois', weeks: 4 },
+    { key: '3mois', label: '3 mois', weeks: 13 },
+    { key: 'tout', label: 'Tout', weeks: 999 },
+  ];
+
+  html += '<div style="display:flex;gap:6px;margin-bottom:16px;flex-wrap:wrap;">';
+  periods.forEach(p => {
+    const active = p.key === _coachingPeriod;
+    html += '<button onclick="_coachingPeriod=\'' + p.key + '\';render();" style="padding:6px 14px;border-radius:20px;border:1px solid ' + (active ? 'var(--a)' : 'var(--b)') + ';background:' + (active ? 'var(--a)' : 'var(--s)') + ';color:' + (active ? '#fff' : 'var(--td)') + ';font-size:12px;font-weight:' + (active ? '600' : '400') + ';cursor:pointer;">' + p.label + '</button>';
+  });
+  html += '</div>';
+
+  // ── Filter reports by selected period ──
+  const periodConfig = periods.find(p => p.key === _coachingPeriod) || periods[0];
+  const filteredReports = allReports.slice(0, periodConfig.weeks);
+  const coaching = filteredReports.length ? _coachingAggregate(filteredReports) : null;
+
   if (coaching) {
     const scores = coaching.scores || {};
     const comp = coaching.comparison || {};
 
-    // ── CARD 1: Scores ──
+    // Determine weakest 3 for rank badges
+    const ranked = COACHING_DIMENSIONS
+      .map(d => ({ key: d.key, score: scores[d.key] }))
+      .filter(d => d.score != null)
+      .sort((a, b) => a.score - b.score);
+    const weakest3 = ranked.slice(0, 3).map(d => d.key);
+
+    // ── CARD: Scores ──
+    const periodLabel = filteredReports.length === 1
+      ? rptWeekLabel(coaching.week_start, coaching.week_end)
+      : rptWeekLabel(coaching.week_start, coaching.week_end);
     html += '<div style="background:var(--s);border:1px solid var(--b);border-radius:12px;padding:20px;margin-bottom:16px;">';
 
-    // Header
+    // Header with global score
     html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">';
     html += '<div>';
     html += '<div style="font-weight:700;color:var(--t);font-size:16px;">📊 Score coaching</div>';
-    html += '<div style="font-size:12px;color:var(--td);margin-top:2px;">' + rptWeekLabel(coaching.week_start, coaching.week_end) + '</div>';
-    html += '</div>';
-    html += '<div style="text-align:right;">';
-    html += '<div style="font-size:11px;color:var(--td);">' + (coaching.calls_analyzed || 0) + ' appels</div>';
-    // Global score in header
-    const allScores = COACHING_DIMENSIONS.map(d => scores[d.key]).filter(v => v != null);
-    if (allScores.length) {
-      const globalScore = allScores.reduce((a,b) => a+b, 0) / allScores.length;
-      const globalDelta = comp.global != null ? comp.global : null;
-      html += '<div style="font-size:28px;font-weight:800;color:' + _coachingScoreColor(globalScore) + ';line-height:1;">' + globalScore.toFixed(1) + '<span style="font-size:14px;font-weight:400;color:var(--td);">/10</span>' + _coachingDelta(globalDelta) + '</div>';
-    }
-    html += '</div>';
+    html += '<div style="font-size:12px;color:var(--td);margin-top:2px;">' + periodLabel + ' &middot; ' + (coaching.calls_analyzed || 0) + ' appels</div>';
     html += '</div>';
 
-    // Score grid
+    // Global score — circular ring
+    const allScoreVals = COACHING_DIMENSIONS.map(d => scores[d.key]).filter(v => v != null);
+    if (allScoreVals.length) {
+      const globalScore = allScoreVals.reduce((a,b) => a+b, 0) / allScoreVals.length;
+      const globalDelta = comp.global != null ? comp.global : null;
+      const pct = Math.round(globalScore * 10);
+      const circumference = 2 * Math.PI * 38;
+      const offset = circumference - (pct / 100) * circumference;
+      const gColor = _coachingScoreColor(globalScore);
+      html += '<div style="position:relative;width:90px;height:90px;">';
+      html += '<svg width="90" height="90" viewBox="0 0 90 90">';
+      html += '<circle cx="45" cy="45" r="38" fill="none" stroke="var(--sh)" stroke-width="6"/>';
+      html += '<circle cx="45" cy="45" r="38" fill="none" stroke="' + gColor + '" stroke-width="6" stroke-linecap="round" stroke-dasharray="' + circumference.toFixed(1) + '" stroke-dashoffset="' + offset.toFixed(1) + '" transform="rotate(-90 45 45)" style="transition:stroke-dashoffset 0.6s;"/>';
+      html += '</svg>';
+      html += '<div style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;">';
+      html += '<div style="font-size:22px;font-weight:800;color:' + gColor + ';line-height:1;">' + globalScore.toFixed(1) + '</div>';
+      html += '<div style="font-size:9px;color:var(--td);">/10' + _coachingDelta(globalDelta) + '</div>';
+      html += '</div></div>';
+    }
+    html += '</div>';
+
+    // Score grid with rank badges on weakest
     html += '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;">';
     COACHING_DIMENSIONS.forEach(dim => {
       const score = scores[dim.key] != null ? scores[dim.key] : null;
       const delta = comp[dim.key] != null ? comp[dim.key] : null;
-      html += _coachingScoreCard(dim, score, delta);
+      const weakIdx = weakest3.indexOf(dim.key);
+      const badge = weakIdx >= 0 ? (weakIdx + 1) : null;
+      html += _coachingScoreCard(dim, score, delta, badge);
     });
     html += '</div>';
-
     html += '</div>';
 
-    // ── CARD 2: Forces & Améliorations ──
+    // ── CARD: Forces & Améliorations ──
     const strengths = coaching.strengths || [];
     const improvements = coaching.improvements || [];
     if (strengths.length || improvements.length) {
@@ -957,33 +1109,38 @@ async function rptBuildCoachingSection(personId) {
       html += '</div>';
     }
 
-    // ── CARD 3: Objections + Call breakdown (side by side) ──
+    // ── CARD: Objections with coaching tips ──
     const objections = coaching.top_objections || [];
     const breakdown = coaching.call_breakdown || {};
     const hasBreakdown = Object.keys(breakdown).length > 0;
     if (objections.length || hasBreakdown) {
       html += '<div style="display:grid;grid-template-columns:' + (hasBreakdown ? '1fr auto' : '1fr') + ';gap:12px;margin-bottom:16px;">';
 
-      // Objections
       if (objections.length) {
         html += '<div style="background:var(--s);border:1px solid var(--b);border-radius:12px;padding:16px;">';
-        html += '<div style="font-weight:700;color:var(--t);margin-bottom:10px;font-size:14px;">🗣️ Objections frequentes</div>';
+        html += '<div style="font-weight:700;color:var(--t);margin-bottom:12px;font-size:14px;">🗣️ Objections frequentes</div>';
         objections.forEach(o => {
           const obj = typeof o === 'string' ? { text: o } : o;
           const count = obj.count || 0;
           const maxCount = objections[0] ? (typeof objections[0] === 'object' ? objections[0].count || 1 : 1) : 1;
           const pct = Math.round((count / maxCount) * 100);
-          html += '<div style="display:flex;align-items:center;gap:8px;padding:4px 0;">';
-          html += '<div style="flex:1;font-size:13px;color:var(--t);">' + esc(obj.text || obj) + '</div>';
-          html += '<div style="min-width:80px;display:flex;align-items:center;gap:6px;">';
+          // Find coaching tip
+          const tipKey = Object.keys(OBJECTION_TIPS).find(k => (obj.text || '').toLowerCase().includes(k.toLowerCase().substring(0, 10)));
+          html += '<div style="padding:6px 0;border-bottom:1px solid var(--sh);">';
+          html += '<div style="display:flex;align-items:center;gap:8px;">';
+          html += '<div style="flex:1;font-size:13px;color:var(--t);font-weight:500;">' + esc(obj.text || obj) + '</div>';
+          html += '<div style="min-width:90px;display:flex;align-items:center;gap:6px;">';
           html += '<div style="flex:1;height:4px;background:var(--sh);border-radius:2px;"><div style="height:100%;width:' + pct + '%;background:var(--a);border-radius:2px;"></div></div>';
-          html += '<span style="font-size:11px;color:var(--td);min-width:20px;text-align:right;">' + count + 'x</span>';
+          html += '<span style="font-size:11px;color:var(--td);min-width:24px;text-align:right;font-weight:600;">' + count + 'x</span>';
           html += '</div></div>';
+          if (tipKey && OBJECTION_TIPS[tipKey]) {
+            html += '<div style="font-size:11px;color:var(--cy);margin-top:3px;padding-left:4px;">💡 ' + esc(OBJECTION_TIPS[tipKey]) + '</div>';
+          }
+          html += '</div>';
         });
         html += '</div>';
       }
 
-      // Call breakdown (Domingos)
       if (hasBreakdown) {
         html += '<div style="background:var(--s);border:1px solid var(--b);border-radius:12px;padding:16px;min-width:140px;">';
         html += '<div style="font-weight:700;color:var(--t);margin-bottom:10px;font-size:14px;">📞 Repartition</div>';
@@ -996,18 +1153,20 @@ async function rptBuildCoachingSection(personId) {
         });
         html += '</div>';
       }
-
       html += '</div>';
     }
 
-    // ── CARD 4: Recommandations ──
+    // ── CARD: Recommendations (numbered) ──
     const recs = coaching.recommendations || [];
     if (recs.length) {
       html += '<div style="background:rgba(96,165,250,0.05);border:1px solid rgba(96,165,250,0.15);border-radius:12px;padding:16px;margin-bottom:16px;">';
-      html += '<div style="font-weight:700;color:var(--bl);margin-bottom:10px;font-size:14px;">💡 Recommandations</div>';
-      recs.forEach(r => {
+      html += '<div style="font-weight:700;color:var(--bl);margin-bottom:12px;font-size:14px;">💡 Recommandations prioritaires</div>';
+      recs.forEach((r, i) => {
         const txt = typeof r === 'string' ? r : (r.text || JSON.stringify(r));
-        html += '<div style="font-size:13px;color:var(--t);padding:4px 0;line-height:1.5;">• ' + esc(txt) + '</div>';
+        html += '<div style="display:flex;gap:10px;padding:6px 0;align-items:flex-start;">';
+        html += '<div style="background:var(--bl);color:#fff;font-size:11px;font-weight:700;width:22px;height:22px;border-radius:50%;display:flex;align-items:center;justify-content:center;flex-shrink:0;">' + (i + 1) + '</div>';
+        html += '<div style="font-size:13px;color:var(--t);line-height:1.5;">' + esc(txt) + '</div>';
+        html += '</div>';
       });
       html += '</div>';
     }
@@ -1015,100 +1174,87 @@ async function rptBuildCoachingSection(personId) {
     // Raw summary (collapsible)
     if (coaching.raw_summary) {
       html += '<details style="margin-bottom:16px;">';
-      html += '<summary style="cursor:pointer;font-weight:600;color:var(--td);font-size:12px;padding:8px 0;">📝 Resume complet du rapport</summary>';
+      html += '<summary style="cursor:pointer;font-weight:600;color:var(--td);font-size:12px;padding:8px 0;">📝 Resume complet</summary>';
       html += '<div style="margin-top:8px;font-size:12px;color:var(--t);line-height:1.6;padding:12px;background:var(--sh);border-radius:8px;white-space:pre-wrap;">' + esc(coaching.raw_summary) + '</div>';
       html += '</details>';
     }
 
   } else if (!activeNitro) {
-    html += '<div class="rpt-empty" style="margin-bottom:16px;">Aucune donnee de coaching disponible. Les rapports automatiques seront generes chaque vendredi a 15h.</div>';
+    html += '<div class="rpt-empty" style="margin-bottom:16px;">Aucune donnee de coaching disponible. Les rapports seront generes chaque vendredi a 15h.</div>';
   }
 
-  // Score progression over time (all weeks)
-  let allReports = [];
-  try { allReports = await dbGetCoachingReports(personId, 12); } catch(e) { /* ignore */ }
-  if (allReports.length > 1) {
-    allReports = allReports.slice().reverse(); // oldest first
-    html += '<div style="background:var(--s);border:1px solid var(--b);border-radius:10px;padding:16px;margin-bottom:16px;">';
-    html += '<div style="font-weight:600;color:var(--t);margin-bottom:12px;font-size:15px;">📈 Progression dans le temps</div>';
-
-    // Mini bar chart for global score per week
-    const maxScore = 10;
-    html += '<div style="display:flex;gap:4px;align-items:flex-end;height:120px;margin-bottom:8px;">';
-    allReports.forEach(r => {
-      const scores = r.scores || {};
-      const vals = Object.values(scores).filter(v => typeof v === 'number');
-      const global = vals.length ? vals.reduce((a,b) => a+b, 0) / vals.length : 0;
-      const pct = (global / maxScore * 100).toFixed(0);
-      const color = _coachingScoreColor(global);
-      const weekLabel = r.week_start ? r.week_start.substring(5) : '';
+  // ── Weekly volume chart ──
+  if (coachingData.length > 1) {
+    const sorted = coachingData.slice().sort((a, b) => a.sync_date.localeCompare(b.sync_date));
+    const maxCalls = Math.max(...sorted.map(d => d.calls_transcribed || 0), 1);
+    html += '<div style="background:var(--s);border:1px solid var(--b);border-radius:12px;padding:16px;margin-bottom:16px;">';
+    html += '<div style="font-weight:700;color:var(--t);margin-bottom:12px;font-size:14px;">📈 Volume d\'appels par semaine</div>';
+    html += '<div style="display:flex;gap:4px;align-items:flex-end;height:100px;">';
+    sorted.forEach(d => {
+      const calls = d.calls_transcribed || 0;
+      const pct = Math.max(2, Math.round((calls / maxCalls) * 100));
+      const label = d.sync_date ? d.sync_date.substring(5) : '';
       html += '<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:2px;">';
-      html += '<div style="font-size:10px;font-weight:600;color:' + color + ';">' + global.toFixed(1) + '</div>';
-      html += '<div style="width:100%;background:var(--sh);border-radius:4px;position:relative;height:100px;">';
-      html += '<div style="position:absolute;bottom:0;width:100%;height:' + pct + '%;background:' + color + ';border-radius:4px;transition:height 0.3s;"></div>';
+      html += '<div style="font-size:10px;font-weight:600;color:var(--t);">' + calls + '</div>';
+      html += '<div style="width:100%;background:var(--sh);border-radius:4px;position:relative;height:80px;">';
+      html += '<div style="position:absolute;bottom:0;width:100%;height:' + pct + '%;background:var(--a);border-radius:4px;transition:height 0.3s;"></div>';
       html += '</div>';
-      html += '<div style="font-size:9px;color:var(--td);white-space:nowrap;">' + esc(weekLabel) + '</div>';
+      html += '<div style="font-size:9px;color:var(--td);white-space:nowrap;">' + esc(label) + '</div>';
       html += '</div>';
     });
-    html += '</div>';
+    html += '</div></div>';
+  }
 
-    // Dimension trend table
-    html += '<div style="overflow-x:auto;margin-top:12px;">';
+  // ── Score progression (all weeks trend table) ──
+  if (allReports.length > 1) {
+    const chronological = allReports.slice().reverse();
+    html += '<div style="background:var(--s);border:1px solid var(--b);border-radius:12px;padding:16px;margin-bottom:16px;">';
+    html += '<div style="font-weight:700;color:var(--t);margin-bottom:12px;font-size:14px;">📊 Progression des scores</div>';
+    html += '<div style="overflow-x:auto;">';
     html += '<table style="width:100%;font-size:11px;border-collapse:collapse;">';
     html += '<tr><th style="text-align:left;color:var(--td);padding:4px 6px;border-bottom:1px solid var(--b);">Dimension</th>';
-    allReports.forEach(r => {
-      const wk = r.week_start ? r.week_start.substring(5) : '';
-      html += '<th style="text-align:center;color:var(--td);padding:4px 6px;border-bottom:1px solid var(--b);white-space:nowrap;">' + esc(wk) + '</th>';
+    chronological.forEach(r => {
+      html += '<th style="text-align:center;color:var(--td);padding:4px 6px;border-bottom:1px solid var(--b);white-space:nowrap;">' + esc(r.week_start ? r.week_start.substring(5) : '') + '</th>';
     });
     html += '</tr>';
     COACHING_DIMENSIONS.forEach(dim => {
       html += '<tr>';
       html += '<td style="padding:4px 6px;color:var(--t);border-bottom:1px solid var(--b);">' + dim.icon + ' ' + esc(dim.label) + '</td>';
-      allReports.forEach(r => {
+      chronological.forEach(r => {
         const val = (r.scores || {})[dim.key];
         const color = val != null ? _coachingScoreColor(val) : 'var(--td)';
         html += '<td style="text-align:center;padding:4px 6px;color:' + color + ';font-weight:600;border-bottom:1px solid var(--b);">' + (val != null ? val.toFixed(1) : '—') + '</td>';
       });
       html += '</tr>';
     });
-    // Global row
-    html += '<tr style="font-weight:700;">';
-    html += '<td style="padding:4px 6px;color:var(--t);border-top:2px solid var(--b);">Global</td>';
-    allReports.forEach(r => {
-      const scores = r.scores || {};
-      const vals = Object.values(scores).filter(v => typeof v === 'number');
-      const global = vals.length ? vals.reduce((a,b) => a+b, 0) / vals.length : 0;
-      const color = _coachingScoreColor(global);
-      html += '<td style="text-align:center;padding:4px 6px;color:' + color + ';border-top:2px solid var(--b);">' + global.toFixed(1) + '</td>';
+    html += '<tr style="font-weight:700;"><td style="padding:4px 6px;color:var(--t);border-top:2px solid var(--b);">Global</td>';
+    chronological.forEach(r => {
+      const vals = Object.values(r.scores || {}).filter(v => typeof v === 'number');
+      const g = vals.length ? vals.reduce((a,b) => a+b, 0) / vals.length : 0;
+      html += '<td style="text-align:center;padding:4px 6px;color:' + _coachingScoreColor(g) + ';border-top:2px solid var(--b);">' + g.toFixed(1) + '</td>';
     });
-    html += '</tr></table></div>';
-    html += '</div>';
+    html += '</tr></table></div></div>';
   }
 
-  // Cron logs (admin only)
+  // ── Cron logs (admin only) ──
   if (authIsAdmin() && cronLogs.length) {
     html += '<div style="background:var(--s);border:1px solid var(--b);border-radius:10px;padding:16px;margin-bottom:16px;">';
-    html += '<div style="font-weight:600;color:var(--t);margin-bottom:8px;font-size:13px;">⚙️ Historique des crons <span style="font-size:11px;color:var(--td);">(admin)</span></div>';
+    html += '<div style="font-weight:600;color:var(--t);margin-bottom:8px;font-size:13px;">⚙️ Crons <span style="font-size:11px;color:var(--td);">(admin)</span></div>';
     cronLogs.forEach(log => {
       const statusIcon = log.status === 'success' ? '✅' : (log.status === 'error' ? '❌' : '⏳');
       const date = log.started_at ? new Date(log.started_at).toLocaleDateString('fr-CA', { day:'numeric', month:'short', hour:'2-digit', minute:'2-digit' }) : '—';
       const dur = log.duration_sec != null ? log.duration_sec + 's' : '';
       const calls = log.calls_processed != null ? log.calls_processed : null;
       const newT = log.transcripts_new || 0;
-      html += '<div style="font-size:12px;color:var(--t);padding:4px 0;display:flex;gap:8px;align-items:center;flex-wrap:wrap;">';
-      html += '<span>' + statusIcon + '</span>';
-      html += '<span style="color:var(--td);min-width:120px;">' + esc(date) + '</span>';
-      html += '<span style="text-transform:capitalize;font-weight:500;">' + esc(log.cron_type.replace('_',' ')) + '</span>';
-      // Always show call count (even 0)
-      if (calls != null) html += '<span style="color:var(--td);">' + calls + ' appel' + (calls !== 1 ? 's' : '') + '</span>';
-      if (newT > 0) html += '<span style="color:var(--g);font-weight:600;">+' + newT + ' transcript' + (newT !== 1 ? 's' : '') + '</span>';
+      html += '<div style="font-size:12px;color:var(--t);padding:3px 0;display:flex;gap:8px;align-items:center;flex-wrap:wrap;">';
+      html += statusIcon + ' ';
+      html += '<span style="color:var(--td);min-width:110px;">' + esc(date) + '</span>';
+      html += '<span style="text-transform:capitalize;">' + esc(log.cron_type.replace('_',' ')) + '</span>';
+      if (calls != null) html += '<span style="color:var(--td);">' + calls + ' appels</span>';
+      if (newT > 0) html += '<span style="color:var(--g);font-weight:600;">+' + newT + '</span>';
       if (dur) html += '<span style="color:var(--td);">' + dur + '</span>';
-      // Show dates synced if present in error_msg as "dates:..." convention
-      if (log.error_msg && log.error_msg.startsWith('dates:')) {
-        html += '<span style="color:var(--cy);font-size:11px;">📅 ' + esc(log.error_msg.substring(6)) + '</span>';
-      } else if (log.error_msg) {
-        html += '<span style="color:var(--r);font-size:11px;">' + esc(log.error_msg.substring(0, 80)) + '</span>';
-      }
+      if (log.error_msg && log.error_msg.startsWith('dates:')) html += '<span style="color:var(--cy);font-size:11px;">📅 ' + esc(log.error_msg.substring(6)) + '</span>';
+      else if (log.error_msg) html += '<span style="color:var(--r);font-size:11px;">' + esc(log.error_msg.substring(0, 80)) + '</span>';
       html += '</div>';
     });
     html += '</div>';
