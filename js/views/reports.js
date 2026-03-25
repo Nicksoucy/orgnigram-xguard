@@ -1092,6 +1092,18 @@ function _generateCoachingInsights(allReports) {
   return insights.slice(0, 4); // max 4 insights
 }
 
+// ── Loading skeleton HTML ──
+function _coachingLoadingSkeleton() {
+  return '<div style="margin-bottom:24px;">'
+    + '<div class="coaching-skeleton coaching-skeleton-bar"></div>'
+    + '<div style="display:flex;gap:6px;margin-bottom:12px;">' + '<div class="coaching-skeleton" style="width:90px;height:30px;border-radius:20px;"></div>'.repeat(5) + '</div>'
+    + '<div class="coaching-skeleton coaching-skeleton-card"></div>'
+    + '<div class="coaching-grid-2col" style="gap:12px;margin-bottom:12px;">'
+    + '<div class="coaching-skeleton coaching-skeleton-radar"></div>'
+    + '<div class="coaching-skeleton coaching-skeleton-card" style="height:300px;"></div>'
+    + '</div></div>';
+}
+
 async function rptBuildCoachingSection(personId) {
   if (!COACHING_PEOPLE.includes(personId)) return '';
 
@@ -1109,10 +1121,25 @@ async function rptBuildCoachingSection(personId) {
     if (authIsAdmin()) cronLogs = await dbGetCronLogs(personId, 5);
   } catch(e) {
     console.error('rptBuildCoachingSection error:', e);
-    return '<div class="rpt-empty">Erreur chargement coaching: ' + esc(e.message || String(e)) + '</div>';
+    return '<div style="background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.2);border-radius:12px;padding:20px;text-align:center;">'
+      + '<div style="font-size:20px;margin-bottom:8px;">❌</div>'
+      + '<div style="font-weight:600;color:var(--r);margin-bottom:4px;">Erreur de chargement</div>'
+      + '<div style="font-size:12px;color:var(--td);margin-bottom:12px;">' + esc(e.message || String(e)) + '</div>'
+      + '<button onclick="render();" style="padding:8px 20px;border-radius:8px;border:1px solid var(--b);background:var(--s);color:var(--t);cursor:pointer;font-size:13px;">🔄 Reessayer</button>'
+      + '</div>';
   }
 
   let html = '<div style="margin-bottom:24px;" id="coaching-section-' + personId + '">';
+
+  // Inject coaching CSS (inline to avoid cache issues)
+  html += '<style>'
+    + '.coaching-grid-2col{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px}'
+    + '.coaching-grid-4col{display:grid;grid-template-columns:repeat(4,1fr);gap:6px}'
+    + '@media(max-width:768px){'
+    + '.coaching-grid-2col{grid-template-columns:1fr!important}'
+    + '.coaching-grid-4col{grid-template-columns:repeat(2,1fr)!important}'
+    + '}'
+    + '</style>';
 
   // ── Nitro progress ──
   const activeNitro = nitroArr.find(n => n.status === 'running');
@@ -1237,7 +1264,7 @@ async function rptBuildCoachingSection(personId) {
 
     // ── ROW 3: Radar Chart + Score Cards (side by side) ──
     const periodLabel = rptWeekLabel(coaching.week_start, coaching.week_end);
-    html += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px;">';
+    html += '<div class="coaching-grid-2col" style="gap:16px;margin-bottom:16px;">';
 
     // LEFT: Radar Chart
     const radarId = 'radar-' + personId + '-' + Date.now();
@@ -1275,7 +1302,7 @@ async function rptBuildCoachingSection(personId) {
     html += '</div>';
 
     // Score grid (4x2)
-    html += '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;">';
+    html += '<div class="coaching-grid-4col">';
     COACHING_DIMENSIONS.forEach(dim => {
       const score = scores[dim.key] != null ? scores[dim.key] : null;
       const delta = comp[dim.key] != null ? comp[dim.key] : null;
@@ -1295,7 +1322,7 @@ async function rptBuildCoachingSection(personId) {
     const strengths = coaching.strengths || [];
     const improvements = coaching.improvements || [];
     if (strengths.length || improvements.length) {
-      html += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px;">';
+      html += '<div class="coaching-grid-2col">';
       if (strengths.length) {
         html += '<div style="background:rgba(52,211,153,0.06);border:1px solid rgba(52,211,153,0.15);border-radius:12px;padding:16px;">';
         html += '<div style="font-weight:700;color:var(--g);margin-bottom:10px;font-size:14px;">✅ Forces</div>';
@@ -1318,7 +1345,7 @@ async function rptBuildCoachingSection(personId) {
     const hasBreakdown = Object.keys(breakdown).length > 0;
 
     if (objections.length || recs.length) {
-      html += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px;">';
+      html += '<div class="coaching-grid-2col">';
 
       // LEFT: Objections
       if (objections.length) {
