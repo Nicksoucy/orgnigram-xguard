@@ -432,6 +432,16 @@ async function dbGetCoachingData(personId, days=30) {
  * @returns {Promise<Object[]>} Array of coaching_report rows.
  * @throws {Error} Supabase error if query fails.
  */
+async function dbGetCallActivity(personId, days=90) {
+  const since = dayjs().subtract(days,'day').format('YYYY-MM-DD');
+  const {data,error} = await db.from('call_activity').select('*')
+    .eq('person_id', personId)
+    .gte('activity_date', since)
+    .order('activity_date', {ascending:false});
+  if(error) throw error;
+  return data||[];
+}
+
 async function dbGetCalls(personId, since=null, until=null) {
   let q = db.from('calls').select('id,call_time,duration_s,contact_name,word_count')
     .eq('person_id', personId)

@@ -1112,13 +1112,15 @@ async function rptBuildCoachingSection(personId) {
   let nitroArr = [];
   let cronLogs = [];
   let allCalls = [];
+  let callActivity = [];
 
   try {
-    [allReports, coachingData, nitroArr, allCalls] = await Promise.all([
+    [allReports, coachingData, nitroArr, allCalls, callActivity] = await Promise.all([
       dbGetCoachingReports(personId, 52),
       dbGetCoachingData(personId, 365),
       dbGetNitroStatus(personId),
       dbGetCalls(personId),
+      dbGetCallActivity(personId, 365),
     ]);
     if (authIsAdmin()) cronLogs = await dbGetCronLogs(personId, 5);
   } catch(e) {
@@ -1212,6 +1214,93 @@ async function rptBuildCoachingSection(personId) {
     html += '<div><div style="font-weight:600;color:var(--y);font-size:13px;">Aucun sync detecte</div>';
     html += '<div style="font-size:11px;color:var(--td);">Le cron quotidien n\'a jamais tourne avec succes pour cette personne.</div>';
     html += '</div></div>';
+  }
+
+  // ── Sales Funnel Card ──
+  if (callActivity.length) {
+    // Aggregate funnel for selected period
+    const _periodDays = { '1sem': 7, '2sem': 14, '1mois': 30, '3mois': 90, 'tout': 9999 };
+    const funnelDays = _periodDays[_coachingPeriod] || 7;
+    const funnelSince = new Date(); funnelSince.setDate(funnelSince.getDate() - funnelDays); funnelSince.setHours(0,0,0,0);
+    const funnelData = funnelDays >= 9999 ? callActivity : callActivity.filter(a => new Date(a.activity_date + 'T12:00:00') >= funnelSince);
+
+    const fTotal = funnelData.reduce((s, a) => s + (a.total_dials || 0), 0);
+    const fAnswered = funnelData.reduce((s, a) => s + (a.answered || 0), 0);
+    const fQualified = funnelData.reduce((s, a) => s + (a.qualified_calls || 0), 0);
+    const fTranscribed = funnelData.reduce((s, a) => s + (a.transcribed || 0), 0);
+    const answerRate = fTotal ? Math.round(fAnswered / fTotal * 100) : 0;
+    const qualRate = fAnswered ? Math.round(fQualified / fAnswered * 100) : 0;
+    const activeDays = funnelData.filter(a => (a.total_dials || 0) > 0).length;
+    const avgDialsPerDay = activeDays ? Math.round(fTotal / activeDays) : 0;
+
+    html += '<div style="background:var(--s);border:1px solid var(--b);border-radius:12px;padding:16px;margin-bottom:16px;">';
+    html += '<div style="font-weight:700;color:var(--t);margin-bottom:12px;font-size:14px;">📞 Entonnoir de vente</div>';
+
+    // Funnel stages
+    html += '<div style="display:flex;gap:2px;align-items:stretch;margin-bottom:12px;">';
+    const funnelStage = (val, label, rate, color) => {
+      return '<div style="flex:1;text-align:center;padding:12px 8px;background:rgba(' + color + ',0.08);border-radius:8px;position:relative;">'
+        + '<div style="font-size:24px;font-weight:800;color:var(--t);">' + val + '</div>'
+        + '<div style="font-size:11px;color:var(--td);margin-top:2px;">' + label + '</div>'
+        + (rate !== null ? '<div style="font-size:10px;font-weight:600;color:rgba(' + color + ',0.9);margin-top:4px;">' + rate + '%</div>' : '')
+        + '</div>';
+    };
+    const arrow = '<div style="display:flex;align-items:center;color:var(--td);font-size:16px;padding:0 2px;">→</div>';
+    html += funnelStage(fTotal, 'Appels', null, '148,163,184');
+    html += arrow;
+    html += funnelStage(fAnswered, 'Repondus', answerRate, '96,165,250');
+    html += arrow;
+    html += funnelStage(fQualified, 'Qualifies', qualRate, '251,146,60');
+    html += arrow;
+    html += funnelStage('—', 'Ventes', null, '52,211,153');
+    html += '</div>';
+
+    // Mini stats row
+    html += '<div style="display:flex;gap:12px;font-size:11px;color:var(--td);">';
+    html += '<span>📅 ' + activeDays + ' jours actifs</span>';
+    html += '<span>📊 ' + avgDialsPerDay + ' appels/jour moy.</span>';
+    html += '<span>⏱️ ' + (funnelData.length ? Math.round(funnelData.reduce((s,a) => s + (a.avg_duration_sec || 0), 0) / funnelData.length) : 0) + 's duree moy.</span>';
+    html += '</div>';
+
+    html += '</div>';
+
+    // ── Revenue Calculator Card ──
+    if (avgDialsPerDay > 0) {
+      const workDaysPerMonth = 22;
+      const monthlyDials = avgDialsPerDay * workDaysPerMonth;
+      const monthlyQualified = Math.round(monthlyDials * (qualRate / 100));
+
+      html += '<div style="background:rgba(52,211,153,0.04);border:1px solid rgba(52,211,153,0.15);border-radius:12px;padding:16px;margin-bottom:16px;">';
+      html += '<div style="font-weight:700;color:var(--g);margin-bottom:10px;font-size:14px;">💰 Calculateur de performance</div>';
+      html += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;font-size:13px;color:var(--t);">';
+      html += '<div>Moyenne: <strong>' + avgDialsPerDay + ' appels/jour</strong></div>';
+      html += '<div>Taux reponse: <strong>' + answerRate + '%</strong></div>';
+      html += '<div>Projection mensuelle: <strong>' + monthlyDials + ' appels</strong></div>';
+      html += '<div>Conversations qualif./mois: <strong>' + monthlyQualified + '</strong></div>';
+      html += '</div>';
+
+      // Target scenarios
+      html += '<div style="margin-top:12px;padding-top:12px;border-top:1px solid rgba(52,211,153,0.15);font-size:12px;color:var(--td);">';
+      html += '<div style="font-weight:600;color:var(--t);margin-bottom:6px;">Scenarios (si taux conversion 5%):</div>';
+      const scenarios = [
+        { calls: 30, label: '30 appels/jour' },
+        { calls: 50, label: '50 appels/jour' },
+        { calls: 80, label: '80 appels/jour' },
+      ];
+      scenarios.forEach(sc => {
+        const monthly = sc.calls * workDaysPerMonth;
+        const qualified = Math.round(monthly * (qualRate / 100));
+        const sales = Math.round(qualified * 0.05);
+        const isCurrentPace = Math.abs(sc.calls - avgDialsPerDay) < 10;
+        html += '<div style="display:flex;gap:8px;padding:2px 0;' + (isCurrentPace ? 'color:var(--a);font-weight:600;' : '') + '">';
+        html += '<span style="min-width:120px;">' + sc.label + (isCurrentPace ? ' ← toi' : '') + '</span>';
+        html += '<span>→ ' + qualified + ' qualif.</span>';
+        html += '<span>→ ~' + sales + ' ventes/mois</span>';
+        html += '</div>';
+      });
+      html += '</div>';
+      html += '</div>';
+    }
   }
 
   // ── Period Filter Pills (with real call counts) ──
