@@ -519,9 +519,13 @@ def main():
 
         # Push funnel per date
         for sync_date in dates_to_sync:
-            day_raw = [c for c in raw_calls if (c.get("call_time") or c.get("datetime") or "")[:10] == sync_date
-                       or (c.get("time_utc") or c.get("time") or "")[:10] == sync_date]
+            day_raw = [c for c in raw_calls if (c.get("time") or c.get("time_utc") or "")[:10] == sync_date]
             if not day_raw:
+                # Even 0-call days get a row so the dashboard shows the gap
+                try:
+                    push_call_activity(sync_date, 0, 0, 0, 0, 0, 0, 0)
+                except RuntimeError:
+                    pass
                 continue
             d_total = len(day_raw)
             d_answered = sum(1 for c in day_raw if int(c.get("duration", 0) or 0) > 0)
@@ -603,6 +607,22 @@ def main():
         avg_dur = sum(new_durations) / len(new_durations) if new_durations else 0.0
         push_coaching_data(today_str, len(raw_calls), calls_success, calls_failed, transcripts_new, avg_dur)
         update_nitro_status("idle", calls_total, calls_total, False)
+
+        # 6b. Update call_activity with transcribed count per date
+        for sync_date in dates_to_sync:
+            day_raw = [c for c in raw_calls if (c.get("time") or c.get("time_utc") or "")[:10] == sync_date]
+            d_total = len(day_raw)
+            d_answered = sum(1 for c in day_raw if int(c.get("duration", 0) or 0) > 0)
+            d_short = sum(1 for c in day_raw if 0 < int(c.get("duration", 0) or 0) < MIN_DURATION_SEC)
+            d_qualified = sum(1 for c in day_raw if int(c.get("duration", 0) or 0) >= MIN_DURATION_SEC)
+            d_durs = [int(c.get("duration", 0) or 0) for c in day_raw if int(c.get("duration", 0) or 0) >= MIN_DURATION_SEC]
+            d_avg = sum(d_durs) / len(d_durs) if d_durs else 0
+            # Count transcribed for this date (qualified calls that succeeded)
+            d_transcribed = sum(1 for c in day_raw if int(c.get("duration", 0) or 0) >= MIN_DURATION_SEC and c.get("_transcribed"))
+            try:
+                push_call_activity(sync_date, d_total, d_answered, d_total - d_answered, d_short, d_qualified, calls_success if len(dates_to_sync) == 1 else d_qualified, d_avg)
+            except RuntimeError:
+                log.warning("Failed to update call_activity transcribed count for %s", sync_date)
 
         elapsed = time.time() - t0
         log.info(
