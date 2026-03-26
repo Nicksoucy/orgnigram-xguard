@@ -39,6 +39,20 @@ JUSTCALL_API_KEY = "daf60d953694336f07c84c74205eb311dd85c996"
 JUSTCALL_API_SECRET = "20612f8fcb80ef33845cbdc226bc8174853c82dd"
 JUSTCALL_AGENT_ID = "407715"
 
+# GHL fallback — in case Heidys uses GHL instead of JustCall
+GHL_TOKEN = "pit-7de455ab-c46e-47a4-af9e-0b07a6c3a1ee"
+GHL_LOCATION = "dfkLurZY2ADWAUZl4zYc"
+GHL_HEIDYS_USER_ID = "FqpS2HfIklBPAiAoANBB"
+GHL_BASE = "https://services.leadconnectorhq.com"
+GHL_HEADERS = {
+    "Authorization": f"Bearer {GHL_TOKEN}",
+    "Version": "2021-07-28",
+    "Content-Type": "application/json",
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+    "Origin": "https://app.gohighlevel.com",
+    "Referer": "https://app.gohighlevel.com/",
+}
+
 SUPABASE_URL = "https://ctjsdpfegpsfpwjgusyi.supabase.co"
 SUPABASE_KEY = (
     "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9."
@@ -169,8 +183,106 @@ def fetch_justcall_calls(date_str: str) -> list[dict]:
     return all_calls
 
 
+def fetch_ghl_calls_heidys(date_str: str) -> list[dict]:
+    """Fetch Heidys's calls from GHL for a single date (fallback if she used GHL).
+    Uses export-messages with cursor pagination.
+    Returns list of dicts normalized to JustCall-like format."""
+    ghl_calls = []
+    cursor = None
+    target_date = date_str
+
+    for _ in range(20):  # max 20 pages
+        url = f"{GHL_BASE}/conversations/messages/export?locationId={GHL_LOCATION}&limit=100"
+        if cursor:
+            url += f"&cursor={cursor}"
+        try:
+            resp = requests.get(url, headers=GHL_HEADERS, timeout=30)
+            resp.raise_for_status()
+        except Exception as exc:
+            log.warning("GHL export-messages failed: %s", exc)
+            break
+
+        data = resp.json()
+        messages = data.get("messages", [])
+        cursor = data.get("nextCursor")
+
+        oldest_date = ""
+        for msg in messages:
+            if not isinstance(msg, dict):
+                continue
+            date_added = msg.get("dateAdded", "")
+            oldest_date = date_added
+
+            # Stop if we've gone past our target date
+            if date_added[:10] < target_date:
+                cursor = None
+                break
+
+            # Only target date, only Heidys, only calls
+            if date_added[:10] != target_date:
+                continue
+            if msg.get("messageType") != "TYPE_CALL":
+                continue
+            if msg.get("userId") != GHL_HEIDYS_USER_ID:
+                continue
+
+            meta_call = msg.get("meta", {}).get("call", {}) if isinstance(msg.get("meta"), dict) else {}
+            duration = meta_call.get("duration") or 0
+
+            if duration < MIN_DURATION_SEC:
+                continue
+
+            # Normalize to JustCall-like format
+            ghl_calls.append({
+                "id": msg.get("id"),
+                "duration": duration,
+                "recording_url": f"__GHL__{msg.get('id')}",  # marker for GHL download
+                "call_time": date_added,
+                "contact_number": msg.get("to", ""),
+                "contact_name": "",
+                "source": "ghl",
+            })
+
+        if not cursor or not messages:
+            break
+        time.sleep(0.3)
+
+    log.info("GHL fallback: %d qualifying Heidys calls for %s", len(ghl_calls), date_str)
+    return ghl_calls
+
+
+def download_ghl_recording(msg_id: str, save_dir) -> str | None:
+    """Download recording from GHL magic endpoint. Returns file path or None."""
+    import os
+    save_dir = Path(save_dir)
+    save_dir.mkdir(parents=True, exist_ok=True)
+    wav_path = save_dir / f"ghl_{msg_id}.wav"
+    if wav_path.exists() and wav_path.stat().st_size > 1000:
+        return str(wav_path)
+    try:
+        rec_url = f"{GHL_BASE}/conversations/messages/{msg_id}/locations/{GHL_LOCATION}/recording"
+        resp = requests.get(rec_url, headers=GHL_HEADERS, timeout=120, stream=True)
+        if resp.status_code == 422:
+            return None
+        resp.raise_for_status()
+        tmp = wav_path.with_suffix(".wav.tmp")
+        size = 0
+        with open(tmp, "wb") as f:
+            for chunk in resp.iter_content(chunk_size=8192):
+                f.write(chunk)
+                size += len(chunk)
+        if size < 1000:
+            tmp.unlink(missing_ok=True)
+            return None
+        tmp.rename(wav_path)
+        return str(wav_path)
+    except Exception as exc:
+        log.error("GHL recording download failed for %s: %s", msg_id, exc)
+        return None
+
+
 def filter_calls(calls: list[dict]) -> list[dict]:
-    """Keep calls with duration >= 30s and a recording URL."""
+    """Keep calls with duration >= 30s and a recording URL (or GHL marker)."""
     filtered = []
     for c in calls:
         duration = int(c.get("duration", 0) or 0)
@@ -500,12 +612,22 @@ def main():
         if len(dates_to_sync) > 1:
             log.info("CATCH-UP: %d days to sync — %s", len(dates_to_sync), ", ".join(dates_to_sync))
 
-        # 2. Fetch calls for all dates
+        # 2. Fetch calls for all dates (JustCall primary + GHL fallback)
         raw_calls = []
+        ghl_calls = []
         for sync_date in dates_to_sync:
             day_calls = fetch_justcall_calls(sync_date)
-            log.info("  %s: %d raw calls", sync_date, len(day_calls))
+            log.info("  %s: %d JustCall raw calls", sync_date, len(day_calls))
             raw_calls.extend(day_calls)
+
+            # GHL fallback: check if Heidys also made calls via GHL
+            try:
+                day_ghl = fetch_ghl_calls_heidys(sync_date)
+                if day_ghl:
+                    log.info("  %s: ⚠️ %d GHL calls found (Heidys used GHL!)", sync_date, len(day_ghl))
+                    ghl_calls.extend(day_ghl)
+            except Exception as exc:
+                log.warning("  GHL fallback check failed (non-fatal): %s", exc)
 
         # 2b. Compute funnel stats from ALL calls (before filtering)
         funnel_total = len(raw_calls)
@@ -603,9 +725,50 @@ def main():
 
             update_nitro_status("running", idx, calls_total, gpu_active, last_file=f"{call_id}.json")
 
+        # 5b. Process GHL fallback calls (if Heidys used GHL)
+        ghl_new = 0
+        if ghl_calls:
+            log.info("=== Processing %d GHL fallback calls ===", len(ghl_calls))
+            for ghl_call in ghl_calls:
+                ghl_msg_id = ghl_call["id"]
+                ghl_transcript_path = TRANSCRIPT_DIR / f"ghl_{ghl_msg_id}.json"
+                if ghl_transcript_path.exists():
+                    log.info("  GHL call %s already transcribed", ghl_msg_id)
+                    continue
+                try:
+                    wav_path = download_ghl_recording(ghl_msg_id, WAV_DIR)
+                    if not wav_path:
+                        log.warning("  GHL recording unavailable for %s", ghl_msg_id)
+                        continue
+                    transcript_text, word_count = transcribe_recording(model, wav_path)
+                    # Save as GHL-sourced transcript
+                    ghl_doc = {
+                        "id": f"ghl_{ghl_msg_id}",
+                        "contact_name": ghl_call.get("contact_name", ""),
+                        "contact_number": ghl_call.get("contact_number", ""),
+                        "call_time": ghl_call.get("call_time", ""),
+                        "duration_s": ghl_call.get("duration", 0),
+                        "word_count": word_count,
+                        "language": "fr",
+                        "transcript": transcript_text,
+                        "recording_url": "",
+                        "source": "ghl",
+                    }
+                    tmp = ghl_transcript_path.with_suffix(".json.tmp")
+                    with open(tmp, "w", encoding="utf-8") as f:
+                        json.dump(ghl_doc, f, ensure_ascii=False, indent=2)
+                    tmp.rename(ghl_transcript_path)
+                    ghl_new += 1
+                    calls_success += 1
+                    log.info("  GHL OK: %s (%d words)", ghl_msg_id, word_count)
+                except Exception as exc:
+                    log.error("  GHL error on %s: %s", ghl_msg_id, exc)
+            log.info("GHL fallback done: %d new transcripts", ghl_new)
+            transcripts_new += ghl_new
+
         # 6. Push summary to Supabase — FATAL if fails
         avg_dur = sum(new_durations) / len(new_durations) if new_durations else 0.0
-        push_coaching_data(today_str, len(raw_calls), calls_success, calls_failed, transcripts_new, avg_dur)
+        push_coaching_data(today_str, len(raw_calls) + len(ghl_calls), calls_success, calls_failed, transcripts_new, avg_dur)
         update_nitro_status("idle", calls_total, calls_total, False)
 
         # 6b. Update call_activity with transcribed count per date
