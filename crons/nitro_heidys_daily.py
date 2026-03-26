@@ -369,7 +369,7 @@ def push_coaching_data(
             "calls_total": calls_total,
             "calls_transcribed": calls_success,
             "calls_new": calls_new,
-            "avg_duration_sec": round(avg_duration, 1),
+            "avg_duration_sec": int(round(avg_duration)),
             "source": "justcall",
         },
         on_conflict="person_id,sync_date",
@@ -392,7 +392,7 @@ def push_call_activity(
             "short_calls": short_calls,
             "qualified_calls": qualified_calls,
             "transcribed": transcribed,
-            "avg_duration_sec": round(avg_duration, 1),
+            "avg_duration_sec": int(round(avg_duration)),
         },
         on_conflict="person_id,activity_date",
     )
