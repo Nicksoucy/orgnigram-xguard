@@ -109,6 +109,37 @@ def supabase_insert(table, data):
     return resp
 
 
+def push_call(call_doc):
+    """Push individual call to Supabase calls table (non-fatal)."""
+    try:
+        supabase_upsert("calls", call_doc, on_conflict="id,person_id")
+    except Exception as exc:
+        log.warning("push_call failed (non-fatal): %s", exc)
+
+
+def push_call_activity(activity_date, total_dials, answered, not_answered,
+                       short_calls, qualified_calls, transcribed, avg_dur):
+    """Push daily activity funnel to Supabase (non-fatal)."""
+    try:
+        supabase_upsert(
+            "call_activity",
+            {
+                "person_id": PERSON_ID,
+                "activity_date": activity_date,
+                "total_dials": total_dials,
+                "answered": answered,
+                "not_answered": not_answered,
+                "short_calls": short_calls,
+                "qualified_calls": qualified_calls,
+                "transcribed": transcribed,
+                "avg_duration_sec": int(avg_dur),
+            },
+            on_conflict="person_id,activity_date",
+        )
+    except Exception as exc:
+        log.warning("push_call_activity failed (non-fatal): %s", exc)
+
+
 def update_nitro_status(**kwargs):
     """Push a status row to nitro_status."""
     payload = {"person_id": PERSON_ID, "task_type": "daily_sync", **kwargs}
@@ -203,45 +234,80 @@ def compute_dates_to_sync(today_str: str) -> list[str]:
     return dates
 
 
-def fetch_call_messages(conversation_id):
-    """Fetch messages for a conversation and filter for Domingos's calls >= 30s."""
-    calls = []
+def fetch_call_messages_all(conversation_id, contact_name="", contact_phone=""):
+    """Fetch ALL call messages for a conversation (both qualified and short).
+    Returns (qualified_calls, all_calls_stats) where all_calls_stats has funnel info."""
+    qualified = []
+    stats = {"total": 0, "answered": 0, "not_answered": 0, "short": 0, "qualified": 0}
     try:
         data = ghl_get(
             f"/conversations/{conversation_id}/messages",
             params={"locationId": GHL_LOCATION, "limit": 100},
         )
-        for msg in data.get("messages", []):
+        raw_msgs = data.get("messages", {})
+        if isinstance(raw_msgs, dict):
+            raw_msgs = raw_msgs.get("messages", [])
+
+        for msg in raw_msgs:
+            if not isinstance(msg, dict):
+                continue
             if msg.get("messageType") != "TYPE_CALL":
                 continue
             if msg.get("userId") != GHL_USER_ID:
                 continue
-            duration = msg.get("duration", 0)
-            if duration < MIN_CALL_DURATION:
-                continue
-            calls.append(msg)
+
+            meta_call = msg.get("meta", {}).get("call", {}) if isinstance(msg.get("meta"), dict) else {}
+            duration = meta_call.get("duration") or msg.get("duration") or 0
+
+            stats["total"] += 1
+            if duration == 0:
+                stats["not_answered"] += 1
+            elif duration < MIN_CALL_DURATION:
+                stats["answered"] += 1
+                stats["short"] += 1
+            else:
+                stats["answered"] += 1
+                stats["qualified"] += 1
+                msg["_duration"] = duration
+                msg["_contact_name"] = contact_name
+                msg["_contact_phone"] = contact_phone
+                qualified.append(msg)
+
     except Exception as exc:
         log.error("Error fetching messages for %s: %s", conversation_id, exc)
-    return calls
+    return qualified, stats
 
 
 # ---------------------------------------------------------------------------
 # Recording download
 # ---------------------------------------------------------------------------
-def download_recording(recording_url, msg_id):
-    """Download a call recording WAV. Returns path or None."""
+def download_recording(msg_id):
+    """Download a call recording WAV using GHL magic endpoint. Returns path or None."""
     WAV_DIR.mkdir(parents=True, exist_ok=True)
     wav_path = WAV_DIR / f"{msg_id}.wav"
-    if wav_path.exists():
+    if wav_path.exists() and wav_path.stat().st_size > 1000:
         log.info("WAV already exists: %s", wav_path.name)
         return wav_path
     try:
-        resp = requests.get(recording_url, timeout=120, stream=True)
+        # Magic GHL endpoint: MUST include /locations/{LOCATION_ID}/ in path
+        rec_url = f"{GHL_BASE}/conversations/messages/{msg_id}/locations/{GHL_LOCATION}/recording"
+        resp = requests.get(rec_url, headers=GHL_HEADERS, timeout=120, stream=True)
+        if resp.status_code == 422:
+            log.warning("No recording available for %s (422)", msg_id)
+            return None
         resp.raise_for_status()
-        with open(wav_path, "wb") as f:
+        tmp_path = WAV_DIR / f"{msg_id}.wav.tmp"
+        size = 0
+        with open(tmp_path, "wb") as f:
             for chunk in resp.iter_content(chunk_size=8192):
                 f.write(chunk)
-        log.info("Downloaded %s", wav_path.name)
+                size += len(chunk)
+        if size < 1000:
+            log.warning("Recording too small (%d bytes) for %s, skipping", size, msg_id)
+            tmp_path.unlink(missing_ok=True)
+            return None
+        tmp_path.rename(wav_path)  # atomic rename
+        log.info("Downloaded %s (%d KB)", wav_path.name, size // 1024)
         return wav_path
     except Exception as exc:
         log.error("Download failed for %s: %s", msg_id, exc)
@@ -324,9 +390,26 @@ def save_transcript(msg, transcript_text, word_count, language, classification):
         "transcribed_at": datetime.now(timezone.utc).isoformat(),
     }
 
-    with open(out_path, "w", encoding="utf-8") as f:
+    tmp_path = TRANSCRIPT_DIR / f"{msg_id}.json.tmp"
+    with open(tmp_path, "w", encoding="utf-8") as f:
         json.dump(doc, f, ensure_ascii=False, indent=2)
+    tmp_path.rename(out_path)  # atomic rename
     log.info("Saved transcript %s (%s)", msg_id, classification)
+
+    # Push individual call to Supabase
+    push_call({
+        "id": msg_id,
+        "person_id": PERSON_ID,
+        "call_time": doc["call_time"],
+        "duration_s": doc["duration_s"],
+        "contact_name": doc["contact_name"],
+        "contact_number": doc["contact_number"],
+        "word_count": word_count,
+        "language": language,
+        "source": "ghl",
+        "classification": classification,
+    })
+
     return doc
 
 
@@ -368,19 +451,41 @@ def main():
         })
         return
 
-    # ------ Step 2: Collect qualifying call messages ------
+    # ------ Step 2: Collect ALL call messages (funnel + qualified) ------
     all_calls = []
+    funnel_totals = {"total": 0, "answered": 0, "not_answered": 0, "short": 0, "qualified": 0}
+
     for conv in conversations:
         conv_id = conv.get("id")
         if not conv_id:
             continue
-        calls = fetch_call_messages(conv_id)
-        for call in calls:
-            call["_contact_name"] = conv.get("contactName", "")
-            call["_contact_phone"] = conv.get("phone", "")
-        all_calls.extend(calls)
+        qualified, stats = fetch_call_messages_all(
+            conv_id,
+            contact_name=conv.get("contactName", ""),
+            contact_phone=conv.get("phone", ""),
+        )
+        all_calls.extend(qualified)
+        for k in funnel_totals:
+            funnel_totals[k] += stats[k]
 
-    log.info("Total qualifying calls: %d", len(all_calls))
+    log.info("Funnel: %d dials, %d answered, %d short, %d qualified",
+             funnel_totals["total"], funnel_totals["answered"],
+             funnel_totals["short"], funnel_totals["qualified"])
+
+    # Push funnel stats per date
+    for sync_date in dates_to_sync:
+        push_call_activity(
+            sync_date,
+            total_dials=funnel_totals["total"] // max(len(dates_to_sync), 1),
+            answered=funnel_totals["answered"] // max(len(dates_to_sync), 1),
+            not_answered=funnel_totals["not_answered"] // max(len(dates_to_sync), 1),
+            short_calls=funnel_totals["short"] // max(len(dates_to_sync), 1),
+            qualified_calls=funnel_totals["qualified"] // max(len(dates_to_sync), 1),
+            transcribed=0,  # updated after transcription
+            avg_dur=0,
+        )
+
+    log.info("Total qualifying calls for transcription: %d", len(all_calls))
     update_nitro_status(
         status="running", done=0, total=len(all_calls), pct=0, gpu_active=False
     )
@@ -411,17 +516,8 @@ def main():
             continue
 
         try:
-            # Recording URL
-            rec_url = msg.get("recordingUrl", "")
-            if not rec_url:
-                attachments = msg.get("attachments", [])
-                rec_url = attachments[0] if attachments else ""
-            if not rec_url:
-                log.warning("No recording URL for %s, skipping", msg_id)
-                continue
-
-            # Download
-            wav_path = download_recording(rec_url, msg_id)
+            # Download recording via GHL magic endpoint
+            wav_path = download_recording(msg_id)
             if wav_path is None:
                 continue
 
@@ -440,14 +536,15 @@ def main():
             classification = classify_call(transcript_text)
             breakdown[classification] = breakdown.get(classification, 0) + 1
 
-            # Inject contact info from conversation
+            # Inject contact info and duration from conversation
             msg["contactName"] = msg.get("contactName") or msg.get("_contact_name", "")
             msg["contactPhone"] = msg.get("contactPhone") or msg.get("_contact_phone", "")
+            msg["duration"] = msg.get("_duration") or msg.get("duration", 0)
 
-            # Save transcript
+            # Save transcript + push to Supabase calls table
             save_transcript(msg, transcript_text, word_count, language, classification)
 
-            dur = msg.get("duration", 0)
+            dur = msg.get("_duration") or msg.get("duration", 0)
             durations.append(dur)
             calls_transcribed += 1
             calls_new += 1
