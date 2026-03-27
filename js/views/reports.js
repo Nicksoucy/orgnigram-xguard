@@ -806,7 +806,7 @@ async function renderReports(ct, cl) {
 // Shown above manual reports for agents with coaching data.
 // ============================================================
 
-const COACHING_PEOPLE = ['v1', 't11'];
+const COACHING_PEOPLE = ['v1', 't11', 'L3', 's2', 's3'];
 
 const COACHING_DIMENSIONS = [
   { key: 'intro',         label: 'Introduction',      icon: '👋' },
@@ -1485,7 +1485,7 @@ async function rptBuildCoachingSection(personId) {
       html += '<div style="background:var(--s);border:1px solid var(--b);border-radius:12px;padding:16px;margin-bottom:16px;display:flex;gap:24px;justify-content:center;">';
       html += '<div style="font-weight:700;color:var(--t);font-size:14px;align-self:center;">📞 Repartition</div>';
       Object.entries(breakdown).forEach(([key, val]) => {
-        const colors = { drone: 'var(--cy)', elite: 'var(--p)', autre: 'var(--td)' };
+        const colors = { drone: 'var(--cy)', elite: 'var(--p)', autre: 'var(--td)', support: 'var(--cy)', inscription: 'var(--g)', plainte: 'var(--r)', info: 'var(--y)' };
         html += '<div style="text-align:center;padding:4px 16px;">';
         html += '<div style="font-size:24px;font-weight:700;color:' + (colors[key] || 'var(--t)') + ';">' + val + '</div>';
         html += '<div style="font-size:11px;color:var(--td);text-transform:capitalize;">' + esc(key) + '</div>';
