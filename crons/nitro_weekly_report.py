@@ -84,8 +84,9 @@ log = logging.getLogger("nitro_weekly_report")
 # Supabase helpers
 # ---------------------------------------------------------------------------
 
-def supabase_upsert(table: str, data: dict | list) -> requests.Response:
-    url = f"{SUPABASE_URL}/rest/v1/{table}"
+def supabase_upsert(table: str, data: dict | list, on_conflict: str = "") -> requests.Response:
+    oc = f"?on_conflict={on_conflict}" if on_conflict else ""
+    url = f"{SUPABASE_URL}/rest/v1/{table}{oc}"
     headers = {
         "apikey": SUPABASE_KEY,
         "Authorization": f"Bearer {SUPABASE_KEY}",
@@ -779,7 +780,7 @@ def build_raw_summary(
 
 def push_to_supabase(report: dict) -> bool:
     try:
-        resp = supabase_upsert("coaching_reports", report)
+        resp = supabase_upsert("coaching_reports", report, on_conflict="person_id,week_start")
         if resp.status_code in (200, 201):
             log.info("Supabase upsert OK for %s", report["person_id"])
             return True

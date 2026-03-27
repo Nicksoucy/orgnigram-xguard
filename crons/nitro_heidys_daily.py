@@ -109,7 +109,7 @@ log.addHandler(_file_handler)
 
 def supabase_upsert(table: str, data: dict | list, on_conflict: str) -> requests.Response:
     """Upsert data into a Supabase table. Raises on failure."""
-    url = f"{SUPABASE_URL}/rest/v1/{table}"
+    url = f"{SUPABASE_URL}/rest/v1/{table}?on_conflict={on_conflict}"
     headers = {
         "apikey": SUPABASE_KEY,
         "Authorization": f"Bearer {SUPABASE_KEY}",

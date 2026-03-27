@@ -150,8 +150,9 @@ def classify_call(text: str) -> str:
 # ---------------------------------------------------------------------------
 
 
-def supabase_upsert(table: str, data: dict | list) -> requests.Response:
-    url = f"{SUPABASE_URL}/rest/v1/{table}"
+def supabase_upsert(table: str, data: dict | list, on_conflict: str = "") -> requests.Response:
+    oc = f"?on_conflict={on_conflict}" if on_conflict else ""
+    url = f"{SUPABASE_URL}/rest/v1/{table}{oc}"
     headers = {
         "apikey": SUPABASE_KEY,
         "Authorization": f"Bearer {SUPABASE_KEY}",
@@ -347,7 +348,7 @@ def process_agent(agent_name: str, config: dict, model, date_str: str) -> dict:
             "gpu_active": True,
             "last_file": "",
             "started_at": datetime.now(timezone.utc).isoformat(),
-        })
+        }, on_conflict="person_id,task_type")
     except Exception as exc:
         log.warning("Failed to update nitro_status: %s", exc)
 
@@ -457,7 +458,7 @@ def process_agent(agent_name: str, config: dict, model, date_str: str) -> dict:
                     "pct": round(100 * stats["calls_transcribed"] / stats["calls_total"], 1),
                     "gpu_active": True,
                     "last_file": call_id,
-                })
+                }, on_conflict="person_id,task_type")
             except Exception:
                 pass
 
@@ -499,7 +500,7 @@ def _finalize_agent(
             "avg_duration_sec": avg_dur,
             "call_breakdown": call_breakdown,
             "source": "justcall",
-        })
+        }, on_conflict="person_id,sync_date")
     except Exception as exc:
         log.error("coaching_data push failed: %s", exc)
 
@@ -514,7 +515,7 @@ def _finalize_agent(
             "pct": 100.0 if stats["calls_total"] > 0 else 0,
             "gpu_active": False,
             "last_file": "",
-        })
+        }, on_conflict="person_id,task_type")
     except Exception as exc:
         log.error("nitro_status push failed: %s", exc)
 
