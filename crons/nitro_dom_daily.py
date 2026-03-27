@@ -79,7 +79,7 @@ ELITE_PATTERN = re.compile(
 # ---------------------------------------------------------------------------
 def supabase_upsert(table, data, on_conflict="person_id"):
     """Upsert a row into Supabase via REST."""
-    url = f"{SUPABASE_URL}/rest/v1/{table}"
+    url = f"{SUPABASE_URL}/rest/v1/{table}?on_conflict={on_conflict}"
     headers = {
         "apikey": SUPABASE_KEY,
         "Authorization": f"Bearer {SUPABASE_KEY}",
