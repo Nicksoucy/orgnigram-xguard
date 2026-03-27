@@ -51,6 +51,21 @@ AGENTS = {
         "transcript_dir": "C:/Users/user/xguard_transcripts/domingos/",
         "report_type": "ventes_drone",
     },
+    "hamza": {
+        "person_id": "L3",
+        "transcript_dir": "C:/Users/user/xguard_transcripts/hamza/",
+        "report_type": "sac",
+    },
+    "lilia": {
+        "person_id": "s2",
+        "transcript_dir": "C:/Users/user/xguard_transcripts/lilia/",
+        "report_type": "sac",
+    },
+    "sekou": {
+        "person_id": "s3",
+        "transcript_dir": "C:/Users/user/xguard_transcripts/sekou/",
+        "report_type": "sac",
+    },
 }
 
 LOCAL_REPORT_DIR = "C:/Users/user/xguard_reports/"
@@ -187,6 +202,40 @@ def classify_call(transcript: dict) -> str:
         return "elite"
     if DRONE_KEYWORDS.search(text):
         return "drone"
+    return "autre"
+
+
+# ---------------------------------------------------------------------------
+# Classification (SAC)
+# ---------------------------------------------------------------------------
+
+SAC_SUPPORT_KW = re.compile(
+    r"\b(problème|aide|fonctionne pas|ne marche pas|erreur|bug|technique|accès|mot de passe|connexion)\b", re.IGNORECASE
+)
+SAC_INSCRIPTION_KW = re.compile(
+    r"\b(inscrire|inscription|formation|cours|session|programme|date|place|disponible)\b", re.IGNORECASE
+)
+SAC_PLAINTE_KW = re.compile(
+    r"\b(plainte|mécontent|insatisfait|rembours|annuler|déçu|inacceptable|pire)\b", re.IGNORECASE
+)
+SAC_INFO_KW = re.compile(
+    r"\b(information|renseignement|question|comment|combien|prix|tarif|horaire|adresse)\b", re.IGNORECASE
+)
+
+
+def classify_call_sac(transcript: dict) -> str:
+    classification = transcript.get("classification", "").lower().strip()
+    if classification in ("support", "inscription", "plainte", "info", "autre"):
+        return classification
+    text = transcript.get("transcript", "") or ""
+    if SAC_PLAINTE_KW.search(text):
+        return "plainte"
+    if SAC_INSCRIPTION_KW.search(text):
+        return "inscription"
+    if SAC_SUPPORT_KW.search(text):
+        return "support"
+    if SAC_INFO_KW.search(text):
+        return "info"
     return "autre"
 
 
@@ -599,12 +648,18 @@ def compute_weekly_summary(
     avg_longest_mono = round(sum(m["longest_monologue_sec"] for m in all_metrics) / len(all_metrics), 0) if all_metrics else 0
     avg_wpm = round(sum(m["words_per_minute"] for m in all_metrics) / len(all_metrics), 0) if all_metrics else 0
 
-    # Classification breakdown (Domingos only)
+    # Classification breakdown
     call_breakdown = None
     if agent_name == "domingos":
         call_breakdown = {"drone": 0, "elite": 0, "autre": 0}
         for t in transcripts:
             cls = classify_call(t)
+            t["_classification"] = cls
+            call_breakdown[cls] += 1
+    elif report_type == "sac":
+        call_breakdown = {"support": 0, "inscription": 0, "plainte": 0, "info": 0, "autre": 0}
+        for t in transcripts:
+            cls = classify_call_sac(t)
             t["_classification"] = cls
             call_breakdown[cls] += 1
 
