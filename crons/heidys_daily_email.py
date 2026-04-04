@@ -12,10 +12,12 @@ Sends an email to Heidys with:
 import json
 import logging
 import os
-import subprocess
+import smtplib
 import sys
 import time
 from datetime import datetime, timedelta, timezone
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
 
 import requests
 
@@ -35,10 +37,9 @@ SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJ
 
 EMAIL_TO = "garheidys@gmail.com"
 EMAIL_CC = "nick@darkhorseads.com"
+GMAIL_USER = "nick@darkhorseads.com"
+GMAIL_APP_PASSWORD = "kjaqmxuewwzkxcif"
 REPORT_DIR = r"C:\Users\user\heidys_reports"
-
-CLAUDE_EXE = r"C:\Users\User\AppData\Local\Packages\Claude_pzs8sxrjxfjjc\LocalCache\Roaming\Claude\claude-code\2.1.63\claude.exe"
-GIT_BASH = r"C:\Program Files\Git\bin\bash.exe"
 
 GHL_HEADERS = {
     "Authorization": f"Bearer {GHL_TOKEN}",
@@ -276,7 +277,7 @@ h3 {{ margin: 0 0 12px; font-size: 15px; color: #333; }}
 
 
 def send_email(date_str, html_body):
-    """Send email via Claude CLI gmail_create_draft."""
+    """Send email via Gmail SMTP directly."""
     os.makedirs(REPORT_DIR, exist_ok=True)
     html_path = os.path.join(REPORT_DIR, "daily_email.html")
     with open(html_path, "w", encoding="utf-8") as f:
@@ -285,27 +286,18 @@ def send_email(date_str, html_body):
     day_names = {0:"Lundi",1:"Mardi",2:"Mercredi",3:"Jeudi",4:"Vendredi",5:"Samedi",6:"Dimanche"}
     day_name = day_names.get(datetime.now().weekday(), "")
 
-    prompt = f"""Use the gmail_create_draft tool to create an email draft with these EXACT parameters:
-To: {EMAIL_TO}
-CC: {EMAIL_CC}
-Subject: Coaching Heidys {day_name} {date_str} — Rappels et Resume
-Content type: text/html
-Body: Read the HTML content from the file at {html_path} and use it as the email body.
-Create the draft now."""
-
-    env = os.environ.copy()
-    env["CLAUDE_CODE_GIT_BASH_PATH"] = GIT_BASH
+    msg = MIMEMultipart("alternative")
+    msg["From"] = GMAIL_USER
+    msg["To"] = EMAIL_TO
+    msg["Cc"] = EMAIL_CC
+    msg["Subject"] = f"Coaching Heidys {day_name} {date_str} — Rappels et Resume"
+    msg.attach(MIMEText(html_body, "html", "utf-8"))
 
     try:
-        result = subprocess.run(
-            [CLAUDE_EXE, "-p", "--model", "haiku", "--max-turns", "3"],
-            input=prompt, capture_output=True, text=True, env=env, timeout=120,
-            cwd=r"C:\Users\user",
-        )
-        if result.returncode == 0:
-            log.info("Email draft created successfully")
-        else:
-            log.warning("Email draft failed: %s", result.stderr[:200])
+        with smtplib.SMTP_SSL("smtp.gmail.com", 465) as server:
+            server.login(GMAIL_USER, GMAIL_APP_PASSWORD)
+            server.sendmail(GMAIL_USER, [EMAIL_TO, EMAIL_CC], msg.as_string())
+        log.info("Email sent successfully via SMTP")
     except Exception as e:
         log.error("Email sending failed: %s", e)
 
