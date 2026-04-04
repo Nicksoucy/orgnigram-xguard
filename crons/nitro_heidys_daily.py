@@ -283,6 +283,56 @@ def download_ghl_recording(msg_id: str, save_dir) -> str | None:
         return None
 
 
+# ---------------------------------------------------------------------------
+# GHL: Find contact, post note, create task
+# ---------------------------------------------------------------------------
+
+def _ghl_find_contact(phone: str) -> str | None:
+    """Find GHL contact by phone number. Returns contactId or None."""
+    if not phone:
+        return None
+    # Normalize phone
+    clean = phone.strip().replace(" ", "").replace("-", "")
+    if not clean.startswith("+"):
+        clean = "+1" + clean if len(clean) == 10 else "+" + clean
+    try:
+        resp = requests.get(
+            f"{GHL_BASE}/contacts/search/duplicate",
+            params={"locationId": GHL_LOCATION, "number": clean},
+            headers=GHL_HEADERS, timeout=15,
+        )
+        if resp.status_code == 200:
+            contact = resp.json().get("contact", {})
+            return contact.get("id")
+    except Exception as e:
+        log.warning("GHL contact lookup failed for %s: %s", phone, e)
+    return None
+
+
+def _ghl_post_note(contact_id: str, body: str):
+    """Post a note on a GHL contact."""
+    resp = requests.post(
+        f"{GHL_BASE}/contacts/{contact_id}/notes",
+        json={"body": body},
+        headers={**GHL_HEADERS, "Content-Type": "application/json"},
+        timeout=15,
+    )
+    if resp.status_code not in (200, 201):
+        log.warning("GHL post note failed (%d): %s", resp.status_code, resp.text[:100])
+
+
+def _ghl_create_task(contact_id: str, title: str, body: str, due_date: str):
+    """Create a task on a GHL contact."""
+    resp = requests.post(
+        f"{GHL_BASE}/contacts/{contact_id}/tasks",
+        json={"title": title, "body": body, "dueDate": f"{due_date}T10:00:00Z", "completed": False},
+        headers={**GHL_HEADERS, "Content-Type": "application/json"},
+        timeout=15,
+    )
+    if resp.status_code not in (200, 201):
+        log.warning("GHL create task failed (%d): %s", resp.status_code, resp.text[:100])
+
+
 def filter_calls(calls: list[dict]) -> list[dict]:
     """Keep calls with duration >= 30s and a recording URL (or GHL marker)."""
     filtered = []
@@ -789,10 +839,121 @@ def main():
             except RuntimeError:
                 log.warning("Failed to update call_activity transcribed count for %s", sync_date)
 
+        # 7. Haiku scoring + GHL notes (non-fatal)
+        haiku_scored = 0
+        ghl_notes_posted = 0
+        ghl_tasks_created = 0
+        try:
+            from claude_scoring import score_heidys_call
+            log.info("=== Step 7: Haiku scoring + GHL notes ===")
+
+            # Collect all newly transcribed calls
+            scored_calls = []
+            for sync_date in dates_to_sync:
+                for fp in Path(TRANSCRIPT_DIR).glob("*.json"):
+                    try:
+                        with open(fp, "r", encoding="utf-8") as f:
+                            doc = json.load(f)
+                        ct = doc.get("call_time", "")
+                        if sync_date not in ct:
+                            continue
+                        if doc.get("ai_scores"):
+                            continue  # Already scored
+                        if (doc.get("word_count") or 0) < 15:
+                            continue
+                        scored_calls.append((fp, doc))
+                    except Exception:
+                        continue
+
+            log.info("  %d calls to score with Haiku", len(scored_calls))
+
+            for fp, doc in scored_calls:
+                try:
+                    result = score_heidys_call(doc)
+                    if not result or not result.get("ai_scores"):
+                        continue
+
+                    # Save scores back to JSON
+                    doc["ai_scores"] = result["ai_scores"]
+                    doc["ai_global_score"] = result["ai_global_score"]
+                    doc["coaching_note"] = result.get("coaching_note", "")
+                    doc["call_summary"] = result.get("call_summary", "")
+                    doc["objections_detected"] = result.get("objections_detected", [])
+                    doc["next_step"] = result.get("next_step", "")
+                    doc["callback_date"] = result.get("callback_date")
+
+                    tmp = str(fp) + ".tmp"
+                    with open(tmp, "w", encoding="utf-8") as f:
+                        json.dump(doc, f, ensure_ascii=False, indent=2)
+                    os.replace(tmp, str(fp))
+                    haiku_scored += 1
+
+                    # Update Supabase calls table with scores
+                    call_id = doc.get("id", "")
+                    if call_id:
+                        try:
+                            supabase_upsert("calls", {
+                                "call_id": call_id,
+                                "person_id": PERSON_ID,
+                                "ai_scores": json.dumps(result["ai_scores"]),
+                                "ai_global_score": result["ai_global_score"],
+                                "coaching_note": result.get("coaching_note", ""),
+                            }, on_conflict="call_id")
+                        except Exception as e:
+                            log.warning("  Supabase score update failed for %s: %s", call_id, e)
+
+                    # Post note to GHL contact
+                    phone = doc.get("contact_number", "")
+                    if phone and len(phone) >= 10:
+                        try:
+                            contact_id = _ghl_find_contact(phone)
+                            if contact_id:
+                                dur_s = doc.get("duration_s", 0)
+                                dur_m = int(dur_s) // 60
+                                dur_sec = int(dur_s) % 60
+                                score = result["ai_global_score"]
+                                summary = result.get("call_summary", "Pas de resume")
+                                objections = ", ".join(result.get("objections_detected", [])) or "Aucune"
+                                next_step = result.get("next_step", "Non defini")
+                                callback = result.get("callback_date")
+
+                                note_body = (
+                                    f"📞 Appel du {doc.get('call_time','')[:10]} — {dur_m}m{dur_sec:02d}s — Score: {score}/10\n"
+                                    f"Resume: {summary}\n"
+                                    f"Objections: {objections}\n"
+                                    f"Next step: {next_step}\n"
+                                    f"🤖 Auto-genere par le systeme coaching"
+                                )
+                                _ghl_post_note(contact_id, note_body)
+                                ghl_notes_posted += 1
+
+                                # Create callback task if date detected
+                                if callback and callback != "null":
+                                    contact_name = doc.get("contact_name", "")
+                                    _ghl_create_task(
+                                        contact_id,
+                                        f"Rappel — {contact_name or phone}",
+                                        f"Suite a l'appel: {summary}",
+                                        callback,
+                                    )
+                                    ghl_tasks_created += 1
+                        except Exception as e:
+                            log.warning("  GHL note/task failed for %s: %s", phone, e)
+
+                    log.info("  Scored: %s — %.1f/10", fp.name if hasattr(fp, 'name') else fp, result["ai_global_score"])
+                except Exception as e:
+                    log.warning("  Haiku scoring failed for %s: %s", fp, e)
+
+            log.info("  Haiku: %d scored, GHL: %d notes, %d tasks", haiku_scored, ghl_notes_posted, ghl_tasks_created)
+        except ImportError:
+            log.warning("claude_scoring.py not found — skipping Haiku scoring")
+        except Exception as e:
+            log.warning("Haiku scoring step failed (non-fatal): %s", e)
+
         elapsed = time.time() - t0
         log.info(
-            "===== Sync complete: %d success, %d failed, %d new transcripts (%.1fs) =====",
-            calls_success, calls_failed, transcripts_new, elapsed,
+            "===== Sync complete: %d success, %d failed, %d new, %d scored, %d GHL notes (%.1fs) =====",
+            calls_success, calls_failed, transcripts_new, haiku_scored, ghl_notes_posted, elapsed,
         )
 
         # Determine overall status
