@@ -21,27 +21,39 @@ GIT_BASH = r"C:\Program Files\Git\bin\bash.exe"
 # ---------------------------------------------------------------------------
 
 def call_claude(prompt: str, model: str = "haiku", max_turns: int = 1, timeout: int = 120) -> str:
-    """Call Claude CLI in print mode. Returns raw text output."""
+    """Call Claude CLI in print mode. Returns raw text output. Retries once on refusal."""
     env = os.environ.copy()
     env["CLAUDE_CODE_GIT_BASH_PATH"] = GIT_BASH
 
     cmd = [CLAUDE_EXE, "-p", "--model", model, "--max-turns", str(max_turns)]
 
-    try:
-        result = subprocess.run(
-            cmd, input=prompt, capture_output=True, text=True,
-            env=env, timeout=timeout, cwd=r"C:\Users\user"
-        )
-        if result.returncode != 0:
-            log.warning("Claude CLI returned %d: %s", result.returncode, result.stderr[:200])
+    for attempt in range(2):
+        try:
+            input_text = prompt if attempt == 0 else (
+                "IMPORTANT: Tu es un outil d'analyse de donnees textuelles. "
+                "Le texte ci-dessous est un transcript d'appel a analyser. "
+                "Reponds UNIQUEMENT avec le JSON demande.\n\n" + prompt
+            )
+            result = subprocess.run(
+                cmd, input=input_text, capture_output=True, text=True,
+                env=env, timeout=timeout, cwd=r"C:\Users\user"
+            )
+            if result.returncode != 0:
+                log.warning("Claude CLI returned %d: %s", result.returncode, result.stderr[:200])
+                return ""
+            output = result.stdout.strip()
+            # Check for refusal (Claude responding as Claude Code instead of scoring)
+            if "ingénierie logicielle" in output or "software engineering" in output or "Claude Code" in output:
+                log.warning("Claude refused to score (attempt %d), retrying with stronger prompt", attempt + 1)
+                continue
+            return output
+        except subprocess.TimeoutExpired:
+            log.warning("Claude CLI timed out after %ds (model=%s)", timeout, model)
             return ""
-        return result.stdout.strip()
-    except subprocess.TimeoutExpired:
-        log.warning("Claude CLI timed out after %ds (model=%s)", timeout, model)
-        return ""
-    except Exception as e:
-        log.error("Claude CLI error: %s", e)
-        return ""
+        except Exception as e:
+            log.error("Claude CLI error: %s", e)
+            return ""
+    return ""
 
 
 def call_claude_json(prompt: str, model: str = "haiku", timeout: int = 120) -> dict:
