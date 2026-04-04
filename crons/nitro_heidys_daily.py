@@ -27,6 +27,7 @@ import tempfile
 import time
 import uuid
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 
 import requests
 
@@ -64,6 +65,7 @@ SUPABASE_KEY = (
 PERSON_ID = "v1"
 AGENT_NAME = "heidys"
 TRANSCRIPT_DIR = r"C:\Users\user\xguard_transcripts\heidys"
+WAV_DIR = os.path.join(TRANSCRIPT_DIR, "wav")
 LOG_FILE = os.path.join(TRANSCRIPT_DIR, "daily.log")
 MIN_DURATION_SEC = 30
 MAX_BATCH_SIZE = 500  # prevent runaway backfills
@@ -731,8 +733,8 @@ def main():
             log.info("=== Processing %d GHL fallback calls ===", len(ghl_calls))
             for ghl_call in ghl_calls:
                 ghl_msg_id = ghl_call["id"]
-                ghl_transcript_path = TRANSCRIPT_DIR / f"ghl_{ghl_msg_id}.json"
-                if ghl_transcript_path.exists():
+                ghl_transcript_path = os.path.join(TRANSCRIPT_DIR, f"ghl_{ghl_msg_id}.json")
+                if os.path.exists(ghl_transcript_path):
                     log.info("  GHL call %s already transcribed", ghl_msg_id)
                     continue
                 try:
