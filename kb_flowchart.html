@@ -16,15 +16,14 @@
   .tab:hover { border-color: #60a5fa; color: #e2e8f0; }
   .tab.active { background: #1e40af; border-color: #3b82f6; color: #fff; }
   .diagram-wrap { width: 100%; overflow-x: auto; padding: 10px 20px 30px; display: flex; justify-content: center; }
-  .diagram-wrap .mermaid { min-width: 900px; }
-  .hidden { display: none; }
+  .hidden { display: none !important; }
 </style>
 </head>
 <body>
 
 <div class="title-bar">
   <h1><span>XGuard</span> System Flowchart</h1>
-  <p>Interactive data flow diagrams — click tabs to switch views</p>
+  <p>Interactive data flow diagrams - click tabs to switch views</p>
 </div>
 
 <div class="tabs">
@@ -34,96 +33,92 @@
   <div class="tab" onclick="show('approval')">Approval Flow</div>
 </div>
 
-<!-- FULL SYSTEM -->
-<div class="diagram-wrap" id="d-full">
-<pre class="mermaid">
-flowchart TD
+<div class="diagram-wrap" id="d-full"><div id="m-full"></div></div>
+<div class="diagram-wrap hidden" id="d-kb"><div id="m-kb"></div></div>
+<div class="diagram-wrap hidden" id="d-sac"><div id="m-sac"></div></div>
+<div class="diagram-wrap hidden" id="d-approval"><div id="m-approval"></div></div>
+
+<script>
+mermaid.initialize({
+  startOnLoad: false,
+  theme: 'dark',
+  themeVariables: {
+    darkMode: true, background: '#0f172a', primaryColor: '#1e40af',
+    primaryTextColor: '#e2e8f0', primaryBorderColor: '#3b82f6', lineColor: '#475569',
+    secondaryColor: '#064e3b', tertiaryColor: '#3b0764',
+    fontFamily: '-apple-system, BlinkMacSystemFont, Segoe UI, Roboto, sans-serif', fontSize: '12px',
+  },
+  flowchart: { htmlLabels: true, curve: 'basis', nodeSpacing: 30, rankSpacing: 40, padding: 12 }
+});
+
+const diagrams = {
+full: `flowchart TD
   subgraph sources["DATA SOURCES"]
-    IMAP["&#9993; IMAP Emails\nacademie@academiexguard.ca\n272k emails | 20 folders"]
-    JC["&#128222; JustCall API\nacademie@ + formateur@\n~250 calls/day"]
-    SMS["&#128172; JustCall SMS\nv2.1 API\n~30 inbound/day"]
-    IMAP2["&#127760; Email Stats\nemail_stats.py\nToday's unanswered"]
+    IMAP["IMAP Emails<br/>academie@academiexguard.ca<br/>272k emails - 20 folders"]
+    JC["JustCall API<br/>academie@ + formateur@<br/>~250 calls/day"]
+    SMS["JustCall SMS<br/>v2.1 API ~30 inbound/day"]
+    IMAP2["Email Stats<br/>email_stats.py<br/>Todays unanswered"]
   end
-
-  subgraph nightly["NIGHTLY CRONS (Nitro)"]
-    KBA["&#129302; KB Analyzer\n23h | 1500/night\n5 Haiku workers"]
-    SACD["&#128190; SAC Daily v2\n19h | Fetch + Transcribe"]
-    SMSS["&#128200; SMS Stats\nsms_stats.py"]
+  subgraph nightly["NIGHTLY CRONS - Nitro"]
+    KBA["KB Analyzer<br/>23h - 1500/night<br/>5 Haiku workers"]
+    SACD["SAC Daily v2<br/>19h - Fetch + Transcribe"]
+    SMSS["SMS Stats<br/>sms_stats.py"]
   end
-
   subgraph ai["AI PROCESSING"]
-    HCLASS["&#9889; Haiku Classify\ncategory + question\nresponse + faq_topic"]
-    GPU["&#127911; GPU Whisper\nGTX 1650 CUDA\n~20s/call"]
-    HSCORE["&#129504; Haiku Scoring\n10 SAC dimensions\nscore /10 + coaching"]
+    HCLASS["Haiku Classify<br/>category + question<br/>response + faq_topic"]
+    GPU["GPU Whisper<br/>GTX 1650 CUDA<br/>~20s/call"]
+    HSCORE["Haiku Scoring<br/>10 SAC dimensions<br/>score /10 + coaching"]
   end
-
   subgraph storage["SUPABASE"]
-    KBE[("&#128451; kb_emails\n~10k after 7 nights")]
-    SAC_CALLS[("&#128451; sac_calls\n2700+ transcripts")]
-    SAC_CON[("&#128451; sac_contacts\n1200+ unique")]
+    KBE[("kb_emails<br/>~10k after 7 nights")]
+    SAC_CALLS[("sac_calls<br/>2700+ transcripts")]
+    SAC_CON[("sac_contacts<br/>1200+ unique")]
   end
-
-  subgraph morning["MORNING (06h-07h30)"]
-    AGG["&#128300; Topic Aggregator\n06h | 1 Haiku call\nSemantic merge"]
-    KBT[("&#128218; kb_topics\nCanonical FAQ\npending/approved")]
+  subgraph morning["MORNING 06h-07h30"]
+    AGG["Topic Aggregator<br/>06h - 1 Haiku call<br/>Semantic merge"]
+    KBT[("kb_topics<br/>Canonical FAQ<br/>pending/approved")]
   end
-
   subgraph output["OUTPUT"]
-    MAIL_KB["&#128231; KB Approval Email\n07h30 to Nick"]
-    MAIL_SAC["&#128231; Daily SAC Email\n19h to Hamza + Nick"]
+    MAIL_KB["KB Approval Email<br/>07h30 to Nick"]
+    MAIL_SAC["Daily SAC Email<br/>19h to Hamza + Nick"]
   end
-
   subgraph humans["HUMAN REVIEW"]
-    ADMIN["&#128187; KB Admin Page\nApprove / Correct / Reject"]
-    NICK["&#128104;&#8205;&#128188; Nick\nValidates topics"]
-    HAMZA["&#128104; Hamza + Team\nDaily coaching"]
+    ADMIN["KB Admin Page<br/>Approve - Correct - Reject"]
+    NICK["Nick<br/>Validates topics"]
+    HAMZA["Hamza + Team<br/>Daily coaching"]
   end
-
   subgraph audit["AUDIT"]
-    APPR[("&#128220; kb_approvals\nImmutable log")]
-    RUNLOG[("&#128202; kb_run_log")]
-    CRONLOG[("&#128202; cron_logs")]
+    APPR[("kb_approvals<br/>Immutable log")]
+    RUNLOG[("kb_run_log")]
+    CRONLOG[("cron_logs")]
   end
-
   subgraph future["FUTURE Phase 4"]
-    AUTO["&#129302; Auto-Response AI\nHigh confidence = auto\nMedium = flag\nLow = escalate"]
+    AUTO["Auto-Response AI<br/>High confidence = auto<br/>Medium = flag - Low = escalate"]
   end
-
-  %% DATA FLOW
-  IMAP -->|"IMAP fetch\nheaders + body"| KBA
-  JC -->|"REST API\nboth accounts"| SACD
+  IMAP -->|"IMAP fetch"| KBA
+  JC -->|"REST API"| SACD
   SMS -->|"SMS v2.1"| SMSS
-  IMAP2 -->|"IMAP scan\ntoday only"| MAIL_SAC
-
-  KBA -->|"classify each"| HCLASS
-  SACD -->|"download .mp3"| GPU
+  IMAP2 -->|"IMAP today"| MAIL_SAC
+  KBA -->|"classify"| HCLASS
+  SACD -->|"download mp3"| GPU
   GPU -->|"transcript FR"| HSCORE
-
   HCLASS -->|"upsert"| KBE
   HSCORE -->|"upsert"| SAC_CALLS
   SACD -->|"upsert"| SAC_CON
-
   KBE -->|"group by topic"| AGG
   AGG -->|"merge + upsert"| KBT
-
   SAC_CALLS -->|"scores + stats"| MAIL_SAC
   SMSS -->|"SMS analysis"| MAIL_SAC
-
   KBT -->|"pending topics"| MAIL_KB
   KBT -->|"all topics"| ADMIN
-
   MAIL_KB -->|"morning email"| NICK
   MAIL_SAC -->|"daily report"| HAMZA
   NICK -->|"approve/correct"| ADMIN
-
   ADMIN -->|"PATCH"| KBT
   ADMIN -->|"POST audit"| APPR
-
   KBA -->|"log run"| RUNLOG
   SACD -->|"log run"| CRONLOG
-
-  KBT -.->|"approved topics\npower future"| AUTO
-
+  KBT -.->|"approved topics"| AUTO
   style sources fill:#1e3a5f,stroke:#3b82f6,color:#fff
   style nightly fill:#064e3b,stroke:#10b981,color:#fff
   style ai fill:#3b0764,stroke:#a855f7,color:#fff
@@ -132,27 +127,21 @@ flowchart TD
   style output fill:#78350f,stroke:#f59e0b,color:#fff
   style humans fill:#1e3a5f,stroke:#3b82f6,color:#fff
   style audit fill:#1f2937,stroke:#6b7280,color:#9ca3af
-  style future fill:#1e1b4b,stroke:#6366f1,color:#a5b4fc,stroke-dasharray: 5 5
-</pre>
-</div>
+  style future fill:#1e1b4b,stroke:#6366f1,color:#a5b4fc,stroke-dasharray: 5 5`,
 
-<!-- KB PIPELINE -->
-<div class="diagram-wrap hidden" id="d-kb">
-<pre class="mermaid">
-flowchart TD
-  IMAP["&#9993; IMAP\nacademie@academiexguard.ca\n272k emails"]
-  KBA["&#129302; KB Analyzer\n23h nightly on Nitro\n5 parallel Haiku workers"]
-  PASS1["Pass 1: Fetch headers\nfrom 20 SAC folders\n~900 candidates"]
-  PASS2["Pass 2: Check Supabase\nskip already analyzed"]
-  PASS3["Pass 3: Fetch body\nonly new emails (max 1500)"]
-  HAIKU["&#9889; Haiku Classification\ncategory, question, intent\nurgency, response, faq_topic"]
-  KBE[("kb_emails\nupsert per email\non_conflict: email_msg_id")]
-  AGG["&#128300; Topic Aggregator\n06h daily | 1 Haiku call"]
-  MERGE["Semantic merge:\n150 raw topics → 40 canonical"]
-  KBT[("kb_topics\ntopic_id, label, response\nfrequency, examples")]
-  EMAIL["&#128231; Approval Email\n07h30 → Nick"]
-  ADMIN["&#128187; Admin Page\nApprove / Correct / Reject"]
-
+kb: `flowchart TD
+  IMAP["IMAP<br/>academie@academiexguard.ca<br/>272k emails"]
+  KBA["KB Analyzer<br/>23h nightly on Nitro<br/>5 parallel Haiku workers"]
+  PASS1["Pass 1: Fetch headers<br/>from 20 SAC folders<br/>~900 candidates"]
+  PASS2["Pass 2: Check Supabase<br/>skip already analyzed"]
+  PASS3["Pass 3: Fetch body<br/>only new emails - max 1500"]
+  HAIKU["Haiku Classification<br/>category, question, intent<br/>urgency, response, faq_topic"]
+  KBE[("kb_emails<br/>upsert per email<br/>on_conflict: email_msg_id")]
+  AGG["Topic Aggregator<br/>06h daily - 1 Haiku call"]
+  MERGE["Semantic merge:<br/>150 raw topics to 40 canonical"]
+  KBT[("kb_topics<br/>topic_id, label, response<br/>frequency, examples")]
+  EMAIL["Approval Email<br/>07h30 to Nick"]
+  ADMIN["Admin Page<br/>Approve - Correct - Reject"]
   IMAP --> KBA
   KBA --> PASS1
   PASS1 --> PASS2
@@ -165,7 +154,6 @@ flowchart TD
   KBT --> EMAIL
   KBT --> ADMIN
   EMAIL -->|"link"| ADMIN
-
   style IMAP fill:#1e3a5f,stroke:#3b82f6,color:#fff
   style KBA fill:#064e3b,stroke:#10b981,color:#fff
   style HAIKU fill:#3b0764,stroke:#a855f7,color:#fff
@@ -174,29 +162,23 @@ flowchart TD
   style KBT fill:#7f1d1d,stroke:#ef4444,color:#fff
   style EMAIL fill:#78350f,stroke:#f59e0b,color:#fff
   style ADMIN fill:#4c1d95,stroke:#8b5cf6,color:#fff
-  style MERGE fill:#3b0764,stroke:#a855f7,color:#fff
-</pre>
-</div>
+  style MERGE fill:#3b0764,stroke:#a855f7,color:#fff`,
 
-<!-- SAC DAILY -->
-<div class="diagram-wrap hidden" id="d-sac">
-<pre class="mermaid">
-flowchart TD
-  JC["&#128222; JustCall API\nacademie@ (301418)\nformateur@ (302145)"]
-  FETCH["Fetch calls\nduration >= 30s\nwith recording"]
-  ATTR["Agent Attribution\nnotes + weekday + name detect\nHamza/Lilia/Sekou"]
-  DL["Download .mp3\nfrom recording_url"]
-  GPU["&#127911; GPU Transcription\nfaster-whisper medium\nCUDA int8_float16"]
-  CLASS["Regex Classification\nplainte > inscription > support\n> info > autre"]
-  HAIKU["&#129504; Haiku Scoring\n10 dimensions + global /10\ncoaching note"]
-  CALLS[("sac_calls\nupsert on call_id")]
-  CONTACTS[("sac_contacts\nupsert on number")]
-  SMART["Smart Stats\ndedup + agent busy\nshifts 8-12 / 12-18"]
-  SMSS["SMS Stats\ncross-ref with calls\nhot leads detection"]
-  EMAILS["Email Stats\nIMAP unanswered today"]
-  REPORT["&#128231; Daily Email Report\nHTML: KPIs + scores + SMS\n+ emails + best/worst"]
-  HAMZA["&#128104; Hamza + Nick\nhmaghraoui65@gmail.com\nnick@darkhorseads.com"]
-
+sac: `flowchart TD
+  JC["JustCall API<br/>academie@ 301418<br/>formateur@ 302145"]
+  FETCH["Fetch calls<br/>duration >= 30s<br/>with recording"]
+  ATTR["Agent Attribution<br/>notes + weekday + name detect<br/>Hamza - Lilia - Sekou"]
+  DL["Download .mp3<br/>from recording_url"]
+  GPU["GPU Transcription<br/>faster-whisper medium<br/>CUDA int8_float16"]
+  CLASS["Regex Classification<br/>plainte, inscription<br/>support, info, autre"]
+  HAIKU["Haiku Scoring<br/>10 dimensions + global /10<br/>coaching note"]
+  CALLS[("sac_calls<br/>upsert on call_id")]
+  CONTACTS[("sac_contacts<br/>upsert on number")]
+  SMART["Smart Stats<br/>dedup + agent busy<br/>shifts 8-12 / 12-18"]
+  SMSS["SMS Stats<br/>cross-ref with calls<br/>hot leads detection"]
+  EMAILS["Email Stats<br/>IMAP unanswered today"]
+  REPORT["Daily Email Report<br/>HTML: KPIs + scores<br/>+ SMS + emails + best/worst"]
+  HAMZA["Hamza + Nick<br/>hmaghraoui65@gmail.com<br/>nick@darkhorseads.com"]
   JC --> FETCH --> ATTR --> DL --> GPU
   GPU --> CLASS --> HAIKU
   HAIKU --> CALLS
@@ -206,60 +188,44 @@ flowchart TD
   SMSS --> REPORT
   EMAILS --> REPORT
   REPORT -->|"SMTP"| HAMZA
-
   style JC fill:#1e3a5f,stroke:#3b82f6,color:#fff
   style GPU fill:#3b0764,stroke:#a855f7,color:#fff
   style HAIKU fill:#3b0764,stroke:#a855f7,color:#fff
   style CALLS fill:#7f1d1d,stroke:#ef4444,color:#fff
   style CONTACTS fill:#7f1d1d,stroke:#ef4444,color:#fff
   style REPORT fill:#78350f,stroke:#f59e0b,color:#fff
-  style HAMZA fill:#1e3a5f,stroke:#3b82f6,color:#fff
-</pre>
-</div>
+  style HAMZA fill:#1e3a5f,stroke:#3b82f6,color:#fff`,
 
-<!-- APPROVAL FLOW -->
-<div class="diagram-wrap hidden" id="d-approval">
-<pre class="mermaid">
-flowchart TD
-  KBT[("kb_topics\n40 canonical topics\n15 pending")]
-  EMAIL["&#128231; Morning Email\n07h30 to Nick\ngrouped by category"]
-  NICK["&#128104;&#8205;&#128188; Nick reads email\nsees new topics + examples\n+ suggested responses"]
-  LINK["Clicks link to\nAdmin Page"]
-  ADMIN["&#128187; kb_admin.html\nLoads all topics from Supabase\nGrouped by category"]
-
+approval: `flowchart TD
+  KBT[("kb_topics<br/>40 canonical topics<br/>15 pending")]
+  EMAIL["Morning Email<br/>07h30 to Nick<br/>grouped by category"]
+  NICK["Nick reads email<br/>sees new topics + examples<br/>+ suggested responses"]
+  LINK["Clicks link to<br/>Admin Page"]
+  ADMIN["kb_admin.html<br/>Loads all topics from Supabase<br/>Grouped by category"]
   APPROVE{"Decision?"}
-  A_YES["&#10003; APPROVE\nResponse becomes official"]
-  A_CORRECT["&#9998; CORRECT\nNick edits response\nthen approves"]
-  A_REJECT["&#10007; REJECT\nTopic hidden\nwon't appear again"]
-
-  PATCH_T["PATCH kb_topics\napproval_status = approved\napproved_by = nick"]
-  PATCH_C["PATCH kb_topics\nstatus = corrected\nnick_correction = new text\nsuggested_response = new text"]
-  PATCH_R["PATCH kb_topics\napproval_status = rejected"]
-
-  AUDIT[("POST kb_approvals\naction + previous + corrected\nimmutable audit log")]
-
-  KB_FINAL[("Validated KB\nApproved + Corrected topics\n= Official knowledge base")]
-  FUTURE["&#129302; Future: Auto-Response\npowered by validated KB"]
-
+  A_YES["APPROVE<br/>Response becomes official"]
+  A_CORRECT["CORRECT<br/>Nick edits response<br/>then approves"]
+  A_REJECT["REJECT<br/>Topic hidden<br/>wont appear again"]
+  PATCH_T["PATCH kb_topics<br/>approval_status = approved<br/>approved_by = nick"]
+  PATCH_C["PATCH kb_topics<br/>status = corrected<br/>nick_correction = new text"]
+  PATCH_R["PATCH kb_topics<br/>approval_status = rejected"]
+  AUDIT[("POST kb_approvals<br/>action + previous + corrected<br/>immutable audit log")]
+  KB_FINAL[("Validated KB<br/>Approved + Corrected topics<br/>= Official knowledge base")]
+  FUTURE["Future: Auto-Response<br/>powered by validated KB"]
   KBT --> EMAIL --> NICK --> LINK --> ADMIN
   ADMIN --> APPROVE
-
   APPROVE -->|"Good as-is"| A_YES
   APPROVE -->|"Needs edit"| A_CORRECT
   APPROVE -->|"Not relevant"| A_REJECT
-
   A_YES --> PATCH_T
   A_CORRECT --> PATCH_C
   A_REJECT --> PATCH_R
-
   PATCH_T --> AUDIT
   PATCH_C --> AUDIT
   PATCH_R --> AUDIT
-
   PATCH_T --> KB_FINAL
   PATCH_C --> KB_FINAL
   KB_FINAL -.-> FUTURE
-
   style KBT fill:#7f1d1d,stroke:#ef4444,color:#fff
   style EMAIL fill:#78350f,stroke:#f59e0b,color:#fff
   style NICK fill:#1e3a5f,stroke:#3b82f6,color:#fff
@@ -270,41 +236,28 @@ flowchart TD
   style A_REJECT fill:#7f1d1d,stroke:#ef4444,color:#fff
   style AUDIT fill:#1f2937,stroke:#6b7280,color:#9ca3af
   style KB_FINAL fill:#064e3b,stroke:#10b981,color:#fff
-  style FUTURE fill:#1e1b4b,stroke:#6366f1,color:#a5b4fc,stroke-dasharray: 5 5
-</pre>
-</div>
+  style FUTURE fill:#1e1b4b,stroke:#6366f1,color:#a5b4fc,stroke-dasharray: 5 5`
+};
 
-<script>
-  mermaid.initialize({
-    startOnLoad: true,
-    theme: 'dark',
-    themeVariables: {
-      darkMode: true,
-      background: '#0f172a',
-      primaryColor: '#1e40af',
-      primaryTextColor: '#e2e8f0',
-      primaryBorderColor: '#3b82f6',
-      lineColor: '#475569',
-      secondaryColor: '#064e3b',
-      tertiaryColor: '#3b0764',
-      fontFamily: '-apple-system, BlinkMacSystemFont, Segoe UI, Roboto, sans-serif',
-      fontSize: '12px',
-    },
-    flowchart: {
-      htmlLabels: true,
-      curve: 'basis',
-      nodeSpacing: 30,
-      rankSpacing: 40,
-      padding: 12,
+// Render all diagrams at init
+async function renderAll() {
+  for (const [id, def] of Object.entries(diagrams)) {
+    try {
+      const { svg } = await mermaid.render('graph-' + id, def);
+      document.getElementById('m-' + id).innerHTML = svg;
+    } catch(e) {
+      document.getElementById('m-' + id).innerHTML = '<p style="color:#f87171;">Error: ' + e.message + '</p>';
     }
-  });
-
-  function show(id) {
-    document.querySelectorAll('.diagram-wrap').forEach(d => d.classList.add('hidden'));
-    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-    document.getElementById('d-' + id).classList.remove('hidden');
-    event.target.classList.add('active');
   }
+}
+renderAll();
+
+function show(id) {
+  document.querySelectorAll('.diagram-wrap').forEach(d => d.classList.add('hidden'));
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.getElementById('d-' + id).classList.remove('hidden');
+  event.target.classList.add('active');
+}
 </script>
 </body>
 </html>
