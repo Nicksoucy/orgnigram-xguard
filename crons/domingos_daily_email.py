@@ -80,21 +80,71 @@ def get_callbacks_today():
             if r.status_code != 200: continue
             tasks = r.json().get("tasks", [])
             if not isinstance(tasks, list): continue
-            for t in tasks:
-                if not isinstance(t, dict): continue
-                if t.get("completed"): continue
-                due = str(t.get("dueDate", ""))[:10]
-                if due and due <= today:
-                    callbacks.append({
-                        "name": opp.get("name", "?"),
-                        "phone": opp.get("contact", {}).get("phone", ""),
-                        "stage": stage,
-                        "task": t.get("title", ""),
-                        "due": due,
-                        "overdue": due < today,
-                    })
+
+            pending = [t for t in tasks if isinstance(t, dict) and not t.get("completed") and str(t.get("dueDate",""))[:10] <= today]
+            if not pending: continue
+
+            # Enrich: last call from call_registry
+            phone = opp.get("contact", {}).get("phone", "")
+            last_summary = ""
+            last_score = None
+            total_calls = 0
+            last_call_date = None
+            last_call_dur = 0
+
+            try:
+                r2 = requests.get(f"{GHL_BASE}/conversations/search",
+                    params={"locationId": GHL_LOCATION, "contactId": cid, "limit": 1},
+                    headers=GHL_HEADERS, timeout=10)
+                if r2.status_code == 200:
+                    convs = r2.json().get("conversations", [])
+                    if convs:
+                        r3 = requests.get(f"{GHL_BASE}/conversations/{convs[0]['id']}/messages",
+                            params={"locationId": GHL_LOCATION, "limit": 30},
+                            headers=GHL_HEADERS, timeout=10)
+                        if r3.status_code == 200:
+                            raw = r3.json().get("messages", {})
+                            if isinstance(raw, dict): raw = raw.get("messages", [])
+                            for msg in raw:
+                                if isinstance(msg, dict) and msg.get("messageType") == "TYPE_CALL":
+                                    dur = (msg.get("meta",{}).get("call",{}).get("duration") or 0) if isinstance(msg.get("meta"),dict) else 0
+                                    if dur > 0:
+                                        total_calls += 1
+                                        cd = msg.get("dateAdded","")[:16]
+                                        if not last_call_date or cd > last_call_date:
+                                            last_call_date = cd
+                                            last_call_dur = dur
+            except: pass
+
+            if phone:
+                try:
+                    sb_h = {"apikey": SUPABASE_KEY, "Authorization": f"Bearer {SUPABASE_KEY}"}
+                    r4 = requests.get(f"{SUPABASE_URL}/rest/v1/call_registry",
+                        params={"contact_phone": f"eq.{phone}", "person_id": f"eq.{PERSON_ID}",
+                                "order": "call_time.desc", "limit": "1"},
+                        headers=sb_h, timeout=10)
+                    if r4.status_code == 200 and r4.json():
+                        last_summary = r4.json()[0].get("call_summary", "")[:150]
+                        last_score = r4.json()[0].get("ai_global_score")
+                except: pass
+
+            for t in pending:
+                due = str(t.get("dueDate",""))[:10]
+                callbacks.append({
+                    "name": opp.get("name", "?"),
+                    "phone": phone,
+                    "stage": stage,
+                    "task": t.get("title", ""),
+                    "due": due,
+                    "overdue": due < today,
+                    "total_calls": total_calls,
+                    "last_call_date": last_call_date,
+                    "last_call_dur": last_call_dur,
+                    "last_score": last_score,
+                    "last_summary": last_summary,
+                })
         except: continue
-        time.sleep(0.1)
+        time.sleep(0.12)
 
     return sorted(callbacks, key=lambda x: (not x["overdue"], x["due"]))
 
@@ -176,7 +226,20 @@ h3 {{ margin: 0 0 12px; font-size: 15px; color: #333; }}
             od = ' <span class="overdue">(EN RETARD)</span>' if cb["overdue"] else ""
             html += f'<div class="row"><strong>{cb["name"]}</strong>{od}<br>'
             html += f'<span style="color:#666;">{cb["stage"]} — {cb["task"]}</span><br>'
-            html += f'<span style="color:#888;">{cb["phone"]}</span></div>'
+            ctx = []
+            if cb.get("total_calls"): ctx.append(f'{cb["total_calls"]} appels')
+            if cb.get("last_call_date"):
+                d = cb["last_call_dur"]
+                ctx.append(f'Dernier: {cb["last_call_date"][:10]} ({d//60}m{d%60:02d}s)')
+            if cb.get("last_score"):
+                sc = cb["last_score"]
+                c = "#38a169" if sc >= 6 else "#d69e2e" if sc >= 4 else "#e53e3e"
+                ctx.append(f'<span style="color:{c}">Score: {sc}/10</span>')
+            if ctx:
+                html += f'<div style="font-size:11px;color:#888;">{"  ·  ".join(ctx)}</div>'
+            if cb.get("last_summary"):
+                html += f'<div style="font-size:11px;color:#667;font-style:italic;">💬 {cb["last_summary"]}</div>'
+            html += f'<span style="color:#aaa;font-size:11px;">{cb["phone"]}</span></div>'
     else:
         html += '<p style="color:#888;">Aucun rappel prevu.</p>'
     html += '</div>'
