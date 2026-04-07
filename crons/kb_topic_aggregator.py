@@ -116,34 +116,87 @@ def get_example_emails_for_topics(raw_topics, limit=3):
     return examples[:limit]
 
 
+CHUNK_SIZE = 80  # Max topics per Haiku call
+HAIKU_MERGE_TIMEOUT = 180  # 3 min per chunk
+
+
 def merge_topics_with_haiku(raw_topics):
-    """Send raw topics to Haiku for semantic merge. Returns list of canonical topics."""
-    # Build the topics list string
-    total_emails = sum(t["count"] for t in raw_topics.values())
-    lines = []
-    for i, (topic, data) in enumerate(sorted(raw_topics.items(), key=lambda x: -x[1]["count"]), 1):
-        top_cat = max(data["categories"], key=data["categories"].get) if data["categories"] else "autre"
-        lines.append(f'{i}. "{topic}" ({data["count"]}x, category: {top_cat})')
+    """Send raw topics to Haiku for semantic merge in batches. Returns list of canonical topics."""
+    # Sort by frequency desc — process the most common first
+    sorted_topics = sorted(raw_topics.items(), key=lambda x: -x[1]["count"])
 
-    topics_text = "\n".join(lines)
+    # Pre-filter: group singletons (count=1) into a catch-all to reduce volume
+    significant = {}
+    singleton_cats = {}
+    for topic, data in sorted_topics:
+        if data["count"] >= 2:
+            significant[topic] = data
+        else:
+            # Group singletons by their top category
+            top_cat = max(data["categories"], key=data["categories"].get) if data["categories"] else "autre"
+            if top_cat not in singleton_cats:
+                singleton_cats[top_cat] = {"count": 0, "categories": {}}
+            singleton_cats[top_cat]["count"] += data["count"]
+            singleton_cats[top_cat]["categories"][top_cat] = singleton_cats[top_cat]["categories"].get(top_cat, 0) + 1
 
-    prompt = MERGE_PROMPT.format(
-        n_topics=len(raw_topics),
-        n_emails=total_emails,
-        topics_list=topics_text,
-    )
+    # Add singleton groups as "divers - {category}"
+    for cat, data in singleton_cats.items():
+        key = f"divers - {cat} (sujets uniques)"
+        significant[key] = data
 
-    log.info("Sending %d raw topics to Haiku for merge...", len(raw_topics))
-    result = call_claude_json(prompt, model="haiku", timeout=120)
+    log.info("Pre-filter: %d significant topics (from %d raw, %d singletons grouped)",
+             len(significant), len(raw_topics), len(raw_topics) - len(significant) + len(singleton_cats))
 
-    if isinstance(result, list):
-        log.info("Haiku returned %d canonical topics", len(result))
-        return result
-    elif isinstance(result, dict) and "topics" in result:
-        return result["topics"]
-    else:
-        log.warning("Unexpected Haiku response type: %s", type(result))
-        return []
+    # Chunk the significant topics
+    topic_items = list(sorted(significant.items(), key=lambda x: -x[1]["count"]))
+    all_canonical = []
+
+    for chunk_start in range(0, len(topic_items), CHUNK_SIZE):
+        chunk = dict(topic_items[chunk_start:chunk_start + CHUNK_SIZE])
+        total_in_chunk = sum(t["count"] for t in chunk.values())
+
+        lines = []
+        for i, (topic, data) in enumerate(sorted(chunk.items(), key=lambda x: -x[1]["count"]), 1):
+            top_cat = max(data["categories"], key=data["categories"].get) if data["categories"] else "autre"
+            lines.append(f'{i}. "{topic}" ({data["count"]}x, category: {top_cat})')
+
+        topics_text = "\n".join(lines)
+
+        prompt = MERGE_PROMPT.format(
+            n_topics=len(chunk),
+            n_emails=total_in_chunk,
+            topics_list=topics_text,
+        )
+
+        chunk_num = chunk_start // CHUNK_SIZE + 1
+        total_chunks = (len(topic_items) + CHUNK_SIZE - 1) // CHUNK_SIZE
+        log.info("Chunk %d/%d: %d topics (%d emails) -> Haiku...",
+                 chunk_num, total_chunks, len(chunk), total_in_chunk)
+
+        result = call_claude_json(prompt, model="haiku", timeout=HAIKU_MERGE_TIMEOUT)
+
+        if isinstance(result, list):
+            log.info("  Haiku returned %d canonical topics", len(result))
+            all_canonical.extend(result)
+        elif isinstance(result, dict):
+            # Try common keys
+            for key in ("topics", "canonical_topics", "result"):
+                if key in result and isinstance(result[key], list):
+                    log.info("  Haiku returned %d canonical topics (key: %s)", len(result[key]), key)
+                    all_canonical.extend(result[key])
+                    break
+            else:
+                log.warning("  Unexpected Haiku dict response, skipping chunk")
+        else:
+            log.warning("  Haiku returned %s, skipping chunk", type(result))
+
+        # Small pause between chunks
+        if chunk_start + CHUNK_SIZE < len(topic_items):
+            import time
+            time.sleep(5)
+
+    log.info("Total canonical topics from all chunks: %d", len(all_canonical))
+    return all_canonical
 
 
 def main():
