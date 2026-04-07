@@ -1,0 +1,380 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>XGuard KB System — Flowchart</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #0a0e1a; color: #e0e0e0; min-height: 100vh; overflow-x: hidden; }
+
+  .title-bar { text-align: center; padding: 30px 20px 10px; }
+  .title-bar h1 { font-size: 28px; color: #fff; letter-spacing: 1px; }
+  .title-bar h1 span { color: #42a5f5; }
+  .title-bar p { color: #777; font-size: 13px; margin-top: 5px; }
+
+  .canvas { position: relative; width: 1200px; margin: 20px auto; min-height: 1600px; }
+
+  /* Nodes */
+  .node { position: absolute; border-radius: 10px; padding: 14px 18px; text-align: center; transition: transform 0.2s, box-shadow 0.2s; cursor: default; z-index: 2; }
+  .node:hover { transform: scale(1.04); box-shadow: 0 0 25px rgba(66,165,245,0.3); }
+  .node-title { font-weight: 700; font-size: 13px; margin-bottom: 4px; }
+  .node-sub { font-size: 10px; opacity: 0.7; }
+  .node-icon { font-size: 22px; margin-bottom: 6px; }
+
+  /* Node types */
+  .source { background: linear-gradient(135deg, #1a237e, #283593); border: 2px solid #3f51b5; min-width: 160px; }
+  .cron { background: linear-gradient(135deg, #004d40, #00695c); border: 2px solid #26a69a; min-width: 180px; }
+  .process { background: linear-gradient(135deg, #311b92, #4527a0); border: 2px solid #7c4dff; min-width: 160px; }
+  .store { background: linear-gradient(135deg, #b71c1c, #c62828); border: 2px solid #ef5350; min-width: 160px; border-radius: 6px; }
+  .output { background: linear-gradient(135deg, #e65100, #f57c00); border: 2px solid #ffb74d; min-width: 160px; }
+  .human { background: linear-gradient(135deg, #1565c0, #1976d2); border: 2px solid #42a5f5; min-width: 160px; }
+  .dashboard { background: linear-gradient(135deg, #6a1b9a, #7b1fa2); border: 2px solid #ce93d8; min-width: 160px; }
+
+  /* Connectors drawn with SVG */
+  svg.connectors { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 1; pointer-events: none; }
+  .conn { fill: none; stroke-width: 2; }
+  .conn-data { stroke: #42a5f5; stroke-dasharray: 6 3; }
+  .conn-flow { stroke: #26a69a; }
+  .conn-push { stroke: #ef5350; stroke-dasharray: 4 2; }
+  .conn-human { stroke: #ffb74d; stroke-width: 2.5; }
+  .conn-feedback { stroke: #ce93d8; stroke-dasharray: 8 4; }
+
+  /* Arrow markers */
+  marker polygon { fill: inherit; }
+
+  /* Legend */
+  .legend { position: absolute; top: 10px; right: 10px; background: rgba(10,14,26,0.9); border: 1px solid #333; border-radius: 8px; padding: 12px 16px; z-index: 10; }
+  .legend-title { font-size: 11px; font-weight: 700; color: #999; margin-bottom: 8px; text-transform: uppercase; }
+  .legend-item { display: flex; align-items: center; gap: 8px; margin: 5px 0; font-size: 11px; }
+  .legend-color { width: 30px; height: 3px; border-radius: 2px; }
+
+  /* Phase labels */
+  .phase { position: absolute; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 2px; color: #555; z-index: 3; }
+
+  /* Time labels */
+  .time-label { position: absolute; background: rgba(0,0,0,0.6); border: 1px solid #444; border-radius: 12px; padding: 3px 10px; font-size: 10px; color: #aaa; z-index: 3; font-weight: 600; }
+
+  /* Glow effects */
+  .glow-green { box-shadow: 0 0 15px rgba(38,166,154,0.4); }
+  .glow-blue { box-shadow: 0 0 15px rgba(66,165,245,0.4); }
+  .glow-orange { box-shadow: 0 0 15px rgba(255,183,77,0.4); }
+  .glow-red { box-shadow: 0 0 15px rgba(239,83,80,0.4); }
+  .glow-purple { box-shadow: 0 0 15px rgba(206,147,216,0.4); }
+
+  /* Stats box */
+  .stats-box { position: absolute; background: rgba(10,14,26,0.95); border: 1px solid #333; border-radius: 8px; padding: 14px; z-index: 3; }
+  .stats-box h3 { font-size: 11px; color: #999; text-transform: uppercase; margin-bottom: 8px; }
+  .stat-row { display: flex; justify-content: space-between; font-size: 12px; margin: 3px 0; }
+  .stat-val { color: #42a5f5; font-weight: 700; }
+</style>
+</head>
+<body>
+
+<div class="title-bar">
+  <h1><span>XGuard</span> Knowledge Base System</h1>
+  <p>Complete data flow — from raw emails to approved FAQ responses</p>
+</div>
+
+<div class="canvas">
+
+<!-- SVG Connectors -->
+<svg class="connectors" viewBox="0 0 1200 1600" preserveAspectRatio="xMidYMid meet">
+  <defs>
+    <marker id="arrow-blue" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#42a5f5"/></marker>
+    <marker id="arrow-green" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#26a69a"/></marker>
+    <marker id="arrow-red" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#ef5350"/></marker>
+    <marker id="arrow-orange" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#ffb74d"/></marker>
+    <marker id="arrow-purple" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#ce93d8"/></marker>
+  </defs>
+
+  <!-- SOURCE → ANALYZER -->
+  <!-- IMAP to Analyzer -->
+  <path class="conn conn-data" d="M 200 130 L 200 200" marker-end="url(#arrow-blue)"/>
+  <!-- JustCall to Daily -->
+  <path class="conn conn-data" d="M 530 130 L 530 200" marker-end="url(#arrow-blue)"/>
+  <!-- JustCall SMS to Daily -->
+  <path class="conn conn-data" d="M 780 130 L 780 200" marker-end="url(#arrow-blue)"/>
+
+  <!-- ANALYZER → GPU Transcription -->
+  <path class="conn conn-flow" d="M 530 275 L 530 340" marker-end="url(#arrow-green)"/>
+
+  <!-- KB Analyzer → Supabase kb_emails -->
+  <path class="conn conn-push" d="M 200 275 L 200 460" marker-end="url(#arrow-red)"/>
+
+  <!-- GPU → Haiku Scoring -->
+  <path class="conn conn-flow" d="M 530 415 L 530 460" marker-end="url(#arrow-green)"/>
+
+  <!-- Haiku (KB) → kb_emails -->
+  <path class="conn conn-flow" d="M 290 355 L 290 460" marker-end="url(#arrow-green)"/>
+  <!-- Label for Haiku -->
+
+  <!-- SMS Stats → Daily Email -->
+  <path class="conn conn-flow" d="M 780 275 L 780 460" marker-end="url(#arrow-green)"/>
+
+  <!-- Haiku Scoring → sac_calls -->
+  <path class="conn conn-push" d="M 530 535 L 530 610" marker-end="url(#arrow-red)"/>
+
+  <!-- kb_emails → Aggregator -->
+  <path class="conn conn-flow" d="M 200 535 L 200 610" marker-end="url(#arrow-green)"/>
+
+  <!-- Aggregator → kb_topics -->
+  <path class="conn conn-push" d="M 200 685 L 200 760" marker-end="url(#arrow-red)"/>
+
+  <!-- sac_calls → Daily Email Report -->
+  <path class="conn conn-flow" d="M 620 645 L 780 645 L 780 535" marker-end="url(#arrow-green)"/>
+
+  <!-- Daily Email Report → SMTP Email -->
+  <path class="conn conn-orange" d="M 780 535 L 780 760" marker-end="url(#arrow-orange)" stroke="#ffb74d" fill="none" stroke-width="2"/>
+
+  <!-- kb_topics → Approval Email -->
+  <path class="conn conn-flow" d="M 290 795 L 450 795 L 450 850" marker-end="url(#arrow-green)"/>
+
+  <!-- kb_topics → Admin Page -->
+  <path class="conn conn-flow" d="M 200 835 L 200 960" marker-end="url(#arrow-green)"/>
+
+  <!-- Approval Email → Nick -->
+  <path class="conn conn-human" d="M 530 925 L 530 960" marker-end="url(#arrow-orange)"/>
+
+  <!-- Daily Email → Nick/Hamza -->
+  <path class="conn conn-human" d="M 780 835 L 780 960" marker-end="url(#arrow-orange)"/>
+
+  <!-- Nick → Admin Page (approve) -->
+  <path class="conn conn-feedback" d="M 480 1035 L 290 1035 L 290 970" marker-end="url(#arrow-purple)"/>
+
+  <!-- Admin Page → kb_approvals -->
+  <path class="conn conn-push" d="M 110 1000 L 110 1100" marker-end="url(#arrow-red)"/>
+
+  <!-- Admin Page → kb_topics (update) -->
+  <path class="conn conn-feedback" d="M 160 960 L 160 835" marker-end="url(#arrow-purple)"/>
+
+  <!-- Feedback loop: approved → future auto-response -->
+  <path class="conn conn-feedback" d="M 200 1100 L 200 1180" marker-end="url(#arrow-purple)"/>
+
+</svg>
+
+<!-- ============ PHASE: DATA SOURCES ============ -->
+<div class="phase" style="top:30px; left:20px;">Data Sources</div>
+<div class="time-label" style="top:32px; left:1020px;">En continu</div>
+
+<div class="node source glow-blue" style="top:70px; left:120px; width:180px;">
+  <div class="node-icon">&#9993;</div>
+  <div class="node-title">IMAP Emails</div>
+  <div class="node-sub">academie@academiexguard.ca<br>272k emails | 20 dossiers SAC</div>
+</div>
+
+<div class="node source glow-blue" style="top:70px; left:440px; width:180px;">
+  <div class="node-icon">&#128222;</div>
+  <div class="node-title">JustCall API</div>
+  <div class="node-sub">Appels SAC (academie@ + formateur@)<br>~200-300/jour</div>
+</div>
+
+<div class="node source glow-blue" style="top:70px; left:700px; width:180px;">
+  <div class="node-icon">&#128172;</div>
+  <div class="node-title">JustCall SMS</div>
+  <div class="node-sub">SMS v2.1 API<br>~25-30 entrants/jour</div>
+</div>
+
+<div class="node source glow-blue" style="top:70px; left:940px; width:180px;">
+  <div class="node-icon">&#127760;</div>
+  <div class="node-title">Email IMAP (today)</div>
+  <div class="node-sub">email_stats.py<br>Emails non-repondus du jour</div>
+</div>
+
+
+<!-- ============ PHASE: NIGHTLY PROCESSING ============ -->
+<div class="phase" style="top:190px; left:20px;">Nightly Processing</div>
+<div class="time-label" style="top:192px; left:1020px;">19h - 23h</div>
+
+<div class="node cron glow-green" style="top:200px; left:110px; width:200px;">
+  <div class="node-icon">&#129302;</div>
+  <div class="node-title">KB Email Analyzer</div>
+  <div class="node-sub">23h | 1500 emails/nuit<br>5 Haiku workers paralleles<br>kb_email_analyzer.py</div>
+</div>
+
+<div class="node cron glow-green" style="top:200px; left:440px; width:180px;">
+  <div class="node-icon">&#128190;</div>
+  <div class="node-title">SAC Daily v2</div>
+  <div class="node-sub">19h | Fetch + Transcribe<br>sac_daily_v2.py</div>
+</div>
+
+<div class="node cron glow-green" style="top:200px; left:700px; width:180px;">
+  <div class="node-icon">&#128200;</div>
+  <div class="node-title">SMS Stats</div>
+  <div class="node-sub">Dans daily report<br>sms_stats.py</div>
+</div>
+
+
+<!-- ============ PHASE: AI PROCESSING ============ -->
+<div class="phase" style="top:330px; left:20px;">AI Processing</div>
+
+<div class="node process" style="top:310px; left:190px; width:180px;">
+  <div class="node-icon">&#9889;</div>
+  <div class="node-title">Haiku Classification</div>
+  <div class="node-sub">Categorie + question + intent<br>urgence + reponse suggeree<br>faq_topic</div>
+</div>
+
+<div class="node process" style="top:340px; left:440px; width:180px;">
+  <div class="node-icon">&#127911;</div>
+  <div class="node-title">GPU Transcription</div>
+  <div class="node-sub">Nitro GTX 1650 CUDA<br>faster-whisper medium<br>~20s/appel</div>
+</div>
+
+<div class="node process" style="top:460px; left:440px; width:180px;">
+  <div class="node-icon">&#129504;</div>
+  <div class="node-title">Haiku Call Scoring</div>
+  <div class="node-sub">10 dimensions SAC<br>Score global /10<br>Note coaching</div>
+</div>
+
+
+<!-- ============ PHASE: DATA STORES ============ -->
+<div class="phase" style="top:450px; left:20px;">Supabase</div>
+<div class="time-label" style="top:452px; left:1020px;">Persistant</div>
+
+<div class="node store glow-red" style="top:460px; left:110px; width:180px;">
+  <div class="node-icon">&#128451;</div>
+  <div class="node-title">kb_emails</div>
+  <div class="node-sub">Emails analyses par Haiku<br>categorie, question, reponse<br>~10k apres 7 nuits</div>
+</div>
+
+<div class="node store glow-red" style="top:610px; left:440px; width:180px;">
+  <div class="node-icon">&#128451;</div>
+  <div class="node-title">sac_calls</div>
+  <div class="node-sub">Appels transcrits + scores<br>2700+ rows</div>
+</div>
+
+<div class="node store glow-red" style="top:460px; left:700px; width:180px;">
+  <div class="node-icon">&#128451;</div>
+  <div class="node-title">Daily Email Report</div>
+  <div class="node-sub">daily_email_report.py<br>KPIs + Haiku + SMS + Emails</div>
+</div>
+
+
+<!-- ============ PHASE: MORNING AGGREGATION ============ -->
+<div class="phase" style="top:600px; left:20px;">Morning</div>
+<div class="time-label" style="top:602px; left:1020px;">06h</div>
+
+<div class="node cron glow-green" style="top:610px; left:110px; width:200px;">
+  <div class="node-icon">&#128300;</div>
+  <div class="node-title">KB Topic Aggregator</div>
+  <div class="node-sub">06h | 1 appel Haiku<br>Merge semantique des topics<br>kb_topic_aggregator.py</div>
+</div>
+
+
+<!-- ============ PHASE: KNOWLEDGE BASE ============ -->
+<div class="phase" style="top:750px; left:20px;">Knowledge Base</div>
+<div class="time-label" style="top:752px; left:1020px;">07h30</div>
+
+<div class="node store glow-red" style="top:760px; left:110px; width:200px;">
+  <div class="node-icon">&#128218;</div>
+  <div class="node-title">kb_topics</div>
+  <div class="node-sub">Topics FAQ canoniques<br>question + reponse + frequence<br>status: pending/approved/rejected</div>
+</div>
+
+<div class="node output glow-orange" style="top:850px; left:400px; width:220px;">
+  <div class="node-icon">&#128231;</div>
+  <div class="node-title">KB Approval Email</div>
+  <div class="node-sub">07h30 | Email a Nick<br>Topics a valider + exemples<br>Lien vers page admin</div>
+</div>
+
+<div class="node output glow-orange" style="top:760px; left:700px; width:200px;">
+  <div class="node-icon">&#128231;</div>
+  <div class="node-title">Daily SAC Email</div>
+  <div class="node-sub">19h | Email a Hamza + Nick<br>KPIs + scores + SMS + emails<br>Best/worst appels</div>
+</div>
+
+
+<!-- ============ PHASE: HUMAN IN THE LOOP ============ -->
+<div class="phase" style="top:950px; left:20px;">Human Review</div>
+
+<div class="node dashboard glow-purple" style="top:960px; left:110px; width:200px;">
+  <div class="node-icon">&#128187;</div>
+  <div class="node-title">KB Admin Page</div>
+  <div class="node-sub">kb_admin.html (GitHub Pages)<br>Approuver / Corriger / Rejeter<br>Vue par categorie + frequence</div>
+</div>
+
+<div class="node human glow-blue" style="top:960px; left:440px; width:200px;">
+  <div class="node-icon">&#128104;&#8205;&#128188;</div>
+  <div class="node-title">Nick (Validation)</div>
+  <div class="node-sub">Review topics chaque matin<br>Corrige les reponses IA<br>Approuve pour la KB officielle</div>
+</div>
+
+<div class="node human glow-blue" style="top:960px; left:700px; width:200px;">
+  <div class="node-icon">&#128105;&#8205;&#128188;</div>
+  <div class="node-title">Hamza + Equipe SAC</div>
+  <div class="node-sub">Recoit rapport quotidien<br>Voit les emails non-repondus<br>Coaching IA par appel</div>
+</div>
+
+
+<!-- ============ PHASE: AUDIT TRAIL ============ -->
+<div class="phase" style="top:1090px; left:20px;">Audit Trail</div>
+
+<div class="node store glow-red" style="top:1100px; left:40px; width:160px;">
+  <div class="node-icon">&#128220;</div>
+  <div class="node-title">kb_approvals</div>
+  <div class="node-sub">Log immutable<br>Chaque action tracee</div>
+</div>
+
+<div class="node store glow-red" style="top:1100px; left:240px; width:160px;">
+  <div class="node-icon">&#128202;</div>
+  <div class="node-title">kb_run_log</div>
+  <div class="node-sub">Monitoring crons<br>emails/s, erreurs, duree</div>
+</div>
+
+<div class="node store glow-red" style="top:1100px; left:440px; width:160px;">
+  <div class="node-icon">&#128202;</div>
+  <div class="node-title">cron_logs</div>
+  <div class="node-sub">Historique SAC daily<br>weekly, Heidys, Domingos</div>
+</div>
+
+<div class="node store glow-red" style="top:1100px; left:640px; width:160px;">
+  <div class="node-icon">&#128202;</div>
+  <div class="node-title">coaching_reports</div>
+  <div class="node-sub">Rapports hebdo Opus<br>Progression par dimension</div>
+</div>
+
+
+<!-- ============ PHASE: FUTURE ============ -->
+<div class="phase" style="top:1200px; left:20px;">Future (Phase 4)</div>
+
+<div class="node" style="top:1210px; left:110px; width:300px; background: linear-gradient(135deg, #1a1a2e, #16213e); border: 2px dashed #555; opacity: 0.7;">
+  <div class="node-icon">&#129302;</div>
+  <div class="node-title">Auto-Response AI</div>
+  <div class="node-sub">Repond automatiquement aux questions haute confiance<br>Flag moyenne confiance pour review<br>Escalade basse confiance a un humain<br><strong style="color:#42a5f5;">Powered by approved KB topics</strong></div>
+</div>
+
+
+<!-- Legend -->
+<div class="legend">
+  <div class="legend-title">Legende</div>
+  <div class="legend-item"><div class="legend-color" style="background:#42a5f5;"></div> Data flow</div>
+  <div class="legend-item"><div class="legend-color" style="background:#26a69a;"></div> Processing flow</div>
+  <div class="legend-item"><div class="legend-color" style="background:#ef5350; border-style: dashed;"></div> Push to Supabase</div>
+  <div class="legend-item"><div class="legend-color" style="background:#ffb74d;"></div> Email delivery</div>
+  <div class="legend-item"><div class="legend-color" style="background:#ce93d8; border-style: dashed;"></div> Feedback loop</div>
+  <div class="legend-item" style="margin-top:8px;"><div style="width:14px;height:14px;border-radius:3px;background:linear-gradient(135deg,#1a237e,#283593);border:1px solid #3f51b5;"></div> Source</div>
+  <div class="legend-item"><div style="width:14px;height:14px;border-radius:3px;background:linear-gradient(135deg,#004d40,#00695c);border:1px solid #26a69a;"></div> Cron script</div>
+  <div class="legend-item"><div style="width:14px;height:14px;border-radius:3px;background:linear-gradient(135deg,#311b92,#4527a0);border:1px solid #7c4dff;"></div> AI processing</div>
+  <div class="legend-item"><div style="width:14px;height:14px;border-radius:3px;background:linear-gradient(135deg,#b71c1c,#c62828);border:1px solid #ef5350;"></div> Supabase table</div>
+  <div class="legend-item"><div style="width:14px;height:14px;border-radius:3px;background:linear-gradient(135deg,#e65100,#f57c00);border:1px solid #ffb74d;"></div> Email output</div>
+  <div class="legend-item"><div style="width:14px;height:14px;border-radius:3px;background:linear-gradient(135deg,#1565c0,#1976d2);border:1px solid #42a5f5;"></div> Human</div>
+  <div class="legend-item"><div style="width:14px;height:14px;border-radius:3px;background:linear-gradient(135deg,#6a1b9a,#7b1fa2);border:1px solid #ce93d8;"></div> Dashboard</div>
+</div>
+
+<!-- Stats box -->
+<div class="stats-box" style="top:1100px; left:870px; width:220px;">
+  <h3>System Stats</h3>
+  <div class="stat-row"><span>Emails dans IMAP</span><span class="stat-val">272,241</span></div>
+  <div class="stat-row"><span>Folders SAC scannes</span><span class="stat-val">20</span></div>
+  <div class="stat-row"><span>Haiku calls/nuit</span><span class="stat-val">~1,500</span></div>
+  <div class="stat-row"><span>Completion estimee</span><span class="stat-val">~7 nuits</span></div>
+  <div class="stat-row"><span>Cron jobs actifs</span><span class="stat-val">8</span></div>
+  <div class="stat-row"><span>Supabase tables</span><span class="stat-val">12+</span></div>
+  <div class="stat-row"><span>GPU</span><span class="stat-val">GTX 1650</span></div>
+  <div class="stat-row"><span>Appels transcrits</span><span class="stat-val">2,700+</span></div>
+</div>
+
+</div>
+
+</body>
+</html>
