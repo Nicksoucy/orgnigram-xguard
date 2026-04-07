@@ -345,7 +345,7 @@ def main():
     start_time = time.time()
 
     # Fetch candidate emails
-    emails = fetch_candidate_emails(since_days=180)
+    emails = fetch_candidate_emails(since_days=365)
 
     if not emails:
         log.info("No new emails to analyze. Done!")

@@ -39,7 +39,7 @@ GIT_BASH = r"C:\Program Files\Git\bin\bash.exe"
 # ---------------------------------------------------------------------------
 # Processing limits
 # ---------------------------------------------------------------------------
-MAX_EMAILS_PER_RUN = 1500       # ~2h of Haiku calls with 5 workers
+MAX_EMAILS_PER_RUN = 2000       # ~2.5h of Haiku calls with 5 workers
 BATCH_SIZE = 20                  # emails per batch
 BATCH_PAUSE_SEC = 10             # pause between batches
 MAX_WORKERS = 5                  # parallel Haiku workers
@@ -72,7 +72,7 @@ PRIORITY_FOLDERS = [
     "usage de la force/Gestion",
 ]
 
-MAX_PER_FOLDER = 500  # last N emails per folder
+MAX_PER_FOLDER = 1500  # last N emails per folder (increased for deeper coverage)
 
 # ---------------------------------------------------------------------------
 # Internal senders to skip
