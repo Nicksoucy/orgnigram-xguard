@@ -1,0 +1,673 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>XGuard System — Architecture & Sequence Diagrams</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #0a0e1a; color: #e0e0e0; }
+
+  /* Nav */
+  .nav { display: flex; gap: 0; background: #111827; border-bottom: 2px solid #1e293b; position: sticky; top: 0; z-index: 50; }
+  .nav-btn { padding: 14px 24px; cursor: pointer; font-size: 13px; font-weight: 600; color: #94a3b8; border-bottom: 3px solid transparent; transition: all 0.2s; }
+  .nav-btn:hover { color: #e2e8f0; background: #1e293b; }
+  .nav-btn.active { color: #60a5fa; border-bottom-color: #60a5fa; }
+  .nav-title { padding: 14px 24px; font-size: 15px; font-weight: 700; color: #fff; }
+  .nav-title span { color: #60a5fa; }
+
+  .page { display: none; padding: 30px; }
+  .page.active { display: block; }
+
+  /* ====== ARCHITECTURE DIAGRAM ====== */
+  .arch-container { max-width: 1100px; margin: 0 auto; }
+  .arch-title { text-align: center; margin-bottom: 30px; }
+  .arch-title h2 { font-size: 22px; color: #fff; }
+  .arch-title p { color: #64748b; font-size: 13px; margin-top: 4px; }
+
+  /* Layers */
+  .layer { margin: 20px 0; border-radius: 12px; overflow: hidden; }
+  .layer-header { padding: 10px 20px; display: flex; justify-content: space-between; align-items: center; }
+  .layer-header h3 { font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: 1.5px; }
+  .layer-header .layer-tag { font-size: 10px; padding: 2px 8px; border-radius: 8px; font-weight: 600; }
+  .layer-body { padding: 15px 20px; display: flex; gap: 12px; flex-wrap: wrap; }
+
+  .l-external .layer-header { background: #1e3a5f; }
+  .l-external .layer-header h3 { color: #93c5fd; }
+  .l-external .layer-body { background: #0f2744; }
+  .l-external .layer-tag { background: #1e3a5f; color: #93c5fd; }
+
+  .l-ingestion .layer-header { background: #134e4a; }
+  .l-ingestion .layer-header h3 { color: #5eead4; }
+  .l-ingestion .layer-body { background: #042f2e; }
+  .l-ingestion .layer-tag { background: #134e4a; color: #5eead4; }
+
+  .l-processing .layer-header { background: #3b0764; }
+  .l-processing .layer-header h3 { color: #d8b4fe; }
+  .l-processing .layer-body { background: #1e0533; }
+  .l-processing .layer-tag { background: #3b0764; color: #d8b4fe; }
+
+  .l-storage .layer-header { background: #7f1d1d; }
+  .l-storage .layer-header h3 { color: #fca5a5; }
+  .l-storage .layer-body { background: #450a0a; }
+  .l-storage .layer-tag { background: #7f1d1d; color: #fca5a5; }
+
+  .l-output .layer-header { background: #78350f; }
+  .l-output .layer-header h3 { color: #fcd34d; }
+  .l-output .layer-body { background: #451a03; }
+  .l-output .layer-tag { background: #78350f; color: #fcd34d; }
+
+  .l-human .layer-header { background: #1e40af; }
+  .l-human .layer-header h3 { color: #93c5fd; }
+  .l-human .layer-body { background: #172554; }
+  .l-human .layer-tag { background: #1e40af; color: #93c5fd; }
+
+  /* Block cards */
+  .block { background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; padding: 12px 14px; min-width: 140px; flex: 1; max-width: 200px; transition: all 0.2s; }
+  .block:hover { background: rgba(255,255,255,0.08); border-color: rgba(255,255,255,0.2); transform: translateY(-2px); }
+  .block-icon { font-size: 20px; margin-bottom: 6px; }
+  .block-name { font-size: 12px; font-weight: 700; color: #fff; margin-bottom: 3px; }
+  .block-tech { font-size: 10px; color: #94a3b8; }
+  .block-detail { font-size: 10px; color: #64748b; margin-top: 4px; border-top: 1px solid rgba(255,255,255,0.05); padding-top: 4px; }
+
+  /* Arrows between layers */
+  .arrow-row { display: flex; justify-content: center; padding: 5px 0; }
+  .arrow-down { color: #475569; font-size: 20px; letter-spacing: 60px; }
+
+  /* ====== SEQUENCE DIAGRAMS ====== */
+  .seq-container { max-width: 1100px; margin: 0 auto; }
+  .seq-title { text-align: center; margin-bottom: 5px; }
+  .seq-title h2 { font-size: 22px; color: #fff; }
+  .seq-title p { color: #64748b; font-size: 13px; margin-top: 4px; }
+
+  .seq-tabs { display: flex; gap: 8px; justify-content: center; margin: 20px 0; flex-wrap: wrap; }
+  .seq-tab { padding: 8px 18px; border-radius: 20px; font-size: 12px; font-weight: 600; cursor: pointer; border: 1px solid #334155; color: #94a3b8; background: #1e293b; transition: all 0.2s; }
+  .seq-tab:hover { border-color: #60a5fa; color: #e2e8f0; }
+  .seq-tab.active { background: #1e40af; border-color: #3b82f6; color: #fff; }
+
+  .seq-diagram { display: none; background: #111827; border: 1px solid #1e293b; border-radius: 12px; padding: 30px 20px; margin: 15px 0; overflow-x: auto; }
+  .seq-diagram.active { display: block; }
+
+  /* Sequence diagram elements */
+  .seq-actors { display: flex; justify-content: space-between; margin-bottom: 0; position: relative; }
+  .seq-actor { text-align: center; min-width: 100px; z-index: 2; }
+  .seq-actor-box { background: #1e293b; border: 2px solid #334155; border-radius: 8px; padding: 8px 12px; display: inline-block; }
+  .seq-actor-name { font-size: 11px; font-weight: 700; color: #e2e8f0; }
+  .seq-actor-type { font-size: 9px; color: #64748b; }
+
+  .seq-lifelines { position: relative; min-height: 40px; }
+  .seq-lifeline { position: absolute; width: 2px; background: #1e293b; top: 0; bottom: 0; }
+
+  .seq-steps { position: relative; }
+  .seq-step { display: flex; align-items: center; margin: 0; padding: 6px 0; position: relative; min-height: 36px; }
+
+  .seq-msg { position: relative; display: flex; align-items: center; width: 100%; }
+  .seq-arrow-line { height: 2px; flex: 1; position: relative; }
+  .seq-arrow-line::after { content: ''; position: absolute; right: -1px; top: -4px; border: 5px solid transparent; }
+  .seq-arrow-line.right::after { border-left-color: currentColor; }
+  .seq-arrow-line.left::after { left: -1px; right: auto; border-right-color: currentColor; }
+  .seq-arrow-line.dashed { border-top: 2px dashed; border-bottom: none; height: 0; }
+  .seq-arrow-line.solid { border-top: 2px solid; border-bottom: none; height: 0; }
+
+  .seq-label { position: absolute; top: -14px; font-size: 10px; font-weight: 600; white-space: nowrap; padding: 1px 6px; border-radius: 3px; }
+
+  /* Step rows with inline rendering */
+  .s-row { display: grid; align-items: center; min-height: 38px; padding: 2px 0; border-bottom: 1px solid rgba(255,255,255,0.02); }
+  .s-row:hover { background: rgba(255,255,255,0.02); }
+  .s-arrow { display: flex; align-items: center; justify-content: center; padding: 0 4px; }
+  .s-arrow svg { width: 100%; height: 16px; }
+  .s-arrow line { stroke-width: 2; }
+  .s-arrow polygon { }
+  .s-text { font-size: 10px; padding: 2px 6px; border-radius: 3px; white-space: nowrap; text-align: center; }
+  .s-cell { display: flex; align-items: center; justify-content: center; }
+  .s-dot { width: 8px; height: 8px; border-radius: 50%; }
+
+  .s-note { font-size: 10px; color: #64748b; text-align: center; padding: 4px; font-style: italic; border-bottom: 1px solid rgba(255,255,255,0.02); }
+  .s-divider { text-align: center; padding: 8px; margin: 4px 0; border: 1px dashed #334155; border-radius: 6px; font-size: 10px; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: 1px; background: rgba(30,41,59,0.5); }
+
+  /* Simple table-based sequence */
+  .seq-table { width: 100%; border-collapse: collapse; }
+  .seq-table th { padding: 10px 8px 15px; text-align: center; vertical-align: top; position: relative; }
+  .seq-table th::after { content: ''; position: absolute; bottom: 0; left: 50%; width: 2px; height: 10px; background: #334155; }
+  .seq-table td { padding: 0; position: relative; vertical-align: middle; height: 34px; }
+  .seq-table td.line::before { content: ''; position: absolute; left: 50%; top: 0; bottom: 0; width: 2px; background: #1e293b; z-index: 0; }
+  .seq-table td.line-active::before { background: #334155; width: 3px; }
+
+  /* Message arrows using divs */
+  .msg { position: relative; height: 34px; display: flex; align-items: center; }
+  .msg-line { height: 2px; flex: 1; }
+  .msg-label { position: absolute; top: 2px; left: 50%; transform: translateX(-50%); font-size: 10px; font-weight: 600; white-space: nowrap; padding: 1px 6px; border-radius: 3px; z-index: 1; }
+  .msg-head { width: 0; height: 0; border: 5px solid transparent; flex-shrink: 0; }
+  .msg-head.right { border-left-width: 8px; }
+  .msg-head.left { border-right-width: 8px; }
+
+  /* Color scheme for messages */
+  .c-blue .msg-line { background: #3b82f6; } .c-blue .msg-head.right { border-left-color: #3b82f6; } .c-blue .msg-head.left { border-right-color: #3b82f6; } .c-blue .msg-label { color: #93c5fd; background: rgba(30,64,175,0.5); }
+  .c-green .msg-line { background: #10b981; } .c-green .msg-head.right { border-left-color: #10b981; } .c-green .msg-head.left { border-right-color: #10b981; } .c-green .msg-label { color: #6ee7b7; background: rgba(6,78,59,0.5); }
+  .c-red .msg-line { background: #ef4444; } .c-red .msg-head.right { border-left-color: #ef4444; } .c-red .msg-head.left { border-right-color: #ef4444; } .c-red .msg-label { color: #fca5a5; background: rgba(127,29,29,0.5); }
+  .c-orange .msg-line { background: #f59e0b; } .c-orange .msg-head.right { border-left-color: #f59e0b; } .c-orange .msg-head.left { border-right-color: #f59e0b; } .c-orange .msg-label { color: #fcd34d; background: rgba(120,53,15,0.5); }
+  .c-purple .msg-line { background: #a855f7; } .c-purple .msg-head.right { border-left-color: #a855f7; } .c-purple .msg-head.left { border-right-color: #a855f7; } .c-purple .msg-label { color: #d8b4fe; background: rgba(59,7,100,0.5); }
+  .c-gray .msg-line { background: #6b7280; border-top: 2px dashed #6b7280; height: 0; } .c-gray .msg-head.right { border-left-color: #6b7280; } .c-gray .msg-head.left { border-right-color: #6b7280; } .c-gray .msg-label { color: #9ca3af; background: rgba(55,65,81,0.5); }
+
+  /* Activation boxes */
+  .act-box { position: absolute; width: 12px; left: calc(50% - 6px); border-radius: 3px; z-index: 1; }
+
+  /* Section dividers in sequence */
+  .seq-section { text-align: center; padding: 6px; margin: 3px 0; }
+  .seq-section span { background: #1e293b; border: 1px solid #334155; border-radius: 4px; padding: 3px 12px; font-size: 10px; font-weight: 700; color: #94a3b8; text-transform: uppercase; letter-spacing: 1px; }
+
+  /* Compact sequence using flex rows */
+  .sfd { width: 100%; }
+  .sfd-header { display: grid; margin-bottom: 5px; }
+  .sfd-actor { text-align: center; }
+  .sfd-actor-box { display: inline-block; background: #1e293b; border: 2px solid #334155; border-radius: 6px; padding: 6px 10px; margin-bottom: 5px; }
+  .sfd-actor-name { font-size: 11px; font-weight: 700; color: #e2e8f0; }
+  .sfd-actor-sub { font-size: 9px; color: #64748b; }
+
+  .sfd-row { display: grid; min-height: 30px; align-items: center; position: relative; }
+  .sfd-row::before { content: ''; position: absolute; top: 0; bottom: 0; }
+
+  /* Lifeline dots */
+  .sfd-cell { position: relative; display: flex; justify-content: center; }
+  .sfd-cell::before { content: ''; position: absolute; top: 0; bottom: 0; left: 50%; width: 1px; border-left: 1px dashed #1e293b; }
+
+  .sfd-msg { position: absolute; display: flex; align-items: center; height: 2px; z-index: 2; }
+  .sfd-msg-label { position: absolute; top: -13px; font-size: 10px; white-space: nowrap; font-weight: 600; padding: 0 4px; border-radius: 2px; }
+
+  /* Simple text-based sequence (most reliable) */
+  .tseq { font-family: 'SF Mono', 'Fira Code', monospace; font-size: 12px; line-height: 1.6; }
+  .tseq .actor { color: #60a5fa; font-weight: 700; }
+  .tseq .arrow-r { color: #34d399; }
+  .tseq .arrow-l { color: #f87171; }
+  .tseq .arrow-d { color: #a78bfa; }
+  .tseq .label { color: #fbbf24; }
+  .tseq .note { color: #64748b; font-style: italic; }
+  .tseq .divider { color: #475569; }
+  .tseq .time { color: #f472b6; font-weight: 700; }
+
+  /* Visual sequence with CSS grid arrows */
+  .vseq { width: 100%; overflow-x: auto; }
+  .vseq-grid { display: grid; gap: 0; }
+  .vseq-head { text-align: center; padding: 8px 4px; position: sticky; top: 0; z-index: 5; }
+  .vseq-head-box { display: inline-block; background: #1e293b; border: 2px solid; border-radius: 6px; padding: 6px 10px; }
+  .vseq-head-name { font-size: 11px; font-weight: 700; }
+  .vseq-head-sub { font-size: 9px; color: #64748b; }
+
+  .vseq-cell { position: relative; min-height: 28px; display: flex; align-items: center; justify-content: center; }
+  .vseq-cell::after { content: ''; position: absolute; left: 50%; top: 0; bottom: 0; width: 1px; border-left: 2px dashed #1e293b; z-index: 0; }
+  .vseq-cell.active::after { border-left-color: #334155; border-left-style: solid; width: 2px; }
+
+  .vseq-arrow { position: absolute; height: 2px; z-index: 2; display: flex; align-items: center; }
+  .vseq-arrow-line { flex: 1; height: 2px; }
+  .vseq-arrow-head { width: 0; height: 0; border: 5px solid transparent; }
+  .vseq-arrow-label { position: absolute; top: -14px; white-space: nowrap; font-size: 10px; font-weight: 600; padding: 1px 5px; border-radius: 3px; }
+
+  .vseq-section { grid-column: 1 / -1; text-align: center; padding: 5px; }
+  .vseq-section span { background: #1e293b; border: 1px dashed #334155; border-radius: 4px; padding: 2px 12px; font-size: 10px; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: 1px; }
+</style>
+</head>
+<body>
+
+<!-- Navigation -->
+<div class="nav">
+  <div class="nav-title"><span>XGuard</span> System Diagrams</div>
+  <div class="nav-btn active" onclick="showPage('arch')">Architecture</div>
+  <div class="nav-btn" onclick="showPage('seq')">Sequence Diagrams</div>
+</div>
+
+<!-- ================================================================ -->
+<!-- PAGE 1: ARCHITECTURE / BLOCK DIAGRAM                             -->
+<!-- ================================================================ -->
+<div class="page active" id="page-arch">
+<div class="arch-container">
+
+<div class="arch-title">
+  <h2>System Architecture</h2>
+  <p>6-layer architecture — External sources to human-validated knowledge base</p>
+</div>
+
+<!-- Layer 1: External Services -->
+<div class="layer l-external">
+  <div class="layer-header">
+    <h3>External Services</h3>
+    <span class="layer-tag">APIs + IMAP</span>
+  </div>
+  <div class="layer-body">
+    <div class="block">
+      <div class="block-icon">&#9993;</div>
+      <div class="block-name">Gmail IMAP</div>
+      <div class="block-tech">academie@academiexguard.ca</div>
+      <div class="block-detail">272k emails | 49 folders<br>20 SAC-relevant scanned</div>
+    </div>
+    <div class="block">
+      <div class="block-icon">&#128222;</div>
+      <div class="block-name">JustCall API</div>
+      <div class="block-tech">REST v1 | 2 accounts</div>
+      <div class="block-detail">academie@ (301418)<br>formateur@ (302145)</div>
+    </div>
+    <div class="block">
+      <div class="block-icon">&#128172;</div>
+      <div class="block-name">JustCall SMS</div>
+      <div class="block-tech">SMS v2.1 API</div>
+      <div class="block-detail">17k+ messages<br>Hot lead detection</div>
+    </div>
+    <div class="block">
+      <div class="block-icon">&#129302;</div>
+      <div class="block-name">Claude CLI</div>
+      <div class="block-tech">Haiku + Opus | Max plan</div>
+      <div class="block-detail">Haiku: scoring + classify<br>Opus: weekly narrative</div>
+    </div>
+    <div class="block">
+      <div class="block-icon">&#128231;</div>
+      <div class="block-name">Gmail SMTP</div>
+      <div class="block-tech">nick@darkhorseads.com</div>
+      <div class="block-detail">App password auth<br>HTML email delivery</div>
+    </div>
+  </div>
+</div>
+
+<div class="arrow-row"><div class="arrow-down">&#9660; &#9660; &#9660; &#9660;</div></div>
+
+<!-- Layer 2: Ingestion Crons -->
+<div class="layer l-ingestion">
+  <div class="layer-header">
+    <h3>Data Ingestion (Nitro Crons)</h3>
+    <span class="layer-tag">Windows Task Scheduler</span>
+  </div>
+  <div class="layer-body">
+    <div class="block">
+      <div class="block-icon">&#128337;</div>
+      <div class="block-name">SAC Daily v2</div>
+      <div class="block-tech">19h | sac_daily_v2.py</div>
+      <div class="block-detail">Fetch calls both accounts<br>Download recordings<br>Agent attribution</div>
+    </div>
+    <div class="block">
+      <div class="block-icon">&#128337;</div>
+      <div class="block-name">KB Analyzer</div>
+      <div class="block-tech">23h | kb_email_analyzer.py</div>
+      <div class="block-detail">1500 emails/night<br>5 parallel Haiku workers<br>IMAP 2-pass fetch</div>
+    </div>
+    <div class="block">
+      <div class="block-icon">&#128337;</div>
+      <div class="block-name">Heidys Daily</div>
+      <div class="block-tech">22h | heidys_daily_v3.py</div>
+      <div class="block-detail">Sales calls<br>Haiku scoring</div>
+    </div>
+    <div class="block">
+      <div class="block-icon">&#128337;</div>
+      <div class="block-name">Domingos Daily</div>
+      <div class="block-tech">23:30 | domingos_daily_v3.py</div>
+      <div class="block-detail">Drone/Elite calls<br>GHL transcription</div>
+    </div>
+    <div class="block">
+      <div class="block-icon">&#128337;</div>
+      <div class="block-name">FAQ Builder</div>
+      <div class="block-tech">23h | email_faq_builder.py</div>
+      <div class="block-detail">Legacy (replaced by<br>KB Analyzer)</div>
+    </div>
+  </div>
+</div>
+
+<div class="arrow-row"><div class="arrow-down">&#9660; &#9660; &#9660;</div></div>
+
+<!-- Layer 3: AI Processing -->
+<div class="layer l-processing">
+  <div class="layer-header">
+    <h3>AI Processing Pipeline</h3>
+    <span class="layer-tag">GPU + Claude AI</span>
+  </div>
+  <div class="layer-body">
+    <div class="block">
+      <div class="block-icon">&#127911;</div>
+      <div class="block-name">GPU Transcription</div>
+      <div class="block-tech">faster-whisper medium | CUDA</div>
+      <div class="block-detail">GTX 1650 (4GB VRAM)<br>~20s/call | int8_float16<br>VAD filter | French</div>
+    </div>
+    <div class="block">
+      <div class="block-icon">&#9889;</div>
+      <div class="block-name">Haiku Scoring</div>
+      <div class="block-tech">claude_scoring.py</div>
+      <div class="block-detail">10 SAC dimensions<br>Global score /10<br>Coaching note</div>
+    </div>
+    <div class="block">
+      <div class="block-icon">&#129504;</div>
+      <div class="block-name">Haiku Classify</div>
+      <div class="block-tech">Email classification</div>
+      <div class="block-detail">Category + question<br>Intent + urgency<br>Suggested response</div>
+    </div>
+    <div class="block">
+      <div class="block-icon">&#128300;</div>
+      <div class="block-name">Topic Aggregator</div>
+      <div class="block-tech">06h | kb_topic_aggregator.py</div>
+      <div class="block-detail">Semantic merge (1 Haiku call)<br>Canonical topics<br>Example extraction</div>
+    </div>
+    <div class="block">
+      <div class="block-icon">&#128214;</div>
+      <div class="block-name">Opus Reports</div>
+      <div class="block-tech">Monday 07h | sac_weekly_v3.py</div>
+      <div class="block-detail">Deep coaching narrative<br>Progression analysis<br>DOCX generation</div>
+    </div>
+  </div>
+</div>
+
+<div class="arrow-row"><div class="arrow-down">&#9660; &#9660; &#9660;</div></div>
+
+<!-- Layer 4: Data Storage -->
+<div class="layer l-storage">
+  <div class="layer-header">
+    <h3>Data Storage (Supabase PostgreSQL)</h3>
+    <span class="layer-tag">12+ tables | Real-time</span>
+  </div>
+  <div class="layer-body">
+    <div class="block">
+      <div class="block-icon">&#128451;</div>
+      <div class="block-name">sac_calls</div>
+      <div class="block-tech">2,700+ rows</div>
+      <div class="block-detail">Transcripts + AI scores<br>10 dimensions + coaching</div>
+    </div>
+    <div class="block">
+      <div class="block-icon">&#128451;</div>
+      <div class="block-name">kb_emails</div>
+      <div class="block-tech">Growing ~1500/night</div>
+      <div class="block-detail">Classified emails<br>Question + response</div>
+    </div>
+    <div class="block">
+      <div class="block-icon">&#128218;</div>
+      <div class="block-name">kb_topics</div>
+      <div class="block-tech">Canonical FAQ</div>
+      <div class="block-detail">Merged topics + approval<br>pending/approved/rejected</div>
+    </div>
+    <div class="block">
+      <div class="block-icon">&#128220;</div>
+      <div class="block-name">kb_approvals</div>
+      <div class="block-tech">Audit log</div>
+      <div class="block-detail">Every action tracked<br>Immutable history</div>
+    </div>
+    <div class="block">
+      <div class="block-icon">&#128202;</div>
+      <div class="block-name">coaching_*</div>
+      <div class="block-tech">reports, data, metrics</div>
+      <div class="block-detail">Weekly scores + trends<br>Objections + actions</div>
+    </div>
+  </div>
+</div>
+
+<div class="arrow-row"><div class="arrow-down">&#9660; &#9660; &#9660;</div></div>
+
+<!-- Layer 5: Output -->
+<div class="layer l-output">
+  <div class="layer-header">
+    <h3>Output Channels</h3>
+    <span class="layer-tag">Email + Web</span>
+  </div>
+  <div class="layer-body">
+    <div class="block">
+      <div class="block-icon">&#128231;</div>
+      <div class="block-name">Daily SAC Email</div>
+      <div class="block-tech">19h | daily_email_report.py</div>
+      <div class="block-detail">KPIs + scores + SMS<br>Unanswered emails<br>Best/worst calls</div>
+    </div>
+    <div class="block">
+      <div class="block-icon">&#128231;</div>
+      <div class="block-name">KB Approval Email</div>
+      <div class="block-tech">07:30 | kb_approval_email.py</div>
+      <div class="block-detail">New topics to review<br>Grouped by category<br>Link to admin page</div>
+    </div>
+    <div class="block">
+      <div class="block-icon">&#128187;</div>
+      <div class="block-name">KB Admin Page</div>
+      <div class="block-tech">GitHub Pages | kb_admin.html</div>
+      <div class="block-detail">Approve / Correct / Reject<br>Direct Supabase REST</div>
+    </div>
+    <div class="block">
+      <div class="block-icon">&#128202;</div>
+      <div class="block-name">Coaching Dashboard</div>
+      <div class="block-tech">GitHub Pages | reports.js</div>
+      <div class="block-detail">Scores grid + trends<br>Call breakdown + crons</div>
+    </div>
+    <div class="block">
+      <div class="block-icon">&#128196;</div>
+      <div class="block-name">Weekly DOCX</div>
+      <div class="block-tech">Google Drive auto-sync</div>
+      <div class="block-detail">Per-agent coaching report<br>Opus-generated narrative</div>
+    </div>
+  </div>
+</div>
+
+<div class="arrow-row"><div class="arrow-down">&#9660; &#9660;</div></div>
+
+<!-- Layer 6: Human -->
+<div class="layer l-human">
+  <div class="layer-header">
+    <h3>Human Actors</h3>
+    <span class="layer-tag">Review + Action</span>
+  </div>
+  <div class="layer-body">
+    <div class="block">
+      <div class="block-icon">&#128104;&#8205;&#128188;</div>
+      <div class="block-name">Nick (Admin)</div>
+      <div class="block-tech">KB validation + system oversight</div>
+      <div class="block-detail">Approves FAQ topics<br>Corrects AI responses<br>Reviews coaching data</div>
+    </div>
+    <div class="block">
+      <div class="block-icon">&#128104;</div>
+      <div class="block-name">Hamza (L3)</div>
+      <div class="block-tech">Responsable SAC</div>
+      <div class="block-detail">Daily report recipient<br>Coaching improvement<br>Mon-Fri 8h-16h</div>
+    </div>
+    <div class="block">
+      <div class="block-icon">&#128105;</div>
+      <div class="block-name">Lilia (s2)</div>
+      <div class="block-tech">Agent SAC</div>
+      <div class="block-detail">formateur@ account<br>Mon-Fri 12h-18h</div>
+    </div>
+    <div class="block">
+      <div class="block-icon">&#128104;</div>
+      <div class="block-name">Sekou (s3)</div>
+      <div class="block-tech">Agent SAC weekend</div>
+      <div class="block-detail">academie@ Sat-Sun<br>Weekend coverage</div>
+    </div>
+    <div class="block" style="border-style: dashed; opacity: 0.6;">
+      <div class="block-icon">&#129302;</div>
+      <div class="block-name">Auto-Response (Future)</div>
+      <div class="block-tech">Phase 4</div>
+      <div class="block-detail">Answers high-confidence<br>Flags medium for review<br>Escalates low to human</div>
+    </div>
+  </div>
+</div>
+
+</div>
+</div>
+
+<!-- ================================================================ -->
+<!-- PAGE 2: SEQUENCE DIAGRAMS                                        -->
+<!-- ================================================================ -->
+<div class="page" id="page-seq">
+<div class="seq-container">
+
+<div class="seq-title">
+  <h2>Sequence Diagrams</h2>
+  <p>Step-by-step flows for each major process</p>
+</div>
+
+<div class="seq-tabs">
+  <div class="seq-tab active" onclick="showSeq('nightly')">Nightly KB Pipeline</div>
+  <div class="seq-tab" onclick="showSeq('daily')">Daily SAC Report</div>
+  <div class="seq-tab" onclick="showSeq('approval')">Topic Approval Flow</div>
+  <div class="seq-tab" onclick="showSeq('weekly')">Weekly Coaching</div>
+</div>
+
+<!-- SEQ 1: Nightly KB Pipeline -->
+<div class="seq-diagram active" id="seq-nightly">
+<h3 style="color:#5eead4; margin-bottom:15px; font-size:14px;">Nightly Knowledge Base Pipeline (23h → 07h30)</h3>
+<pre class="tseq">
+<span class="divider">  IMAP            KB Analyzer         Haiku            Supabase          Aggregator       Approval Email      Nick</span>
+<span class="divider">   |                  |                  |                  |                  |                  |               |</span>
+<span class="time">   |    ============ 23:00 — KB ANALYZER STARTS ============</span>
+<span class="divider">   |                  |                  |                  |                  |                  |               |</span>
+   <span class="actor">IMAP</span> <span class="arrow-l">&lt;-----------</span> <span class="actor">Analyzer</span>         |                  |              <span class="label">Connect + list folders</span>
+   <span class="actor">IMAP</span> <span class="arrow-r">-----------&gt;</span> <span class="actor">Analyzer</span>         |                  |              <span class="label">895 headers from 20 folders</span>
+<span class="divider">   |                  |                  |                  |                  |                  |               |</span>
+   |             <span class="actor">Analyzer</span> <span class="arrow-l">&lt;-----------</span>   |             <span class="actor">Supabase</span>              <span class="label">GET kb_emails (existing IDs)</span>
+   |             <span class="actor">Analyzer</span>           |  <span class="arrow-r">-----------&gt;</span> <span class="actor">Supabase</span>              <span class="label">0 already done → 895 new</span>
+<span class="divider">   |                  |                  |                  |                  |                  |               |</span>
+   <span class="actor">IMAP</span> <span class="arrow-l">&lt;-----------</span> <span class="actor">Analyzer</span>         |                  |              <span class="label">Fetch body (1500 max)</span>
+   <span class="actor">IMAP</span> <span class="arrow-r">-----------&gt;</span> <span class="actor">Analyzer</span>         |                  |              <span class="label">Email bodies (truncated 800ch)</span>
+<span class="divider">   |                  |                  |                  |                  |                  |               |</span>
+<span class="note">   |    -------- CLASSIFICATION LOOP (5 workers x 20 batch) --------</span>
+<span class="divider">   |                  |                  |                  |                  |                  |               |</span>
+   |             <span class="actor">Analyzer</span> <span class="arrow-r">-----------&gt;</span> <span class="actor">Haiku</span>             |              <span class="label">Classify email (JSON prompt)</span>
+   |             <span class="actor">Analyzer</span> <span class="arrow-r">-----------&gt;</span> <span class="actor">Haiku</span>             |              <span class="label">Classify email (parallel x5)</span>
+   |             <span class="actor">Analyzer</span> <span class="arrow-l">&lt;-----------</span> <span class="actor">Haiku</span>             |              <span class="label">{category, question, response, topic}</span>
+   |             <span class="actor">Analyzer</span>           |  <span class="arrow-r">-----------&gt;</span> <span class="actor">Supabase</span>              <span class="label">UPSERT kb_emails (per email)</span>
+<span class="divider">   |                  |                  |                  |                  |                  |               |</span>
+<span class="note">   |    -------- REPEAT x75 batches (~1500 emails) --------</span>
+<span class="note">   |    -------- 10s pause between batches --------</span>
+<span class="divider">   |                  |                  |                  |                  |                  |               |</span>
+   |             <span class="actor">Analyzer</span>           |  <span class="arrow-r">-----------&gt;</span> <span class="actor">Supabase</span>              <span class="label">INSERT kb_run_log (completed)</span>
+<span class="divider">   |                  |                  |                  |                  |                  |               |</span>
+<span class="time">   |    ============ 06:00 — TOPIC AGGREGATOR STARTS ============</span>
+<span class="divider">   |                  |                  |                  |                  |                  |               |</span>
+   |                  |                  |             <span class="actor">Supabase</span> <span class="arrow-r">-----------&gt;</span> <span class="actor">Aggregator</span>         <span class="label">GET all faq_topics + counts</span>
+   |                  |             <span class="actor">Haiku</span> <span class="arrow-l">&lt;-----------</span>   |             <span class="actor">Aggregator</span>         <span class="label">Merge 150 raw → 40 canonical</span>
+   |                  |             <span class="actor">Haiku</span> <span class="arrow-r">-----------&gt;</span>   |             <span class="actor">Aggregator</span>         <span class="label">[{topic_id, label, response, merged}]</span>
+   |                  |                  |             <span class="actor">Supabase</span> <span class="arrow-l">&lt;-----------</span> <span class="actor">Aggregator</span>         <span class="label">UPSERT kb_topics + examples</span>
+   |                  |                  |             <span class="actor">Supabase</span> <span class="arrow-l">&lt;-----------</span> <span class="actor">Aggregator</span>         <span class="label">PATCH kb_emails.topic_id</span>
+<span class="divider">   |                  |                  |                  |                  |                  |               |</span>
+<span class="time">   |    ============ 07:30 — APPROVAL EMAIL ============</span>
+<span class="divider">   |                  |                  |                  |                  |                  |               |</span>
+   |                  |                  |             <span class="actor">Supabase</span>           |  <span class="arrow-r">-----------&gt;</span> <span class="actor">ApprovalEmail</span>     <span class="label">GET pending topics</span>
+   |                  |                  |                  |                  | <span class="actor">ApprovalEmail</span> <span class="arrow-r">-----------&gt;</span> <span class="actor">Nick</span> <span class="label">HTML email (topics + link)</span>
+</pre>
+</div>
+
+<!-- SEQ 2: Daily SAC Report -->
+<div class="seq-diagram" id="seq-daily">
+<h3 style="color:#fcd34d; margin-bottom:15px; font-size:14px;">Daily SAC Report Pipeline (19h)</h3>
+<pre class="tseq">
+<span class="divider"> JustCall        SAC Daily v2       GPU Nitro         Haiku           Supabase       Email Report       Hamza/Nick</span>
+<span class="divider">   |                  |                  |                  |                  |                  |               |</span>
+<span class="time">   |    ============ 19:00 — SAC DAILY v2 STARTS ============</span>
+<span class="divider">   |                  |                  |                  |                  |                  |               |</span>
+   <span class="actor">JustCall</span> <span class="arrow-l">&lt;--------</span> <span class="actor">Daily v2</span>          |                  |                  |              <span class="label">POST /calls/query (academie@)</span>
+   <span class="actor">JustCall</span> <span class="arrow-r">--------&gt;</span> <span class="actor">Daily v2</span>          |                  |                  |              <span class="label">200+ calls with recordings</span>
+   <span class="actor">JustCall</span> <span class="arrow-l">&lt;--------</span> <span class="actor">Daily v2</span>          |                  |                  |              <span class="label">POST /calls/query (formateur@)</span>
+   <span class="actor">JustCall</span> <span class="arrow-r">--------&gt;</span> <span class="actor">Daily v2</span>          |                  |                  |              <span class="label">50+ calls with recordings</span>
+<span class="divider">   |                  |                  |                  |                  |                  |               |</span>
+<span class="note">   |    -------- ATTRIBUTION: notes + weekday + name detection --------</span>
+<span class="divider">   |                  |                  |                  |                  |                  |               |</span>
+   |             <span class="actor">Daily v2</span> <span class="arrow-r">-----------&gt;</span> <span class="actor">GPU</span>               |                  |              <span class="label">Download .mp3 → transcribe</span>
+   |             <span class="actor">Daily v2</span> <span class="arrow-l">&lt;-----------</span> <span class="actor">GPU</span>               |                  |              <span class="label">French transcript (~20s/call)</span>
+   |             <span class="actor">Daily v2</span>           |  <span class="arrow-r">-----------&gt;</span> <span class="actor">Haiku</span>             |              <span class="label">Score 10 dimensions + coaching</span>
+   |             <span class="actor">Daily v2</span>           |  <span class="arrow-l">&lt;-----------</span> <span class="actor">Haiku</span>             |              <span class="label">{scores, global, coaching_note}</span>
+   |             <span class="actor">Daily v2</span>           |                  | <span class="arrow-r">-----------&gt;</span> <span class="actor">Supabase</span>              <span class="label">UPSERT sac_calls + sac_contacts</span>
+<span class="divider">   |                  |                  |                  |                  |                  |               |</span>
+<span class="note">   |    -------- REPEAT for each call with recording (30s+ duration) --------</span>
+<span class="divider">   |                  |                  |                  |                  |                  |               |</span>
+<span class="note">   |    -------- EMAIL REPORT SUBPROCESS --------</span>
+<span class="divider">   |                  |                  |                  |                  |                  |               |</span>
+   |                  |                  |                  |             <span class="actor">Supabase</span> <span class="arrow-r">-----------&gt;</span> <span class="actor">Report</span>         <span class="label">GET sac_calls (today)</span>
+   |                  |                  |                  |                  | <span class="actor">Report</span>: smart_stats()       <span class="label">Dedup + agent busy + shifts</span>
+   |                  |                  |                  |                  | <span class="actor">Report</span>: sms_stats()         <span class="label">JustCall SMS v2.1 cross-ref</span>
+   |                  |                  |                  |                  | <span class="actor">Report</span>: email_stats()       <span class="label">IMAP unanswered emails</span>
+   |                  |                  |                  |                  | <span class="actor">Report</span>: build_html()        <span class="label">KPIs + scores + SMS + emails</span>
+   |                  |                  |                  |                  |             <span class="actor">Report</span> <span class="arrow-r">-----------&gt;</span> <span class="actor">Hamza+Nick</span> <span class="label">SMTP HTML email</span>
+</pre>
+</div>
+
+<!-- SEQ 3: Approval Flow -->
+<div class="seq-diagram" id="seq-approval">
+<h3 style="color:#d8b4fe; margin-bottom:15px; font-size:14px;">Topic Approval Workflow (Human-in-the-Loop)</h3>
+<pre class="tseq">
+<span class="divider">    Nick              Email              Admin Page          Supabase          kb_topics          kb_approvals</span>
+<span class="divider">     |                  |                     |                  |                  |                  |</span>
+<span class="time">     |    ============ 07:30 — MORNING EMAIL ARRIVES ============</span>
+<span class="divider">     |                  |                     |                  |                  |                  |</span>
+     <span class="actor">Nick</span> <span class="arrow-l">&lt;-----------</span> <span class="actor">Email</span>                  |                  |                  |              <span class="label">15 new pending topics</span>
+     <span class="actor">Nick</span>   reads email   |                     |                  |                  |              <span class="label">Reviews categories + frequencies</span>
+     <span class="actor">Nick</span> <span class="arrow-r">---clicks link---&gt;</span>               <span class="actor">Admin Page</span>         |                  |              <span class="label">Opens kb_admin.html</span>
+<span class="divider">     |                  |                     |                  |                  |                  |</span>
+     |                  |                <span class="actor">Admin Page</span> <span class="arrow-r">-----------&gt;</span> <span class="actor">Supabase</span>              |              <span class="label">GET kb_topics (all)</span>
+     |                  |                <span class="actor">Admin Page</span> <span class="arrow-l">&lt;-----------</span> <span class="actor">Supabase</span>              |              <span class="label">40 topics (15 pending)</span>
+     |                  |                <span class="actor">Admin Page</span> renders grouped by category                            <span class="label">Cards with approve/reject/correct</span>
+<span class="divider">     |                  |                     |                  |                  |                  |</span>
+<span class="note">     |    ======== APPROVE: Nick clicks "Approuver" on "inscription-en-ligne" ========</span>
+<span class="divider">     |                  |                     |                  |                  |                  |</span>
+     <span class="actor">Nick</span> <span class="arrow-r">---clicks---&gt;</span>                  <span class="actor">Admin Page</span>         |                  |                  |
+     |                  |                <span class="actor">Admin Page</span> <span class="arrow-r">-----------&gt;</span> <span class="actor">Supabase</span>              |              <span class="label">PATCH kb_topics (approved)</span>
+     |                  |                <span class="actor">Admin Page</span> <span class="arrow-r">-----------&gt;</span>   |                  | <span class="arrow-r">-----------&gt;</span> <span class="actor">Approvals</span> <span class="label">POST kb_approvals (audit log)</span>
+     |                  |                <span class="actor">Admin Page</span>: toast("Approuve!")                                    <span class="label">UI updates instantly</span>
+<span class="divider">     |                  |                     |                  |                  |                  |</span>
+<span class="note">     |    ======== CORRECT: Nick edits response + clicks "Corriger" ========</span>
+<span class="divider">     |                  |                     |                  |                  |                  |</span>
+     <span class="actor">Nick</span> types correction in textarea                          |                  |                  |
+     <span class="actor">Nick</span> <span class="arrow-r">---clicks---&gt;</span>                  <span class="actor">Admin Page</span>         |                  |                  |
+     |                  |                <span class="actor">Admin Page</span> <span class="arrow-r">-----------&gt;</span> <span class="actor">Supabase</span>              |              <span class="label">PATCH kb_topics (corrected + new response)</span>
+     |                  |                <span class="actor">Admin Page</span> <span class="arrow-r">-----------&gt;</span>   |                  | <span class="arrow-r">-----------&gt;</span> <span class="actor">Approvals</span> <span class="label">POST kb_approvals (correct + old + new)</span>
+<span class="divider">     |                  |                     |                  |                  |                  |</span>
+<span class="note">     |    ======== REJECT: Nick clicks "Rejeter" on spam topic ========</span>
+<span class="divider">     |                  |                     |                  |                  |                  |</span>
+     <span class="actor">Nick</span> <span class="arrow-r">---clicks---&gt;</span>                  <span class="actor">Admin Page</span> <span class="arrow-r">-----------&gt;</span> <span class="actor">Supabase</span>              |              <span class="label">PATCH kb_topics (rejected)</span>
+     |                  |                     |             <span class="actor">Supabase</span>           | <span class="arrow-r">-----------&gt;</span> <span class="actor">Approvals</span> <span class="label">POST kb_approvals (reject)</span>
+<span class="divider">     |                  |                     |                  |                  |                  |</span>
+<span class="time">     |    ============ RESULT: Validated KB grows daily ============</span>
+<span class="divider">     |                  |                     |                  |                  |                  |</span>
+<span class="note">     |    Approved topics = official knowledge base for future auto-response system</span>
+<span class="note">     |    Corrected responses = Nick's expertise captured permanently</span>
+<span class="note">     |    Rejected topics = filtered out, won't appear again</span>
+</pre>
+</div>
+
+<!-- SEQ 4: Weekly Coaching -->
+<div class="seq-diagram" id="seq-weekly">
+<h3 style="color:#93c5fd; margin-bottom:15px; font-size:14px;">Weekly Coaching Report (Monday 07h)</h3>
+<pre class="tseq">
+<span class="divider">  Supabase        Weekly v3          Haiku              Opus            Node.js           Google Drive       Nick/Hamza</span>
+<span class="divider">     |                  |                  |                  |                  |                  |               </span>
+<span class="time">     |    ============ MONDAY 07:00 — WEEKLY REPORT ============</span>
+<span class="divider">     |                  |                  |                  |                  |                  |               </span>
+     <span class="actor">Supabase</span> <span class="arrow-r">--------&gt;</span> <span class="actor">Weekly v3</span>         |                  |                  |              <span class="label">GET sac_calls (last 7 days)</span>
+     <span class="actor">Supabase</span> <span class="arrow-r">--------&gt;</span> <span class="actor">Weekly v3</span>         |                  |                  |              <span class="label">GET previous week scores</span>
+<span class="divider">     |                  |                  |                  |                  |                  |               </span>
+<span class="note">     |    -------- PER AGENT (Hamza, Lilia, Sekou) --------</span>
+<span class="divider">     |                  |                  |                  |                  |                  |               </span>
+     |             <span class="actor">Weekly v3</span> <span class="arrow-r">-----------&gt;</span> <span class="actor">Haiku</span>             |                  |              <span class="label">Batch score (unscored calls)</span>
+     |             <span class="actor">Weekly v3</span> <span class="arrow-l">&lt;-----------</span> <span class="actor">Haiku</span>             |                  |              <span class="label">10-dimension scores per call</span>
+     |             <span class="actor">Weekly v3</span>: aggregate scores, compare vs previous week
+<span class="divider">     |                  |                  |                  |                  |                  |               </span>
+     |             <span class="actor">Weekly v3</span>           |  <span class="arrow-r">-----------&gt;</span> <span class="actor">Opus</span>              |              <span class="label">Full data JSON → deep analysis</span>
+     |             <span class="actor">Weekly v3</span>           |  <span class="arrow-l">&lt;-----------</span> <span class="actor">Opus</span>              |              <span class="label">Coaching narrative (strengths,</span>
+     |                  |                  |                  |                  |              <span class="label"> improvements, recommendations)</span>
+<span class="divider">     |                  |                  |                  |                  |                  |               </span>
+     |             <span class="actor">Weekly v3</span>           |                  | <span class="arrow-r">-----------&gt;</span> <span class="actor">Node.js</span>            <span class="label">generate_reports_docx.js</span>
+     |                  |                  |                  | <span class="actor">Node.js</span> <span class="arrow-r">-----------&gt;</span>   |              <span class="label">DOCX → Google Drive (auto-sync)</span>
+<span class="divider">     |                  |                  |                  |                  |                  |               </span>
+     <span class="actor">Supabase</span> <span class="arrow-l">&lt;--------</span> <span class="actor">Weekly v3</span>         |                  |                  |              <span class="label">UPSERT coaching_reports</span>
+     |             <span class="actor">Weekly v3</span>           |                  |                  | <span class="arrow-r">-----------&gt;</span> <span class="actor">Nick/Hamza</span> <span class="label">SMTP email with DOCX link</span>
+<span class="divider">     |                  |                  |                  |                  |                  |               </span>
+<span class="note">     |    Scoring: accueil, ecoute, resolution, patience, professionnalisme,</span>
+<span class="note">     |              vente_subtile, qualification, gestion_objections, energie, engagement</span>
+</pre>
+</div>
+
+</div>
+</div>
+
+<script>
+function showPage(id) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('page-' + id).classList.add('active');
+  event.target.classList.add('active');
+}
+
+function showSeq(id) {
+  document.querySelectorAll('.seq-diagram').forEach(d => d.classList.remove('active'));
+  document.querySelectorAll('.seq-tab').forEach(t => t.classList.remove('active'));
+  document.getElementById('seq-' + id).classList.add('active');
+  event.target.classList.add('active');
+}
+</script>
+
+</body>
+</html>
