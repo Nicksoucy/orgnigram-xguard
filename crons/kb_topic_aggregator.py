@@ -88,15 +88,31 @@ def get_existing_topic_mappings():
 
 
 def get_example_emails_for_topics(raw_topics, limit=3):
-    """Get example emails for a set of raw topics."""
-    # Build filter for multiple topics
+    """Get example emails for a set of raw topics. Uses category match as fallback."""
     examples = []
-    for topic in raw_topics[:3]:  # Check top 3 raw topics
+    import urllib.parse
+    for topic in raw_topics[:5]:
+        # URL-encode the topic for Supabase query
+        encoded = urllib.parse.quote(topic, safe="")
         rows = sb_get(
-            f"kb_emails?faq_topic=eq.{topic}&select=subject,from_addr,body_preview,email_date"
+            f"kb_emails?faq_topic=eq.{encoded}&select=subject,from_addr,body_preview,email_date"
             f"&order=email_date.desc&limit={limit}"
         )
-        examples.extend(rows)
+        for r in rows:
+            if r not in examples:
+                examples.append(r)
+        if len(examples) >= limit:
+            break
+    # Fallback: if no examples found by faq_topic, search by category in the raw topic name
+    if not examples and raw_topics:
+        for cat in ["inscription", "paiement", "annulation", "info", "plainte", "certificat", "emploi", "technique", "spam"]:
+            if cat in " ".join(raw_topics).lower():
+                rows = sb_get(
+                    f"kb_emails?category=eq.{cat}&select=subject,from_addr,body_preview,email_date"
+                    f"&order=email_date.desc&limit={limit}"
+                )
+                examples.extend(rows[:limit])
+                break
     return examples[:limit]
 
 

@@ -221,9 +221,18 @@ function renderTopics() {
   el.innerHTML = filtered.map(t => {
     const cc = CAT_COLORS[t.category] || '#777';
     const statusClass = `badge-${t.approval_status}`;
-    const examples = (t.example_subjects || []).slice(0, 3);
     const isPending = t.approval_status === 'pending';
-    const examplesHtml = examples.map(e => `<div class="example">${e.substring(0, 80)}</div>`).join('');
+    // Show example_emails (with body) if available, fallback to example_subjects
+    let parsedExamples = [];
+    try { parsedExamples = typeof t.example_emails === 'string' ? JSON.parse(t.example_emails) : (t.example_emails || []); } catch(e) {}
+    const examples = parsedExamples.length > 0 ? parsedExamples : (t.example_subjects || []).map(s => ({subject: s}));
+    const examplesHtml = examples.slice(0, 5).map(e => {
+      if (typeof e === 'string') return `<div class="example">${e.substring(0, 80)}</div>`;
+      const subj = (e.subject || '').substring(0, 70);
+      const from = (e.from_addr || '').substring(0, 40);
+      const body = (e.body_preview || '').substring(0, 120);
+      return `<div class="example"><strong>${subj}</strong>${from ? ' <span style="color:#999;font-size:10px;">— '+from+'</span>' : ''}${body ? '<br><span style="color:#888;font-size:10px;">'+body+'</span>' : ''}</div>`;
+    }).join('');
 
     return `
     <div class="topic-card">

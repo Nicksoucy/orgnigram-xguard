@@ -83,6 +83,9 @@ IGNORE_SENDERS = {
     "noreply", "no-reply", "mailer-daemon", "postmaster", "notifications",
     "justcall", "gohighlevel", "calendly", "stripe", "paypal",
     "support@justcall", "notification@", "system@", "alert@",
+    "twilio", "vercel", "supabase", "interac", "brave.com",
+    "qualtrics", "mailchimp", "sendgrid", "hubspot",
+    "google.com", "microsoft.com", "apple.com", "amazon.com",
 }
 
 # ---------------------------------------------------------------------------
