@@ -3,351 +3,308 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>XGuard KB System — Flowchart</title>
+<title>XGuard System — Flowchart</title>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #0a0e1a; color: #e0e0e0; min-height: 100vh; padding-bottom: 30px; }
-
-  .title-bar { text-align: center; padding: 15px 20px 8px; }
-  .title-bar h1 { font-size: 22px; color: #fff; letter-spacing: 1px; }
-  .title-bar h1 span { color: #42a5f5; }
-  .title-bar p { color: #666; font-size: 11px; margin-top: 2px; }
-
-  /* Main layout */
-  .flow { max-width: 1150px; margin: 0 auto; padding: 0 20px; display: flex; flex-direction: column; gap: 0; }
-
-  /* Phase section */
-  .phase { margin: 0; }
-  .phase-header { display: flex; justify-content: space-between; align-items: center; padding: 4px 0 5px; }
-  .phase-label { font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 1.5px; color: #555; }
-  .phase-time { background: rgba(0,0,0,0.4); border: 1px solid #333; border-radius: 12px; padding: 1px 8px; font-size: 8px; color: #888; font-weight: 600; }
-  .phase-nodes { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
-
-  /* Arrow between phases */
-  .arrow-down { display: flex; flex-direction: column; align-items: center; padding: 3px 0; }
-  .arrow-down::before { content: ''; display: block; width: 2px; height: 8px; background: linear-gradient(to bottom, #334155, #1e293b); }
-  .arrow-down::after { content: ''; display: block; width: 0; height: 0; border-left: 4px solid transparent; border-right: 4px solid transparent; border-top: 5px solid #334155; margin-left: -3px; margin-top: -1px; }
-
-  /* Node cards */
-  .node { border-radius: 6px; padding: 8px 10px; text-align: center; transition: transform 0.2s, box-shadow 0.2s; cursor: default; width: 170px; flex-shrink: 0; }
-  .node:hover { transform: translateY(-2px); }
-  .node-icon { font-size: 16px; margin-bottom: 3px; }
-  .node-title { font-weight: 700; font-size: 11px; margin-bottom: 2px; color: #fff; }
-  .node-sub { font-size: 8.5px; opacity: 0.75; line-height: 1.35; }
-
-  /* Node type colors */
-  .source { background: linear-gradient(135deg, #1a237e, #283593); border: 2px solid #3f51b5; }
-  .source:hover { box-shadow: 0 0 25px rgba(63,81,181,0.4); }
-  .cron { background: linear-gradient(135deg, #004d40, #00695c); border: 2px solid #26a69a; }
-  .cron:hover { box-shadow: 0 0 25px rgba(38,166,154,0.4); }
-  .process { background: linear-gradient(135deg, #311b92, #4527a0); border: 2px solid #7c4dff; }
-  .process:hover { box-shadow: 0 0 25px rgba(124,77,255,0.4); }
-  .store { background: linear-gradient(135deg, #b71c1c, #c62828); border: 2px solid #ef5350; border-radius: 8px; }
-  .store:hover { box-shadow: 0 0 25px rgba(239,83,80,0.4); }
-  .output { background: linear-gradient(135deg, #e65100, #f57c00); border: 2px solid #ffb74d; }
-  .output:hover { box-shadow: 0 0 25px rgba(255,183,77,0.4); }
-  .human { background: linear-gradient(135deg, #1565c0, #1976d2); border: 2px solid #42a5f5; }
-  .human:hover { box-shadow: 0 0 25px rgba(66,165,245,0.4); }
-  .dashboard { background: linear-gradient(135deg, #6a1b9a, #7b1fa2); border: 2px solid #ce93d8; }
-  .dashboard:hover { box-shadow: 0 0 25px rgba(206,147,216,0.4); }
-  .future { background: linear-gradient(135deg, #1a1a2e, #16213e); border: 2px dashed #555; opacity: 0.7; }
-
-  /* Small nodes for audit row */
-  .node-sm { width: 135px; padding: 6px 8px; }
-  .node-sm .node-icon { font-size: 14px; margin-bottom: 2px; }
-  .node-sm .node-title { font-size: 10px; margin-bottom: 2px; }
-  .node-sm .node-sub { font-size: 8px; }
-
-  /* Wide node */
-  .node-wide { width: 280px; }
-
-  /* Legend — fixed bottom right */
-  .legend { position: fixed; bottom: 10px; right: 10px; background: rgba(10,14,26,0.95); border: 1px solid #333; border-radius: 8px; padding: 8px 12px; z-index: 10; backdrop-filter: blur(8px); }
-  .legend-title { font-size: 9px; font-weight: 700; color: #666; margin-bottom: 5px; text-transform: uppercase; letter-spacing: 1px; }
-  .legend-row { display: flex; gap: 12px; flex-wrap: wrap; }
-  .legend-item { display: flex; align-items: center; gap: 5px; font-size: 9px; color: #aaa; }
-  .legend-swatch { width: 12px; height: 12px; border-radius: 3px; flex-shrink: 0; }
-
-  /* Stats box inline */
-  .stats-box { background: rgba(10,14,26,0.9); border: 1px solid #333; border-radius: 6px; padding: 8px 10px; width: 135px; flex-shrink: 0; }
-  .stats-box h3 { font-size: 8px; color: #666; text-transform: uppercase; margin-bottom: 4px; letter-spacing: 1px; }
-  .stat-row { display: flex; justify-content: space-between; font-size: 9px; margin: 1px 0; }
-  .stat-val { color: #42a5f5; font-weight: 700; }
-
-  /* Connection hint labels */
-  .conn-label { text-align: center; padding: 0; margin: -3px 0; }
-  .conn-label span { font-size: 7px; color: #3a3a4a; background: rgba(0,0,0,0.3); padding: 1px 6px; border-radius: 6px; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #0f172a; color: #e2e8f0; }
+  .title-bar { text-align: center; padding: 20px 20px 5px; }
+  .title-bar h1 { font-size: 22px; color: #fff; } .title-bar h1 span { color: #60a5fa; }
+  .title-bar p { color: #64748b; font-size: 11px; margin-top: 3px; }
+  .tabs { display: flex; justify-content: center; gap: 6px; padding: 12px; }
+  .tab { padding: 6px 16px; border-radius: 16px; font-size: 11px; font-weight: 600; cursor: pointer; border: 1px solid #334155; color: #94a3b8; background: #1e293b; transition: all 0.2s; }
+  .tab:hover { border-color: #60a5fa; color: #e2e8f0; }
+  .tab.active { background: #1e40af; border-color: #3b82f6; color: #fff; }
+  .diagram-wrap { width: 100%; overflow-x: auto; padding: 10px 20px 30px; display: flex; justify-content: center; }
+  .diagram-wrap .mermaid { min-width: 900px; }
+  .hidden { display: none; }
 </style>
 </head>
 <body>
 
 <div class="title-bar">
-  <h1><span>XGuard</span> Knowledge Base System</h1>
-  <p>Complete data flow — from raw emails to approved FAQ responses</p>
+  <h1><span>XGuard</span> System Flowchart</h1>
+  <p>Interactive data flow diagrams — click tabs to switch views</p>
 </div>
 
-<div class="flow">
-
-  <!-- ============ DATA SOURCES ============ -->
-  <div class="phase">
-    <div class="phase-header">
-      <span class="phase-label">Data Sources</span>
-      <span class="phase-time">En continu</span>
-    </div>
-    <div class="phase-nodes">
-      <div class="node source">
-        <div class="node-icon">&#9993;</div>
-        <div class="node-title">IMAP Emails</div>
-        <div class="node-sub">academie@academiexguard.ca<br>272k emails | 20 dossiers SAC</div>
-      </div>
-      <div class="node source">
-        <div class="node-icon">&#128222;</div>
-        <div class="node-title">JustCall API</div>
-        <div class="node-sub">Appels SAC<br>(academie@ + formateur@)<br>~200-300/jour</div>
-      </div>
-      <div class="node source">
-        <div class="node-icon">&#128172;</div>
-        <div class="node-title">JustCall SMS</div>
-        <div class="node-sub">SMS v2.1 API<br>~25-30 entrants/jour</div>
-      </div>
-      <div class="node source">
-        <div class="node-icon">&#127760;</div>
-        <div class="node-title">Email IMAP (today)</div>
-        <div class="node-sub">email_stats.py<br>Emails non-repondus du jour</div>
-      </div>
-    </div>
-  </div>
-
-  <div class="arrow-down"></div>
-
-  <!-- ============ NIGHTLY PROCESSING ============ -->
-  <div class="phase">
-    <div class="phase-header">
-      <span class="phase-label">Nightly Processing</span>
-      <span class="phase-time">19h - 23h</span>
-    </div>
-    <div class="phase-nodes">
-      <div class="node cron">
-        <div class="node-icon">&#129302;</div>
-        <div class="node-title">KB Email Analyzer</div>
-        <div class="node-sub">23h | 1500 emails/nuit<br>5 Haiku workers paralleles<br>kb_email_analyzer.py</div>
-      </div>
-      <div class="node cron">
-        <div class="node-icon">&#128190;</div>
-        <div class="node-title">SAC Daily v2</div>
-        <div class="node-sub">19h | Fetch + Transcribe<br>Both JustCall accounts<br>sac_daily_v2.py</div>
-      </div>
-      <div class="node cron">
-        <div class="node-icon">&#128200;</div>
-        <div class="node-title">SMS Stats</div>
-        <div class="node-sub">Dans daily report<br>Cross-ref appels/SMS<br>sms_stats.py</div>
-      </div>
-    </div>
-  </div>
-
-  <div class="arrow-down"></div>
-
-  <!-- ============ AI PROCESSING ============ -->
-  <div class="phase">
-    <div class="phase-header">
-      <span class="phase-label">AI Processing</span>
-      <span class="phase-time">GPU + Claude Haiku</span>
-    </div>
-    <div class="phase-nodes">
-      <div class="node process">
-        <div class="node-icon">&#9889;</div>
-        <div class="node-title">Haiku Classification</div>
-        <div class="node-sub">Categorie + question + intent<br>urgence + reponse suggeree<br>faq_topic</div>
-      </div>
-      <div class="node process">
-        <div class="node-icon">&#127911;</div>
-        <div class="node-title">GPU Transcription</div>
-        <div class="node-sub">Nitro GTX 1650 CUDA<br>faster-whisper medium<br>~20s/appel</div>
-      </div>
-      <div class="node process">
-        <div class="node-icon">&#129504;</div>
-        <div class="node-title">Haiku Call Scoring</div>
-        <div class="node-sub">10 dimensions SAC<br>Score global /10<br>Note coaching</div>
-      </div>
-    </div>
-  </div>
-
-  <div class="arrow-down"></div>
-  <div class="conn-label"><span>&#8595; Push to Supabase</span></div>
-
-  <!-- ============ SUPABASE STORAGE ============ -->
-  <div class="phase">
-    <div class="phase-header">
-      <span class="phase-label">Supabase (Data Storage)</span>
-      <span class="phase-time">Persistant</span>
-    </div>
-    <div class="phase-nodes">
-      <div class="node store">
-        <div class="node-icon">&#128451;</div>
-        <div class="node-title">kb_emails</div>
-        <div class="node-sub">Emails analyses par Haiku<br>categorie, question, reponse<br>~10k apres 7 nuits</div>
-      </div>
-      <div class="node store">
-        <div class="node-icon">&#128451;</div>
-        <div class="node-title">sac_calls</div>
-        <div class="node-sub">Appels transcrits + scores<br>10 dimensions + coaching<br>2700+ rows</div>
-      </div>
-      <div class="node store">
-        <div class="node-icon">&#128451;</div>
-        <div class="node-title">sac_contacts</div>
-        <div class="node-sub">Contacts uniques<br>Repeat tracking<br>1200+ rows</div>
-      </div>
-    </div>
-  </div>
-
-  <div class="arrow-down"></div>
-
-  <!-- ============ MORNING AGGREGATION ============ -->
-  <div class="phase">
-    <div class="phase-header">
-      <span class="phase-label">Morning Aggregation</span>
-      <span class="phase-time">06h00</span>
-    </div>
-    <div class="phase-nodes">
-      <div class="node cron">
-        <div class="node-icon">&#128300;</div>
-        <div class="node-title">KB Topic Aggregator</div>
-        <div class="node-sub">06h | 1 appel Haiku<br>Merge semantique des topics<br>kb_topic_aggregator.py</div>
-      </div>
-    </div>
-  </div>
-
-  <div class="arrow-down"></div>
-
-  <!-- ============ KNOWLEDGE BASE ============ -->
-  <div class="phase">
-    <div class="phase-header">
-      <span class="phase-label">Knowledge Base</span>
-      <span class="phase-time">07h30</span>
-    </div>
-    <div class="phase-nodes">
-      <div class="node store">
-        <div class="node-icon">&#128218;</div>
-        <div class="node-title">kb_topics</div>
-        <div class="node-sub">Topics FAQ canoniques<br>question + reponse + frequence<br>status: pending / approved / rejected</div>
-      </div>
-      <div class="node output">
-        <div class="node-icon">&#128231;</div>
-        <div class="node-title">KB Approval Email</div>
-        <div class="node-sub">07h30 | Email a Nick<br>Topics a valider + exemples<br>Lien vers page admin</div>
-      </div>
-      <div class="node output">
-        <div class="node-icon">&#128231;</div>
-        <div class="node-title">Daily SAC Email</div>
-        <div class="node-sub">19h | Email a Hamza + Nick<br>KPIs + scores + SMS + emails<br>Best/worst appels</div>
-      </div>
-    </div>
-  </div>
-
-  <div class="arrow-down"></div>
-  <div class="conn-label"><span>&#8595; Delivered to humans</span></div>
-
-  <!-- ============ HUMAN REVIEW ============ -->
-  <div class="phase">
-    <div class="phase-header">
-      <span class="phase-label">Human Review</span>
-      <span class="phase-time">Chaque matin</span>
-    </div>
-    <div class="phase-nodes">
-      <div class="node dashboard">
-        <div class="node-icon">&#128187;</div>
-        <div class="node-title">KB Admin Page</div>
-        <div class="node-sub">kb_admin.html (GitHub Pages)<br>Approuver / Corriger / Rejeter<br>Vue par categorie + frequence</div>
-      </div>
-      <div class="node human">
-        <div class="node-icon">&#128104;&#8205;&#128188;</div>
-        <div class="node-title">Nick (Validation)</div>
-        <div class="node-sub">Review topics chaque matin<br>Corrige les reponses IA<br>Approuve pour la KB officielle</div>
-      </div>
-      <div class="node human">
-        <div class="node-icon">&#128104;</div>
-        <div class="node-title">Hamza + Equipe SAC</div>
-        <div class="node-sub">Recoit rapport quotidien<br>Voit les emails non-repondus<br>Coaching IA par appel</div>
-      </div>
-    </div>
-  </div>
-
-  <div class="arrow-down"></div>
-  <div class="conn-label"><span>&#8595; Actions logged</span></div>
-
-  <!-- ============ AUDIT TRAIL ============ -->
-  <div class="phase">
-    <div class="phase-header">
-      <span class="phase-label">Audit Trail</span>
-      <span class="phase-time">Immutable</span>
-    </div>
-    <div class="phase-nodes">
-      <div class="node node-sm store">
-        <div class="node-icon">&#128220;</div>
-        <div class="node-title">kb_approvals</div>
-        <div class="node-sub">Log immutable<br>Chaque action tracee</div>
-      </div>
-      <div class="node node-sm store">
-        <div class="node-icon">&#128202;</div>
-        <div class="node-title">kb_run_log</div>
-        <div class="node-sub">Monitoring crons<br>emails/s, erreurs, duree</div>
-      </div>
-      <div class="node node-sm store">
-        <div class="node-icon">&#128202;</div>
-        <div class="node-title">cron_logs</div>
-        <div class="node-sub">Historique SAC daily<br>weekly, Heidys, Domingos</div>
-      </div>
-      <div class="node node-sm store">
-        <div class="node-icon">&#128202;</div>
-        <div class="node-title">coaching_reports</div>
-        <div class="node-sub">Rapports hebdo Opus<br>Progression par dimension</div>
-      </div>
-      <div class="stats-box">
-        <h3>System Stats</h3>
-        <div class="stat-row"><span>Emails IMAP</span><span class="stat-val">272,241</span></div>
-        <div class="stat-row"><span>Folders scannes</span><span class="stat-val">20</span></div>
-        <div class="stat-row"><span>Haiku/nuit</span><span class="stat-val">~1,500</span></div>
-        <div class="stat-row"><span>Completion</span><span class="stat-val">~7 nuits</span></div>
-        <div class="stat-row"><span>Crons actifs</span><span class="stat-val">8</span></div>
-        <div class="stat-row"><span>Tables Supabase</span><span class="stat-val">12+</span></div>
-        <div class="stat-row"><span>GPU</span><span class="stat-val">GTX 1650</span></div>
-        <div class="stat-row"><span>Appels transcrits</span><span class="stat-val">2,700+</span></div>
-      </div>
-    </div>
-  </div>
-
-  <div class="arrow-down"></div>
-
-  <!-- ============ FUTURE ============ -->
-  <div class="phase">
-    <div class="phase-header">
-      <span class="phase-label">Future (Phase 4)</span>
-      <span class="phase-time">A venir</span>
-    </div>
-    <div class="phase-nodes">
-      <div class="node node-wide future">
-        <div class="node-icon">&#129302;</div>
-        <div class="node-title">Auto-Response AI</div>
-        <div class="node-sub">Repond automatiquement aux questions haute confiance<br>Flag moyenne confiance pour review<br>Escalade basse confiance a un humain<br><strong style="color:#42a5f5;">Powered by approved KB topics</strong></div>
-      </div>
-    </div>
-  </div>
-
+<div class="tabs">
+  <div class="tab active" onclick="show('full')">Full System</div>
+  <div class="tab" onclick="show('kb')">KB Pipeline</div>
+  <div class="tab" onclick="show('sac')">SAC Daily</div>
+  <div class="tab" onclick="show('approval')">Approval Flow</div>
 </div>
 
-<!-- Legend -->
-<div class="legend">
-  <div class="legend-title">Legende</div>
-  <div class="legend-row">
-    <div class="legend-item"><div class="legend-swatch" style="background:linear-gradient(135deg,#1a237e,#283593);border:1px solid #3f51b5;"></div>Source</div>
-    <div class="legend-item"><div class="legend-swatch" style="background:linear-gradient(135deg,#004d40,#00695c);border:1px solid #26a69a;"></div>Cron</div>
-    <div class="legend-item"><div class="legend-swatch" style="background:linear-gradient(135deg,#311b92,#4527a0);border:1px solid #7c4dff;"></div>AI</div>
-    <div class="legend-item"><div class="legend-swatch" style="background:linear-gradient(135deg,#b71c1c,#c62828);border:1px solid #ef5350;"></div>Supabase</div>
-    <div class="legend-item"><div class="legend-swatch" style="background:linear-gradient(135deg,#e65100,#f57c00);border:1px solid #ffb74d;"></div>Email</div>
-    <div class="legend-item"><div class="legend-swatch" style="background:linear-gradient(135deg,#1565c0,#1976d2);border:1px solid #42a5f5;"></div>Human</div>
-    <div class="legend-item"><div class="legend-swatch" style="background:linear-gradient(135deg,#6a1b9a,#7b1fa2);border:1px solid #ce93d8;"></div>Dashboard</div>
-  </div>
+<!-- FULL SYSTEM -->
+<div class="diagram-wrap" id="d-full">
+<pre class="mermaid">
+flowchart TD
+  subgraph sources["DATA SOURCES"]
+    IMAP["&#9993; IMAP Emails\nacademie@academiexguard.ca\n272k emails | 20 folders"]
+    JC["&#128222; JustCall API\nacademie@ + formateur@\n~250 calls/day"]
+    SMS["&#128172; JustCall SMS\nv2.1 API\n~30 inbound/day"]
+    IMAP2["&#127760; Email Stats\nemail_stats.py\nToday's unanswered"]
+  end
+
+  subgraph nightly["NIGHTLY CRONS (Nitro)"]
+    KBA["&#129302; KB Analyzer\n23h | 1500/night\n5 Haiku workers"]
+    SACD["&#128190; SAC Daily v2\n19h | Fetch + Transcribe"]
+    SMSS["&#128200; SMS Stats\nsms_stats.py"]
+  end
+
+  subgraph ai["AI PROCESSING"]
+    HCLASS["&#9889; Haiku Classify\ncategory + question\nresponse + faq_topic"]
+    GPU["&#127911; GPU Whisper\nGTX 1650 CUDA\n~20s/call"]
+    HSCORE["&#129504; Haiku Scoring\n10 SAC dimensions\nscore /10 + coaching"]
+  end
+
+  subgraph storage["SUPABASE"]
+    KBE[("&#128451; kb_emails\n~10k after 7 nights")]
+    SAC_CALLS[("&#128451; sac_calls\n2700+ transcripts")]
+    SAC_CON[("&#128451; sac_contacts\n1200+ unique")]
+  end
+
+  subgraph morning["MORNING (06h-07h30)"]
+    AGG["&#128300; Topic Aggregator\n06h | 1 Haiku call\nSemantic merge"]
+    KBT[("&#128218; kb_topics\nCanonical FAQ\npending/approved")]
+  end
+
+  subgraph output["OUTPUT"]
+    MAIL_KB["&#128231; KB Approval Email\n07h30 to Nick"]
+    MAIL_SAC["&#128231; Daily SAC Email\n19h to Hamza + Nick"]
+  end
+
+  subgraph humans["HUMAN REVIEW"]
+    ADMIN["&#128187; KB Admin Page\nApprove / Correct / Reject"]
+    NICK["&#128104;&#8205;&#128188; Nick\nValidates topics"]
+    HAMZA["&#128104; Hamza + Team\nDaily coaching"]
+  end
+
+  subgraph audit["AUDIT"]
+    APPR[("&#128220; kb_approvals\nImmutable log")]
+    RUNLOG[("&#128202; kb_run_log")]
+    CRONLOG[("&#128202; cron_logs")]
+  end
+
+  subgraph future["FUTURE Phase 4"]
+    AUTO["&#129302; Auto-Response AI\nHigh confidence = auto\nMedium = flag\nLow = escalate"]
+  end
+
+  %% DATA FLOW
+  IMAP -->|"IMAP fetch\nheaders + body"| KBA
+  JC -->|"REST API\nboth accounts"| SACD
+  SMS -->|"SMS v2.1"| SMSS
+  IMAP2 -->|"IMAP scan\ntoday only"| MAIL_SAC
+
+  KBA -->|"classify each"| HCLASS
+  SACD -->|"download .mp3"| GPU
+  GPU -->|"transcript FR"| HSCORE
+
+  HCLASS -->|"upsert"| KBE
+  HSCORE -->|"upsert"| SAC_CALLS
+  SACD -->|"upsert"| SAC_CON
+
+  KBE -->|"group by topic"| AGG
+  AGG -->|"merge + upsert"| KBT
+
+  SAC_CALLS -->|"scores + stats"| MAIL_SAC
+  SMSS -->|"SMS analysis"| MAIL_SAC
+
+  KBT -->|"pending topics"| MAIL_KB
+  KBT -->|"all topics"| ADMIN
+
+  MAIL_KB -->|"morning email"| NICK
+  MAIL_SAC -->|"daily report"| HAMZA
+  NICK -->|"approve/correct"| ADMIN
+
+  ADMIN -->|"PATCH"| KBT
+  ADMIN -->|"POST audit"| APPR
+
+  KBA -->|"log run"| RUNLOG
+  SACD -->|"log run"| CRONLOG
+
+  KBT -.->|"approved topics\npower future"| AUTO
+
+  style sources fill:#1e3a5f,stroke:#3b82f6,color:#fff
+  style nightly fill:#064e3b,stroke:#10b981,color:#fff
+  style ai fill:#3b0764,stroke:#a855f7,color:#fff
+  style storage fill:#7f1d1d,stroke:#ef4444,color:#fff
+  style morning fill:#064e3b,stroke:#10b981,color:#fff
+  style output fill:#78350f,stroke:#f59e0b,color:#fff
+  style humans fill:#1e3a5f,stroke:#3b82f6,color:#fff
+  style audit fill:#1f2937,stroke:#6b7280,color:#9ca3af
+  style future fill:#1e1b4b,stroke:#6366f1,color:#a5b4fc,stroke-dasharray: 5 5
+</pre>
 </div>
 
+<!-- KB PIPELINE -->
+<div class="diagram-wrap hidden" id="d-kb">
+<pre class="mermaid">
+flowchart TD
+  IMAP["&#9993; IMAP\nacademie@academiexguard.ca\n272k emails"]
+  KBA["&#129302; KB Analyzer\n23h nightly on Nitro\n5 parallel Haiku workers"]
+  PASS1["Pass 1: Fetch headers\nfrom 20 SAC folders\n~900 candidates"]
+  PASS2["Pass 2: Check Supabase\nskip already analyzed"]
+  PASS3["Pass 3: Fetch body\nonly new emails (max 1500)"]
+  HAIKU["&#9889; Haiku Classification\ncategory, question, intent\nurgency, response, faq_topic"]
+  KBE[("kb_emails\nupsert per email\non_conflict: email_msg_id")]
+  AGG["&#128300; Topic Aggregator\n06h daily | 1 Haiku call"]
+  MERGE["Semantic merge:\n150 raw topics → 40 canonical"]
+  KBT[("kb_topics\ntopic_id, label, response\nfrequency, examples")]
+  EMAIL["&#128231; Approval Email\n07h30 → Nick"]
+  ADMIN["&#128187; Admin Page\nApprove / Correct / Reject"]
+
+  IMAP --> KBA
+  KBA --> PASS1
+  PASS1 --> PASS2
+  PASS2 --> PASS3
+  PASS3 -->|"batch 20 x 75"| HAIKU
+  HAIKU -->|"JSON result"| KBE
+  KBE -->|"GROUP BY faq_topic"| AGG
+  AGG -->|"1 Haiku call"| MERGE
+  MERGE --> KBT
+  KBT --> EMAIL
+  KBT --> ADMIN
+  EMAIL -->|"link"| ADMIN
+
+  style IMAP fill:#1e3a5f,stroke:#3b82f6,color:#fff
+  style KBA fill:#064e3b,stroke:#10b981,color:#fff
+  style HAIKU fill:#3b0764,stroke:#a855f7,color:#fff
+  style AGG fill:#064e3b,stroke:#10b981,color:#fff
+  style KBE fill:#7f1d1d,stroke:#ef4444,color:#fff
+  style KBT fill:#7f1d1d,stroke:#ef4444,color:#fff
+  style EMAIL fill:#78350f,stroke:#f59e0b,color:#fff
+  style ADMIN fill:#4c1d95,stroke:#8b5cf6,color:#fff
+  style MERGE fill:#3b0764,stroke:#a855f7,color:#fff
+</pre>
+</div>
+
+<!-- SAC DAILY -->
+<div class="diagram-wrap hidden" id="d-sac">
+<pre class="mermaid">
+flowchart TD
+  JC["&#128222; JustCall API\nacademie@ (301418)\nformateur@ (302145)"]
+  FETCH["Fetch calls\nduration >= 30s\nwith recording"]
+  ATTR["Agent Attribution\nnotes + weekday + name detect\nHamza/Lilia/Sekou"]
+  DL["Download .mp3\nfrom recording_url"]
+  GPU["&#127911; GPU Transcription\nfaster-whisper medium\nCUDA int8_float16"]
+  CLASS["Regex Classification\nplainte > inscription > support\n> info > autre"]
+  HAIKU["&#129504; Haiku Scoring\n10 dimensions + global /10\ncoaching note"]
+  CALLS[("sac_calls\nupsert on call_id")]
+  CONTACTS[("sac_contacts\nupsert on number")]
+  SMART["Smart Stats\ndedup + agent busy\nshifts 8-12 / 12-18"]
+  SMSS["SMS Stats\ncross-ref with calls\nhot leads detection"]
+  EMAILS["Email Stats\nIMAP unanswered today"]
+  REPORT["&#128231; Daily Email Report\nHTML: KPIs + scores + SMS\n+ emails + best/worst"]
+  HAMZA["&#128104; Hamza + Nick\nhmaghraoui65@gmail.com\nnick@darkhorseads.com"]
+
+  JC --> FETCH --> ATTR --> DL --> GPU
+  GPU --> CLASS --> HAIKU
+  HAIKU --> CALLS
+  ATTR --> CONTACTS
+  CALLS --> SMART
+  SMART --> REPORT
+  SMSS --> REPORT
+  EMAILS --> REPORT
+  REPORT -->|"SMTP"| HAMZA
+
+  style JC fill:#1e3a5f,stroke:#3b82f6,color:#fff
+  style GPU fill:#3b0764,stroke:#a855f7,color:#fff
+  style HAIKU fill:#3b0764,stroke:#a855f7,color:#fff
+  style CALLS fill:#7f1d1d,stroke:#ef4444,color:#fff
+  style CONTACTS fill:#7f1d1d,stroke:#ef4444,color:#fff
+  style REPORT fill:#78350f,stroke:#f59e0b,color:#fff
+  style HAMZA fill:#1e3a5f,stroke:#3b82f6,color:#fff
+</pre>
+</div>
+
+<!-- APPROVAL FLOW -->
+<div class="diagram-wrap hidden" id="d-approval">
+<pre class="mermaid">
+flowchart TD
+  KBT[("kb_topics\n40 canonical topics\n15 pending")]
+  EMAIL["&#128231; Morning Email\n07h30 to Nick\ngrouped by category"]
+  NICK["&#128104;&#8205;&#128188; Nick reads email\nsees new topics + examples\n+ suggested responses"]
+  LINK["Clicks link to\nAdmin Page"]
+  ADMIN["&#128187; kb_admin.html\nLoads all topics from Supabase\nGrouped by category"]
+
+  APPROVE{"Decision?"}
+  A_YES["&#10003; APPROVE\nResponse becomes official"]
+  A_CORRECT["&#9998; CORRECT\nNick edits response\nthen approves"]
+  A_REJECT["&#10007; REJECT\nTopic hidden\nwon't appear again"]
+
+  PATCH_T["PATCH kb_topics\napproval_status = approved\napproved_by = nick"]
+  PATCH_C["PATCH kb_topics\nstatus = corrected\nnick_correction = new text\nsuggested_response = new text"]
+  PATCH_R["PATCH kb_topics\napproval_status = rejected"]
+
+  AUDIT[("POST kb_approvals\naction + previous + corrected\nimmutable audit log")]
+
+  KB_FINAL[("Validated KB\nApproved + Corrected topics\n= Official knowledge base")]
+  FUTURE["&#129302; Future: Auto-Response\npowered by validated KB"]
+
+  KBT --> EMAIL --> NICK --> LINK --> ADMIN
+  ADMIN --> APPROVE
+
+  APPROVE -->|"Good as-is"| A_YES
+  APPROVE -->|"Needs edit"| A_CORRECT
+  APPROVE -->|"Not relevant"| A_REJECT
+
+  A_YES --> PATCH_T
+  A_CORRECT --> PATCH_C
+  A_REJECT --> PATCH_R
+
+  PATCH_T --> AUDIT
+  PATCH_C --> AUDIT
+  PATCH_R --> AUDIT
+
+  PATCH_T --> KB_FINAL
+  PATCH_C --> KB_FINAL
+  KB_FINAL -.-> FUTURE
+
+  style KBT fill:#7f1d1d,stroke:#ef4444,color:#fff
+  style EMAIL fill:#78350f,stroke:#f59e0b,color:#fff
+  style NICK fill:#1e3a5f,stroke:#3b82f6,color:#fff
+  style ADMIN fill:#4c1d95,stroke:#8b5cf6,color:#fff
+  style APPROVE fill:#1e293b,stroke:#94a3b8,color:#fff
+  style A_YES fill:#064e3b,stroke:#10b981,color:#fff
+  style A_CORRECT fill:#1e3a5f,stroke:#3b82f6,color:#fff
+  style A_REJECT fill:#7f1d1d,stroke:#ef4444,color:#fff
+  style AUDIT fill:#1f2937,stroke:#6b7280,color:#9ca3af
+  style KB_FINAL fill:#064e3b,stroke:#10b981,color:#fff
+  style FUTURE fill:#1e1b4b,stroke:#6366f1,color:#a5b4fc,stroke-dasharray: 5 5
+</pre>
+</div>
+
+<script>
+  mermaid.initialize({
+    startOnLoad: true,
+    theme: 'dark',
+    themeVariables: {
+      darkMode: true,
+      background: '#0f172a',
+      primaryColor: '#1e40af',
+      primaryTextColor: '#e2e8f0',
+      primaryBorderColor: '#3b82f6',
+      lineColor: '#475569',
+      secondaryColor: '#064e3b',
+      tertiaryColor: '#3b0764',
+      fontFamily: '-apple-system, BlinkMacSystemFont, Segoe UI, Roboto, sans-serif',
+      fontSize: '12px',
+    },
+    flowchart: {
+      htmlLabels: true,
+      curve: 'basis',
+      nodeSpacing: 30,
+      rankSpacing: 40,
+      padding: 12,
+    }
+  });
+
+  function show(id) {
+    document.querySelectorAll('.diagram-wrap').forEach(d => d.classList.add('hidden'));
+    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+    document.getElementById('d-' + id).classList.remove('hidden');
+    event.target.classList.add('active');
+  }
+</script>
 </body>
 </html>
