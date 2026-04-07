@@ -1,0 +1,289 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>XGuard KB — Approbation</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f5f5f5; color: #333; }
+
+  .header { background: #1565C0; color: white; padding: 20px 30px; display: flex; justify-content: space-between; align-items: center; }
+  .header h1 { font-size: 20px; }
+  .header .stats { display: flex; gap: 15px; }
+  .header .stat { text-align: center; }
+  .header .stat-num { font-size: 24px; font-weight: bold; }
+  .header .stat-label { font-size: 10px; opacity: 0.8; }
+
+  .tabs { display: flex; gap: 0; background: white; border-bottom: 2px solid #e0e0e0; padding: 0 20px; }
+  .tab { padding: 12px 20px; cursor: pointer; font-size: 13px; font-weight: 600; color: #777; border-bottom: 3px solid transparent; }
+  .tab:hover { color: #1565C0; }
+  .tab.active { color: #1565C0; border-bottom-color: #1565C0; }
+  .tab .count { background: #e0e0e0; color: #555; padding: 1px 6px; border-radius: 8px; font-size: 11px; margin-left: 4px; }
+  .tab.active .count { background: #1565C0; color: white; }
+
+  .container { max-width: 900px; margin: 20px auto; padding: 0 15px; }
+
+  .filter-bar { display: flex; gap: 8px; margin: 0 0 15px; flex-wrap: wrap; }
+  .filter-pill { padding: 5px 12px; border-radius: 15px; font-size: 12px; cursor: pointer; border: 1px solid #ddd; background: white; }
+  .filter-pill:hover { border-color: #1565C0; }
+  .filter-pill.active { background: #1565C0; color: white; border-color: #1565C0; }
+
+  .topic-card { background: white; border: 1px solid #e0e0e0; border-radius: 6px; margin: 10px 0; overflow: hidden; }
+  .topic-header { padding: 12px 15px; display: flex; justify-content: space-between; align-items: center; cursor: pointer; }
+  .topic-header:hover { background: #fafafa; }
+  .topic-label { font-size: 14px; font-weight: 600; }
+  .topic-meta { display: flex; gap: 8px; align-items: center; }
+  .badge { padding: 2px 8px; border-radius: 10px; font-size: 11px; font-weight: 600; }
+  .badge-cat { color: white; }
+  .badge-freq { background: #f5f5f5; color: #555; }
+  .badge-status { font-size: 10px; }
+  .badge-pending { background: #FFF8E1; color: #F57F17; }
+  .badge-approved { background: #E8F5E9; color: #2E7D32; }
+  .badge-rejected { background: #FFEBEE; color: #C62828; }
+  .badge-corrected { background: #E3F2FD; color: #1565C0; }
+
+  .topic-body { display: none; padding: 0 15px 15px; border-top: 1px solid #f0f0f0; }
+  .topic-body.open { display: block; }
+
+  .field-label { font-size: 11px; color: #777; font-weight: 600; text-transform: uppercase; margin: 10px 0 3px; }
+  .question-text { color: #1565C0; font-style: italic; font-size: 13px; margin: 0 0 8px; }
+  .response-area { width: 100%; min-height: 80px; padding: 10px; border: 1px solid #ddd; border-radius: 4px; font-size: 13px; font-family: inherit; resize: vertical; }
+  .response-area:focus { border-color: #1565C0; outline: none; }
+
+  .examples { margin: 8px 0; }
+  .example { background: #fafafa; padding: 6px 10px; border-radius: 4px; margin: 3px 0; font-size: 12px; color: #555; }
+
+  .actions { display: flex; gap: 8px; margin: 12px 0 0; }
+  .btn { padding: 8px 16px; border: none; border-radius: 4px; font-size: 12px; font-weight: 600; cursor: pointer; }
+  .btn:hover { opacity: 0.9; }
+  .btn-approve { background: #2E7D32; color: white; }
+  .btn-reject { background: #C62828; color: white; }
+  .btn-correct { background: #1565C0; color: white; }
+  .btn-undo { background: #f5f5f5; color: #555; border: 1px solid #ddd; }
+
+  .toast { position: fixed; bottom: 20px; right: 20px; background: #333; color: white; padding: 10px 20px; border-radius: 6px; font-size: 13px; display: none; z-index: 100; }
+  .toast.show { display: block; animation: fadeIn 0.3s; }
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; } }
+
+  .loading { text-align: center; padding: 40px; color: #999; }
+  .empty { text-align: center; padding: 40px; color: #999; }
+  .empty-icon { font-size: 40px; margin-bottom: 10px; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>XGuard Knowledge Base</h1>
+  <div class="stats">
+    <div class="stat"><div class="stat-num" id="stat-emails">-</div><div class="stat-label">Emails</div></div>
+    <div class="stat"><div class="stat-num" id="stat-topics">-</div><div class="stat-label">Topics</div></div>
+    <div class="stat"><div class="stat-num" id="stat-pending">-</div><div class="stat-label">En attente</div></div>
+    <div class="stat"><div class="stat-num" id="stat-approved">-</div><div class="stat-label">Approuves</div></div>
+  </div>
+</div>
+
+<div class="tabs">
+  <div class="tab active" data-tab="pending" onclick="switchTab('pending')">En attente <span class="count" id="tab-pending-count">0</span></div>
+  <div class="tab" data-tab="approved" onclick="switchTab('approved')">Approuves <span class="count" id="tab-approved-count">0</span></div>
+  <div class="tab" data-tab="rejected" onclick="switchTab('rejected')">Rejetes <span class="count" id="tab-rejected-count">0</span></div>
+  <div class="tab" data-tab="all" onclick="switchTab('all')">Tous <span class="count" id="tab-all-count">0</span></div>
+</div>
+
+<div class="container">
+  <div class="filter-bar" id="filter-bar"></div>
+  <div id="topics-list"><div class="loading">Chargement...</div></div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const SB_URL = 'https://ctjsdpfegpsfpwjgusyi.supabase.co';
+const SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImN0anNkcGZlZ3BzZnB3amd1c3lpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM2MDU2NDQsImV4cCI6MjA4OTE4MTY0NH0.Uv2pbxbmvcbXhyDa7Y_M0HqkLuV7uJaNxl1N01q5wMo';
+
+const CAT_COLORS = {
+  inscription:'#2E7D32', paiement:'#1565C0', annulation:'#E65100', plainte:'#C62828',
+  certificat:'#6A1B9A', emploi:'#00695C', info:'#37474F', changement_date:'#F57F17',
+  technique:'#455A64', autre:'#777', spam:'#999'
+};
+
+let allTopics = [];
+let currentTab = 'pending';
+let currentCat = 'all';
+
+async function sbFetch(path) {
+  const r = await fetch(`${SB_URL}/rest/v1/${path}`, {
+    headers: { apikey: SB_KEY, Authorization: `Bearer ${SB_KEY}` }
+  });
+  return r.json();
+}
+
+async function sbPatch(table, filter, data) {
+  return fetch(`${SB_URL}/rest/v1/${table}?${filter}`, {
+    method: 'PATCH', headers: { apikey: SB_KEY, Authorization: `Bearer ${SB_KEY}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify(data)
+  });
+}
+
+async function sbPost(table, data) {
+  return fetch(`${SB_URL}/rest/v1/${table}`, {
+    method: 'POST', headers: { apikey: SB_KEY, Authorization: `Bearer ${SB_KEY}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify(data)
+  });
+}
+
+async function sbCount(table, filter='') {
+  const f = filter ? `?${filter}&` : '?';
+  const r = await fetch(`${SB_URL}/rest/v1/${table}${f}select=id`, {
+    headers: { apikey: SB_KEY, Authorization: `Bearer ${SB_KEY}`, Prefer: 'count=exact', Range: '0-0' }
+  });
+  const cr = r.headers.get('Content-Range') || '*/0';
+  return parseInt(cr.split('/')[1]) || 0;
+}
+
+function toast(msg, dur=2000) {
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), dur);
+}
+
+function switchTab(tab) {
+  currentTab = tab;
+  document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.tab === tab));
+  renderTopics();
+}
+
+function toggleTopic(id) {
+  const el = document.getElementById(`body-${id}`);
+  if (el) el.classList.toggle('open');
+}
+
+async function doAction(topicId, action) {
+  const topic = allTopics.find(t => t.topic_id === topicId);
+  if (!topic) return;
+
+  let data = { approval_status: action, approved_by: 'nick', approved_at: new Date().toISOString() };
+
+  if (action === 'corrected') {
+    const textarea = document.getElementById(`response-${topicId}`);
+    const corrected = textarea ? textarea.value.trim() : '';
+    if (!corrected) { toast('Ecris une correction!'); return; }
+    data.nick_correction = corrected;
+    data.suggested_response = corrected;
+  }
+
+  await sbPatch('kb_topics', `topic_id=eq.${topicId}`, data);
+  await sbPost('kb_approvals', {
+    topic_id: topicId, action: action === 'corrected' ? 'correct' : action === 'approved' ? 'approve' : 'reject',
+    previous_response: topic.suggested_response, corrected_response: data.nick_correction || null
+  });
+
+  topic.approval_status = action;
+  if (data.nick_correction) topic.suggested_response = data.nick_correction;
+  if (data.nick_correction) topic.nick_correction = data.nick_correction;
+
+  toast(action === 'approved' ? 'Approuve!' : action === 'rejected' ? 'Rejete.' : 'Corrige!');
+  updateStats();
+  renderTopics();
+}
+
+function renderTopics() {
+  let filtered = allTopics;
+
+  if (currentTab === 'pending') filtered = filtered.filter(t => t.approval_status === 'pending');
+  else if (currentTab === 'approved') filtered = filtered.filter(t => t.approval_status === 'approved' || t.approval_status === 'corrected');
+  else if (currentTab === 'rejected') filtered = filtered.filter(t => t.approval_status === 'rejected');
+
+  if (currentCat !== 'all') filtered = filtered.filter(t => t.category === currentCat);
+
+  filtered.sort((a, b) => (b.frequency || 0) - (a.frequency || 0));
+
+  // Build category filter
+  const cats = {};
+  const tabTopics = currentTab === 'all' ? allTopics :
+    currentTab === 'pending' ? allTopics.filter(t => t.approval_status === 'pending') :
+    currentTab === 'approved' ? allTopics.filter(t => ['approved','corrected'].includes(t.approval_status)) :
+    allTopics.filter(t => t.approval_status === 'rejected');
+  tabTopics.forEach(t => { cats[t.category] = (cats[t.category] || 0) + 1; });
+
+  const fb = document.getElementById('filter-bar');
+  fb.innerHTML = `<div class="filter-pill ${currentCat==='all'?'active':''}" onclick="currentCat='all';renderTopics()">Tous (${tabTopics.length})</div>`;
+  Object.entries(cats).sort((a,b) => b[1]-a[1]).forEach(([cat, cnt]) => {
+    fb.innerHTML += `<div class="filter-pill ${currentCat===cat?'active':''}" onclick="currentCat='${cat}';renderTopics()">${cat} (${cnt})</div>`;
+  });
+
+  const el = document.getElementById('topics-list');
+  if (!filtered.length) {
+    el.innerHTML = `<div class="empty"><div class="empty-icon">${currentTab==='pending'?'&#10003;':'&#128269;'}</div>${currentTab==='pending'?'Aucun topic en attente!':'Aucun topic trouve.'}</div>`;
+    return;
+  }
+
+  el.innerHTML = filtered.map(t => {
+    const cc = CAT_COLORS[t.category] || '#777';
+    const statusClass = `badge-${t.approval_status}`;
+    const examples = (t.example_subjects || []).slice(0, 3);
+    const isPending = t.approval_status === 'pending';
+    const examplesHtml = examples.map(e => `<div class="example">${e.substring(0, 80)}</div>`).join('');
+
+    return `
+    <div class="topic-card">
+      <div class="topic-header" onclick="toggleTopic('${t.topic_id}')">
+        <span class="topic-label">${t.topic_label || t.topic_id}</span>
+        <div class="topic-meta">
+          <span class="badge badge-cat" style="background:${cc}">${t.category}</span>
+          <span class="badge badge-freq">${t.frequency || 0}x</span>
+          <span class="badge badge-status ${statusClass}">${t.approval_status}</span>
+        </div>
+      </div>
+      <div class="topic-body" id="body-${t.topic_id}">
+        ${t.question_pattern ? `<div class="field-label">Question type</div><div class="question-text">"${t.question_pattern}"</div>` : ''}
+        <div class="field-label">Reponse suggeree ${isPending ? '(modifiable)' : ''}</div>
+        <textarea class="response-area" id="response-${t.topic_id}" ${isPending?'':'readonly'}>${t.nick_correction || t.suggested_response || ''}</textarea>
+        ${examplesHtml ? `<div class="field-label">Exemples d'emails</div><div class="examples">${examplesHtml}</div>` : ''}
+        <div class="actions">
+          ${isPending ? `
+            <button class="btn btn-approve" onclick="doAction('${t.topic_id}','approved')">Approuver</button>
+            <button class="btn btn-correct" onclick="doAction('${t.topic_id}','corrected')">Corriger + Approuver</button>
+            <button class="btn btn-reject" onclick="doAction('${t.topic_id}','rejected')">Rejeter</button>
+          ` : `
+            <button class="btn btn-undo" onclick="doAction('${t.topic_id}','pending')">Remettre en attente</button>
+          `}
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function updateStats() {
+  const pending = allTopics.filter(t => t.approval_status === 'pending').length;
+  const approved = allTopics.filter(t => ['approved','corrected'].includes(t.approval_status)).length;
+  const rejected = allTopics.filter(t => t.approval_status === 'rejected').length;
+
+  document.getElementById('stat-pending').textContent = pending;
+  document.getElementById('stat-approved').textContent = approved;
+  document.getElementById('tab-pending-count').textContent = pending;
+  document.getElementById('tab-approved-count').textContent = approved;
+  document.getElementById('tab-rejected-count').textContent = rejected;
+  document.getElementById('tab-all-count').textContent = allTopics.length;
+}
+
+async function init() {
+  try {
+    const [topics, emailCount] = await Promise.all([
+      sbFetch('kb_topics?select=*&order=frequency.desc'),
+      sbCount('kb_emails'),
+    ]);
+    allTopics = topics || [];
+    document.getElementById('stat-emails').textContent = emailCount;
+    document.getElementById('stat-topics').textContent = allTopics.length;
+    updateStats();
+    renderTopics();
+  } catch (e) {
+    document.getElementById('topics-list').innerHTML = `<div class="empty">Erreur: ${e.message}</div>`;
+  }
+}
+
+init();
+</script>
+</body>
+</html>
