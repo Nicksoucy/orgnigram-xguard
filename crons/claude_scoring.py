@@ -36,6 +36,7 @@ def call_claude(prompt: str, model: str = "haiku", max_turns: int = 1, timeout: 
             )
             result = subprocess.run(
                 cmd, input=input_text, capture_output=True, text=True,
+                encoding="utf-8", errors="replace",
                 env=env, timeout=timeout, cwd=r"C:\Users\user"
             )
             if result.returncode != 0:
@@ -268,6 +269,73 @@ def score_heidys_call(call: dict) -> dict:
     }
 
 
+# ---------------------------------------------------------------------------
+# Domingos DRONE/ELITE scoring — same 8 dimensions adapted for drone sales
+# ---------------------------------------------------------------------------
+
+DOMINGOS_PROMPT_TEMPLATE = """Tu es un coach de vente telephonique pour l'Academie XGuard (formation drone et gardiennage au Quebec).
+Analyse cet appel de vente de Domingos. Il vend des formations de pilotage de drone (Transport Canada) et des formations de gardiennage (elite/BSP).
+
+Duree: {duration} secondes
+
+TRANSCRIPT:
+{transcript}
+
+Score ces 8 dimensions de 0 a 10:
+1. intro - S'est-il presente clairement (nom + Academie XGuard + raison de l'appel)?
+2. qualification - A-t-il pose des questions pour comprendre le besoin AVANT de presenter l'offre?
+3. objections - A-t-il gere les objections avec empathie et propose des solutions?
+4. closing - A-t-il tente de conclure la vente ou fixer un prochain pas concret?
+5. empathie - A-t-il montre de l'empathie et personnalise la conversation?
+6. energie - Ton positif, enthousiaste, pas robotique?
+7. duree - L'appel etait-il assez long pour qualifier correctement?
+8. engagement - Dialogue naturel a deux sens ou monologue?
+
+AUSSI fournir:
+- resume: 2-3 phrases resumant ce qui s'est passe
+- classification: "drone" ou "elite" ou "autre" (quel produit est discute)
+- objections_detectees: liste des objections du prospect
+- next_step: ce qui a ete convenu comme prochaine etape
+- callback_date: date de rappel au format YYYY-MM-DD (ou null)
+- coaching_note: 1 phrase de conseil specifique
+
+Reponds UNIQUEMENT en JSON valide:
+{{"intro":0,"qualification":0,"objections":0,"closing":0,"empathie":0,"energie":0,"duree":0,"engagement":0,"resume":"...","classification":"drone","objections_detectees":[],"next_step":"...","callback_date":null,"coaching_note":"..."}}"""
+
+
+def score_domingos_call(call: dict) -> dict:
+    """Score a single Domingos sales call with Haiku."""
+    transcript = call.get("transcript", "")
+    if not transcript or len(transcript) < 20:
+        return {}
+    words = transcript.split()
+    if len(words) > 1500:
+        transcript = " ".join(words[:1500]) + "... [tronque]"
+    duration = call.get("duration_s", 0)
+    prompt = DOMINGOS_PROMPT_TEMPLATE.format(duration=duration, transcript=transcript)
+    result = call_claude_json(prompt, model="haiku", timeout=90)
+    if not result:
+        return {}
+    dims = ["intro", "qualification", "objections", "closing", "empathie", "energie", "duree", "engagement"]
+    scores = {}
+    for d in dims:
+        val = result.get(d)
+        if isinstance(val, (int, float)):
+            scores[d] = round(min(10.0, max(0.0, float(val))), 1)
+    if not scores:
+        return {}
+    return {
+        "ai_scores": scores,
+        "ai_global_score": round(sum(scores.values()) / len(scores), 1),
+        "coaching_note": result.get("coaching_note", ""),
+        "call_summary": result.get("resume", ""),
+        "classification": result.get("classification", "autre"),
+        "objections_detected": result.get("objections_detectees", []),
+        "next_step": result.get("next_step", ""),
+        "callback_date": result.get("callback_date"),
+    }
+
+
 def score_heidys_batch(calls: list, max_workers: int = 3, delay: float = 2.0) -> list:
     """Score multiple Heidys calls in parallel."""
     results = [None] * len(calls)
@@ -329,9 +397,17 @@ Genere un rapport de coaching en francais qui inclut:
    - Objections les plus frequentes et comment y repondre
    - Clients recurrents qui rappellent souvent (signe de non-resolution)
 
-6. TOP 5 ACTIONS PRIORITAIRES (numerotees, avec responsable et echeance)
+6. ANALYSE SMS (si donnees SMS disponibles):
+   - Volume SMS de la semaine (entrants vs sortants)
+   - SMS non-repondus: combien et qui sont ces clients?
+   - Leads chauds par SMS: clients qui ont mentionne inscription ou paiement par texto
+   - Temps de reponse moyen SMS
+   - Clients qui ont a la fois appele ET texte (signe de frustration ou urgence)
+   - Recommandations pour ameliorer la gestion des SMS
 
-Sois direct, concret, et cite des moments reels des appels. Pas de generalites vagues.
+7. TOP 5 ACTIONS PRIORITAIRES (numerotees, avec responsable et echeance)
+
+Sois direct, concret, et cite des moments reels des appels et des SMS. Pas de generalites vagues.
 Le rapport sera lu par Hamza (le manager) et partage avec l'equipe."""
 
 
