@@ -37,35 +37,19 @@ logging.basicConfig(
 log = logging.getLogger("kb_aggregator")
 
 
-MERGE_PROMPT = """Tu es un expert en service a la clientele de l'Academie XGuard (formation gardiennage/securite au Quebec).
+MERGE_PROMPT = """Analyse ces {n_topics} sujets FAQ de l'Academie XGuard (formation gardiennage/securite Quebec).
+Regroupe les sujets similaires. Reponds UNIQUEMENT avec un JSON array.
 
-Voici {n_topics} sujets FAQ extraits de {n_emails} emails clients. Certains sujets sont similaires et doivent etre regroupes.
-
-Regroupe les sujets similaires en topics canoniques. Pour chaque group:
-
-SUJETS A REGROUPER:
+SUJETS:
 {topics_list}
 
-Reponds UNIQUEMENT en JSON (array):
+JSON ARRAY (commence par [ et finit par ]):
 [
-  {{
-    "topic_id": "slug-kebab-case (ex: inscription-en-ligne)",
-    "category": "inscription|info|paiement|plainte|annulation|changement_date|certificat|emploi|technique|autre",
-    "topic_label": "Libelle lisible (ex: Inscription en ligne)",
-    "question_pattern": "Question type du client (ex: Comment s'inscrire a la formation?)",
-    "suggested_response": "Reponse suggeree complete (2-3 phrases, professionnelle, avec info utile)",
-    "merged_raw_topics": ["sujet1", "sujet2", ...]
-  }},
-  ...
+{{"topic_id":"inscription-en-ligne","category":"inscription","topic_label":"Inscription en ligne","question_pattern":"Comment m'inscrire a la formation?","suggested_response":"Vous pouvez vous inscrire en ligne sur notre site academiexguard.ca ou nous appeler.","merged_raw_topics":["inscription en ligne","inscription formation"]}},
+... (continue pour CHAQUE groupe)
 ]
 
-REGLES:
-- Chaque sujet brut doit apparaitre dans exactement UN group
-- Maximum 50 topics canoniques (fusionne les petits sujets similaires)
-- Le topic_id doit etre unique, en kebab-case, sans accents
-- La suggested_response doit etre utile et specifique a XGuard
-- Si un sujet est "spam" ou non pertinent, mets-le dans un group "autre"
-"""
+REGLES: topic_id en kebab-case sans accents. Categories: inscription|info|paiement|plainte|annulation|changement_date|certificat|emploi|technique|spam|autre. Chaque sujet dans exactement 1 groupe. Max 30 groupes."""
 
 
 def get_raw_topic_counts():
@@ -116,7 +100,7 @@ def get_example_emails_for_topics(raw_topics, limit=3):
     return examples[:limit]
 
 
-CHUNK_SIZE = 80  # Max topics per Haiku call
+CHUNK_SIZE = 30  # Max topics per Haiku call (smaller = more reliable output)
 HAIKU_MERGE_TIMEOUT = 180  # 3 min per chunk
 
 
@@ -174,19 +158,31 @@ def merge_topics_with_haiku(raw_topics):
                  chunk_num, total_chunks, len(chunk), total_in_chunk)
 
         result = call_claude_json(prompt, model="haiku", timeout=HAIKU_MERGE_TIMEOUT)
+        log.info("  Raw response type: %s, keys/len: %s", type(result).__name__,
+                 list(result.keys())[:5] if isinstance(result, dict) else len(result) if isinstance(result, list) else "?")
 
         if isinstance(result, list):
             log.info("  Haiku returned %d canonical topics", len(result))
             all_canonical.extend(result)
         elif isinstance(result, dict):
-            # Try common keys
-            for key in ("topics", "canonical_topics", "result"):
-                if key in result and isinstance(result[key], list):
-                    log.info("  Haiku returned %d canonical topics (key: %s)", len(result[key]), key)
-                    all_canonical.extend(result[key])
+            # Try to find the array inside the dict — Haiku sometimes wraps it
+            found = False
+            for key, val in result.items():
+                if isinstance(val, list) and len(val) > 0 and isinstance(val[0], dict):
+                    log.info("  Haiku returned %d canonical topics (key: '%s')", len(val), key)
+                    all_canonical.extend(val)
+                    found = True
                     break
-            else:
-                log.warning("  Unexpected Haiku dict response, skipping chunk")
+            if not found:
+                # Maybe the dict itself IS a single topic
+                if "topic_id" in result:
+                    log.info("  Haiku returned 1 canonical topic (single dict)")
+                    all_canonical.append(result)
+                else:
+                    log.warning("  Unexpected Haiku dict keys: %s", list(result.keys())[:10])
+                    log.warning("  First 300 chars: %s", str(result)[:300])
+        elif result is None or result == {}:
+            log.warning("  Haiku returned empty response, skipping chunk")
         else:
             log.warning("  Haiku returned %s, skipping chunk", type(result))
 

@@ -70,8 +70,8 @@ def call_claude_json(prompt: str, model: str = "haiku", timeout: int = 120) -> d
     except json.JSONDecodeError:
         pass
 
-    # Try to find JSON in the response
-    for start_char, end_char in [("{", "}"), ("[", "]")]:
+    # Try to find JSON in the response — try array FIRST, then object
+    for start_char, end_char in [("[", "]"), ("{", "}")]:
         start = raw.find(start_char)
         if start == -1:
             continue
