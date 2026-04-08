@@ -35,9 +35,8 @@ DRONE_PIPELINE = "W08jXuPPrQDM0EFcCgAR"
 SUPABASE_URL = "https://ctjsdpfegpsfpwjgusyi.supabase.co"
 SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImN0anNkcGZlZ3BzZnB3amd1c3lpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM2MDU2NDQsImV4cCI6MjA4OTE4MTY0NH0.Uv2pbxbmvcbXhyDa7Y_M0HqkLuV7uJaNxl1N01q5wMo"
 
-# Domingos email TBD — for now send to Nick only
-EMAIL_TO = "nick@darkhorseads.com"
-EMAIL_CC = ""
+EMAIL_TO = "d.oliveira@academiexguard.ca"
+EMAIL_CC = "nick@darkhorseads.com"
 GMAIL_USER = "nick@darkhorseads.com"
 GMAIL_APP_PASSWORD = "kjaqmxuewwzkxcif"
 
@@ -81,7 +80,8 @@ def get_callbacks_today():
             tasks = r.json().get("tasks", [])
             if not isinstance(tasks, list): continue
 
-            pending = [t for t in tasks if isinstance(t, dict) and not t.get("completed") and str(t.get("dueDate",""))[:10] <= today]
+            week_ago = (datetime.now() - timedelta(days=7)).strftime("%Y-%m-%d")
+            pending = [t for t in tasks if isinstance(t, dict) and not t.get("completed") and str(t.get("dueDate",""))[:10] <= today and str(t.get("dueDate",""))[:10] >= week_ago]
             if not pending: continue
 
             # Enrich: last call from call_registry
