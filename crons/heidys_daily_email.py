@@ -93,6 +93,8 @@ def get_ghl_callbacks_today():
             if not isinstance(tasks, list):
                 continue
 
+            # Only show tasks due within last 7 days (avoid 688+ accumulated overdue)
+            week_ago = (datetime.now() - timedelta(days=7)).strftime("%Y-%m-%d")
             pending_tasks = []
             for t in tasks:
                 if not isinstance(t, dict):
@@ -100,7 +102,7 @@ def get_ghl_callbacks_today():
                 if t.get("completed") or t.get("status") == "completed":
                     continue
                 due = str(t.get("dueDate", ""))[:10]
-                if due and due <= today:
+                if due and due <= today and due >= week_ago:
                     pending_tasks.append(t)
 
             if not pending_tasks:
@@ -343,17 +345,35 @@ h3 {{ margin: 0 0 12px; font-size: 15px; color: #333; }}
         html += f'<div class="stat"><div class="stat-num {score_class}">{avg_score:.1f}/10</div><div class="stat-label">Score moy.</div></div>'
         html += '</div>'
 
-        # Best & worst
+        # All calls list with scores
+        html += '<table style="width:100%;border-collapse:collapse;margin-top:10px;font-size:12px;">'
+        html += '<tr style="background:#f5f5f5;"><th style="padding:5px;text-align:left;">Contact</th><th style="padding:5px;">Score</th><th style="padding:5px;">Duree</th><th style="padding:5px;text-align:left;">Coaching</th></tr>'
+        for s in scored[:10]:
+            sc = s.get("ai_global_score", 0)
+            sc_class = "score-good" if sc >= 6 else "score-mid" if sc >= 4 else "score-bad"
+            dur = s.get("duration_s", 0) or 0
+            dur_str = f"{dur // 60}m{dur % 60:02d}s" if dur > 0 else "?"
+            name = (s.get("contact_name") or "Inconnu")[:20]
+            note = (s.get("coaching_note") or "")[:80]
+            html += f'<tr style="border-bottom:1px solid #eee;">'
+            html += f'<td style="padding:4px;">{name}</td>'
+            html += f'<td style="padding:4px;text-align:center;" class="{sc_class}"><strong>{sc}/10</strong></td>'
+            html += f'<td style="padding:4px;text-align:center;">{dur_str}</td>'
+            html += f'<td style="padding:4px;font-size:11px;color:#666;font-style:italic;">{note}</td>'
+            html += '</tr>'
+        html += '</table>'
+
+        # Best & worst highlights
         if len(scored) >= 2:
             best = scored[0]
             worst = scored[-1]
             html += f'<div style="margin-top:12px;font-size:13px;">'
             html += f'<div class="score-good">✅ Meilleur: {best.get("contact_name","?")} — {best.get("ai_global_score",0)}/10</div>'
             if best.get("coaching_note"):
-                html += f'<div style="color:#666;margin-left:16px;">{best["coaching_note"]}</div>'
+                html += f'<div style="color:#666;margin-left:16px;font-size:11px;">{best["coaching_note"][:120]}</div>'
             html += f'<div class="score-bad" style="margin-top:6px;">⚠️ A travailler: {worst.get("contact_name","?")} — {worst.get("ai_global_score",0)}/10</div>'
             if worst.get("coaching_note"):
-                html += f'<div style="color:#666;margin-left:16px;">{worst["coaching_note"]}</div>'
+                html += f'<div style="color:#666;margin-left:16px;font-size:11px;">{worst["coaching_note"][:120]}</div>'
             html += '</div>'
 
         # Weakest dimension
