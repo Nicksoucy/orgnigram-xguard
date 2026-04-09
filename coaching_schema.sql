@@ -110,13 +110,32 @@ CREATE TABLE IF NOT EXISTS cron_logs (
 );
 
 -- =============================================
--- 5. ROW LEVEL SECURITY
+-- 5. WATCHDOG_HEARTBEAT
+-- Tracks the Nitro watchdog service health.
+-- Single row (id='nitro') updated every 5 min.
+-- Frontend uses this to show Nitro online/offline status.
+-- =============================================
+CREATE TABLE IF NOT EXISTS watchdog_heartbeat (
+  id              TEXT PRIMARY KEY DEFAULT 'nitro',
+  status          TEXT DEFAULT 'alive',        -- 'alive', 'starting', 'shutdown'
+  started_at      TIMESTAMPTZ,
+  last_heartbeat  TIMESTAMPTZ,
+  uptime_sec      INTEGER DEFAULT 0,
+  next_jobs       JSONB DEFAULT '[]',          -- [{id, next}]
+  disk_free_mb    INTEGER DEFAULT 0,
+  version         TEXT DEFAULT '1.0',
+  error_msg       TEXT
+);
+
+-- =============================================
+-- 6. ROW LEVEL SECURITY
 -- All tables open (internal tool, no auth layer)
 -- =============================================
 ALTER TABLE coaching_data    ENABLE ROW LEVEL SECURITY;
 ALTER TABLE coaching_reports ENABLE ROW LEVEL SECURITY;
 ALTER TABLE nitro_status     ENABLE ROW LEVEL SECURITY;
-ALTER TABLE cron_logs        ENABLE ROW LEVEL SECURITY;
+ALTER TABLE cron_logs              ENABLE ROW LEVEL SECURITY;
+ALTER TABLE watchdog_heartbeat     ENABLE ROW LEVEL SECURITY;
 
 -- Drop and recreate policies to avoid duplicate errors on re-run
 DO $$
@@ -136,6 +155,10 @@ BEGIN
   -- cron_logs
   DROP POLICY IF EXISTS "public all" ON cron_logs;
   CREATE POLICY "public all" ON cron_logs FOR ALL USING (true) WITH CHECK (true);
+
+  -- watchdog_heartbeat
+  DROP POLICY IF EXISTS "public all" ON watchdog_heartbeat;
+  CREATE POLICY "public all" ON watchdog_heartbeat FOR ALL USING (true) WITH CHECK (true);
 END $$;
 
 -- =============================================
@@ -179,6 +202,7 @@ ALTER PUBLICATION supabase_realtime ADD TABLE coaching_data;
 ALTER PUBLICATION supabase_realtime ADD TABLE coaching_reports;
 ALTER PUBLICATION supabase_realtime ADD TABLE nitro_status;
 ALTER PUBLICATION supabase_realtime ADD TABLE cron_logs;
+ALTER PUBLICATION supabase_realtime ADD TABLE watchdog_heartbeat;
 
 -- =============================================
 -- END OF SCHEMA
