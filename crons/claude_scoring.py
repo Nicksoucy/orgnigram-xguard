@@ -106,20 +106,23 @@ Direction: {direction}
 TRANSCRIPT:
 {transcript}
 
-Score ces 10 dimensions:
+Score ces 13 dimensions:
 1. accueil - L'agent s'est-il presente clairement (nom + XGuard + offre d'aide)?
-2. ecoute - A-t-il reformule et montre qu'il comprend le besoin?
-3. resolution - Le probleme/question a-t-il ete resolu concretement?
+2. ecoute - A-t-il reformule et montre qu'il comprend le besoin (pas juste "je comprends")?
+3. resolution - Le probleme/question a-t-il ete resolu concretement dans l'appel?
 4. patience - A-t-il pris le temps necessaire sans presser?
 5. professionnalisme - Langage professionnel, courtoisie, bonne cloture?
 6. vente_subtile - A-t-il propose naturellement l'inscription quand pertinent?
 7. qualification - A-t-il pose des questions avant de repondre?
 8. gestion_objections - A-t-il gere les objections/plaintes avec empathie + solution?
 9. energie - Ton positif, enthousiasme naturel?
-10. engagement - Dialogue naturel ou echange mecanique?
+10. engagement - Dialogue naturel et personnalise ou echange mecanique?
+11. empathie - A-t-il fait preuve de compassion et reconnu les emotions du client?
+12. connaissance_produit - A-t-il demontre une bonne connaissance des formations XGuard (dates, prix, duree, exigences)?
+13. suivi - A-t-il propose un suivi clair et des prochaines etapes concretes?
 
 Reponds UNIQUEMENT en JSON valide, rien d'autre:
-{{"accueil":0,"ecoute":0,"resolution":0,"patience":0,"professionnalisme":0,"vente_subtile":0,"qualification":0,"gestion_objections":0,"energie":0,"engagement":0,"coaching_note":"une phrase de coaching"}}"""
+{{"accueil":0,"ecoute":0,"resolution":0,"patience":0,"professionnalisme":0,"vente_subtile":0,"qualification":0,"gestion_objections":0,"energie":0,"engagement":0,"empathie":0,"connaissance_produit":0,"suivi":0,"coaching_note":"une phrase de coaching"}}"""
 
 
 def score_call_haiku(call: dict) -> dict:
@@ -148,7 +151,8 @@ def score_call_haiku(call: dict) -> dict:
 
     # Extract scores
     dims = ["accueil", "ecoute", "resolution", "patience", "professionnalisme",
-            "vente_subtile", "qualification", "gestion_objections", "energie", "engagement"]
+            "vente_subtile", "qualification", "gestion_objections", "energie", "engagement",
+            "empathie", "connaissance_produit", "suivi"]
 
     scores = {}
     for d in dims:
