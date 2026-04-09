@@ -1114,6 +1114,7 @@ async function rptBuildCoachingSection(personId) {
   let allCalls = [];
   let callActivity = [];
 
+  let watchdog = null;
   try {
     [allReports, coachingData, nitroArr, allCalls, callActivity] = await Promise.all([
       dbGetCoachingReports(personId, 52),
@@ -1122,7 +1123,12 @@ async function rptBuildCoachingSection(personId) {
       dbGetCalls(personId),
       dbGetCallActivity(personId, 365),
     ]);
-    if (authIsAdmin()) cronLogs = await dbGetCronLogs(personId, 5);
+    if (authIsAdmin()) {
+      [cronLogs, watchdog] = await Promise.all([
+        dbGetCronLogs(personId, 5),
+        dbGetWatchdogHeartbeat(),
+      ]);
+    }
   } catch(e) {
     console.error('rptBuildCoachingSection error:', e);
     return '<div style="background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.2);border-radius:12px;padding:20px;text-align:center;">'
@@ -1144,6 +1150,34 @@ async function rptBuildCoachingSection(personId) {
     + '.coaching-grid-4col{grid-template-columns:repeat(2,1fr)!important}'
     + '}'
     + '</style>';
+
+  // ── Watchdog Status (admin only) ──
+  if (watchdog && authIsAdmin()) {
+    const hb = watchdog.last_heartbeat ? new Date(watchdog.last_heartbeat) : null;
+    const minAgo = hb ? Math.round((Date.now() - hb.getTime()) / 60000) : 999;
+    let dotColor, statusLabel, statusBg, statusBorder;
+    if (watchdog.status === 'shutdown') {
+      dotColor = '#94a3b8'; statusLabel = 'Nitro arrete'; statusBg = 'rgba(148,163,184,0.08)'; statusBorder = 'rgba(148,163,184,0.25)';
+    } else if (minAgo <= 10) {
+      dotColor = '#22c55e'; statusLabel = 'Nitro en ligne'; statusBg = 'rgba(34,197,94,0.08)'; statusBorder = 'rgba(34,197,94,0.25)';
+    } else if (minAgo <= 30) {
+      dotColor = '#eab308'; statusLabel = 'Nitro injoignable (' + minAgo + ' min)'; statusBg = 'rgba(234,179,8,0.08)'; statusBorder = 'rgba(234,179,8,0.25)';
+    } else {
+      dotColor = '#ef4444'; statusLabel = 'Nitro hors ligne (' + minAgo + ' min)'; statusBg = 'rgba(239,68,68,0.08)'; statusBorder = 'rgba(239,68,68,0.25)';
+    }
+    const uptimeH = watchdog.uptime_sec ? Math.floor(watchdog.uptime_sec / 3600) : 0;
+    const uptimeM = watchdog.uptime_sec ? Math.floor((watchdog.uptime_sec % 3600) / 60) : 0;
+    const uptimeLabel = uptimeH > 0 ? uptimeH + 'h ' + uptimeM + 'm' : uptimeM + 'm';
+    const diskLabel = watchdog.disk_free_mb ? watchdog.disk_free_mb + ' MB' : '?';
+
+    html += '<div style="background:' + statusBg + ';border:1px solid ' + statusBorder + ';border-radius:10px;padding:10px 16px;margin-bottom:12px;display:flex;align-items:center;gap:10px;">';
+    html += '<span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:' + dotColor + ';box-shadow:0 0 6px ' + dotColor + ';"></span>';
+    html += '<div style="flex:1;"><span style="font-weight:600;font-size:13px;color:var(--t);">' + statusLabel + '</span>';
+    html += '<span style="font-size:11px;color:var(--td);margin-left:12px;">v' + (watchdog.version || '?') + '</span>';
+    html += '<span style="font-size:11px;color:var(--td);margin-left:12px;">Uptime: ' + uptimeLabel + '</span>';
+    html += '<span style="font-size:11px;color:var(--td);margin-left:12px;">Disque: ' + diskLabel + '</span>';
+    html += '</div></div>';
+  }
 
   // ── Nitro progress ──
   const activeNitro = nitroArr.find(n => n.status === 'running');
