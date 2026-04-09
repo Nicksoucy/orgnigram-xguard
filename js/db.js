@@ -532,3 +532,16 @@ async function dbGetAllCronLogs(limit=50) {
   if(error) throw error;
   return data||[];
 }
+
+/**
+ * Fetches the Nitro watchdog heartbeat status.
+ * Returns null if no heartbeat row exists (watchdog never started).
+ * @returns {Promise<Object|null>} Watchdog heartbeat row or null.
+ */
+async function dbGetWatchdogHeartbeat() {
+  const {data,error} = await db.from('watchdog_heartbeat').select('*')
+    .eq('id', 'nitro')
+    .maybeSingle();
+  if(error) { console.warn('dbGetWatchdogHeartbeat error:', error); return null; }
+  return data;
+}
