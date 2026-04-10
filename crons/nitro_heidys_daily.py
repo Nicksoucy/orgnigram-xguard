@@ -189,74 +189,40 @@ def fetch_justcall_calls(date_str: str) -> list[dict]:
     return all_calls
 
 
-def _ts_to_date(ts):
-    """Convert GHL timestamp (ms int or ISO string) to YYYY-MM-DD."""
-    if isinstance(ts, (int, float)):
-        return datetime.utcfromtimestamp(ts / 1000).strftime("%Y-%m-%d")
-    return str(ts)[:10] if ts else ""
-
-
 def fetch_ghl_calls_heidys(date_str: str) -> list[dict]:
-    """Fetch Heidys's calls from GHL for a single date.
-    GHL lastMessageDate is a Unix timestamp in ms (int).
-    Paginates conversations assigned to Heidys, checks each for call messages."""
+    """Fetch Heidys's calls from GHL using messages/export with cursor pagination.
+    This is the only reliable way to get ALL calls (conversations/search misses many)."""
     ghl_calls = []
     target_date = date_str
     seen_ids = set()
+    cursor = None
 
-    # Paginate conversations (GHL doesn't support offset, so we use limit + stop condition)
-    params = {
-        "locationId": GHL_LOCATION,
-        "assignedTo": GHL_HEIDYS_USER_ID,
-        "limit": 50,
-        "sort": "desc",
-        "sortBy": "last_message_date",
-    }
+    for page_num in range(1, 30):  # max 30 pages
+        url = f"{GHL_BASE}/conversations/messages/export?locationId={GHL_LOCATION}&limit=100"
+        if cursor:
+            url += f"&cursor={cursor}"
 
-    try:
-        resp = requests.get(f"{GHL_BASE}/conversations/search",
-                            params=params, headers=GHL_HEADERS, timeout=30)
-        if resp.status_code != 200:
-            log.warning("GHL conversations/search failed (%d): %s", resp.status_code, resp.text[:200])
-            return ghl_calls
-        convs = resp.json().get("conversations", [])
-    except Exception as exc:
-        log.warning("GHL conversation search failed: %s", exc)
-        return ghl_calls
-
-    log.info("  GHL: %d conversations returned for Heidys", len(convs))
-
-    for conv in convs:
-        conv_id = conv.get("id", "")
-        last_msg_ts = conv.get("lastMessageDate")
-        conv_date = _ts_to_date(last_msg_ts)
-
-        # Stop if conversations are older than target date
-        if conv_date and conv_date < target_date:
-            break
-
-        # Skip if not target date (could be future)
-        # But check messages anyway — conv might have older calls on target date
-        # Only skip if more than 1 day ahead
-        if conv_date and conv_date > target_date:
-            # Still check — the conversation may have calls from target_date
-            pass
-
-        # Fetch messages for this conversation
         try:
-            r2 = requests.get(f"{GHL_BASE}/conversations/{conv_id}/messages",
-                              params={"locationId": GHL_LOCATION, "limit": 30},
-                              headers=GHL_HEADERS, timeout=15)
-            if r2.status_code != 200:
-                continue
-            raw = r2.json().get("messages", {})
-            if isinstance(raw, dict):
-                raw = raw.get("messages", [])
+            resp = requests.get(url, headers=GHL_HEADERS, timeout=30)
+            if resp.status_code != 200:
+                log.warning("GHL messages/export failed (%d)", resp.status_code)
+                break
 
-            for msg in raw:
+            data = resp.json()
+            msgs = data.get("messages", [])
+            cursor = data.get("nextCursor")
+
+            if not msgs:
+                break
+
+            oldest = msgs[-1].get("dateAdded", "")[:10] if msgs else ""
+
+            for msg in msgs:
                 if not isinstance(msg, dict):
                     continue
                 if msg.get("messageType") != "TYPE_CALL":
+                    continue
+                if msg.get("userId") != GHL_HEIDYS_USER_ID:
                     continue
 
                 date_added = msg.get("dateAdded", "")
@@ -270,9 +236,11 @@ def fetch_ghl_calls_heidys(date_str: str) -> list[dict]:
 
                 meta_call = msg.get("meta", {}).get("call", {}) if isinstance(msg.get("meta"), dict) else {}
                 duration = meta_call.get("duration") or 0
+                contact_number = msg.get("to", "")
 
-                contact_name = conv.get("contactName", "")
-                contact_number = conv.get("phone", "") or msg.get("to", "")
+                # Try to get contact name from contactId
+                contact_name = ""
+                contact_id = msg.get("contactId", "")
 
                 ghl_calls.append({
                     "id": msg_id,
@@ -281,16 +249,25 @@ def fetch_ghl_calls_heidys(date_str: str) -> list[dict]:
                     "call_time": date_added,
                     "contact_number": contact_number,
                     "contact_name": contact_name,
+                    "contact_id": contact_id,
                     "direction": "1" if msg.get("direction") == "inbound" else "0",
                     "source": "ghl",
                 })
-        except Exception as e:
-            log.warning("  GHL conv %s messages failed: %s", conv_id[:8], e)
 
-        time.sleep(0.12)
+            # Stop if we've gone past our target date
+            if oldest and oldest < target_date:
+                break
+            if not cursor:
+                break
 
-    log.info("GHL: %d Heidys calls for %s (%d with recording)", len(ghl_calls), date_str,
-             len([c for c in ghl_calls if c.get("recording_url")]))
+            time.sleep(0.3)
+
+        except Exception as exc:
+            log.warning("GHL messages/export page %d failed: %s", page_num, exc)
+            break
+
+    log.info("GHL export: %d Heidys calls for %s (%d qualified 30s+)", len(ghl_calls), date_str,
+             len([c for c in ghl_calls if int(c.get("duration", 0) or 0) >= MIN_DURATION_SEC]))
     return ghl_calls
 
 
