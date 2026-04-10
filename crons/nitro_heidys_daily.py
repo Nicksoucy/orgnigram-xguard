@@ -186,70 +186,104 @@ def fetch_justcall_calls(date_str: str) -> list[dict]:
 
 
 def fetch_ghl_calls_heidys(date_str: str) -> list[dict]:
-    """Fetch Heidys's calls from GHL for a single date (fallback if she used GHL).
-    Uses export-messages with cursor pagination.
+    """Fetch Heidys's calls from GHL for a single date.
+    Uses conversations/search to find recent conversations, then checks messages for calls.
     Returns list of dicts normalized to JustCall-like format."""
     ghl_calls = []
-    cursor = None
     target_date = date_str
+    seen_ids = set()
 
-    for _ in range(20):  # max 20 pages
-        url = f"{GHL_BASE}/conversations/messages/export?locationId={GHL_LOCATION}&limit=100"
-        if cursor:
-            url += f"&cursor={cursor}"
+    # Strategy: search conversations assigned to Heidys, check for call messages on target date
+    for page in range(1, 10):
         try:
-            resp = requests.get(url, headers=GHL_HEADERS, timeout=30)
-            resp.raise_for_status()
-        except Exception as exc:
-            log.warning("GHL export-messages failed: %s", exc)
-            break
-
-        data = resp.json()
-        messages = data.get("messages", [])
-        cursor = data.get("nextCursor")
-
-        oldest_date = ""
-        for msg in messages:
-            if not isinstance(msg, dict):
-                continue
-            date_added = msg.get("dateAdded", "")
-            oldest_date = date_added
-
-            # Stop if we've gone past our target date
-            if date_added[:10] < target_date:
-                cursor = None
+            params = {
+                "locationId": GHL_LOCATION,
+                "assignedTo": GHL_HEIDYS_USER_ID,
+                "limit": 50,
+                "sort": "desc",
+                "sortBy": "last_message_date",
+            }
+            resp = requests.get(f"{GHL_BASE}/conversations/search",
+                                params=params, headers=GHL_HEADERS, timeout=30)
+            if resp.status_code != 200:
+                log.warning("GHL conversations/search failed (%d)", resp.status_code)
+                break
+            convs = resp.json().get("conversations", [])
+            if not convs:
                 break
 
-            # Only target date, only Heidys, only calls
-            if date_added[:10] != target_date:
-                continue
-            if msg.get("messageType") != "TYPE_CALL":
-                continue
-            if msg.get("userId") != GHL_HEIDYS_USER_ID:
-                continue
+            found_target_date = False
+            for conv in convs:
+                conv_id = conv.get("id", "")
+                last_msg = conv.get("lastMessageDate", "")
 
-            meta_call = msg.get("meta", {}).get("call", {}) if isinstance(msg.get("meta"), dict) else {}
-            duration = meta_call.get("duration") or 0
+                # Stop if conversations are older than target date
+                if last_msg[:10] < target_date:
+                    break
 
-            if duration < MIN_DURATION_SEC:
-                continue
+                if last_msg[:10] != target_date:
+                    continue
 
-            # Normalize to JustCall-like format
-            ghl_calls.append({
-                "id": msg.get("id"),
-                "duration": duration,
-                "recording_url": f"__GHL__{msg.get('id')}",  # marker for GHL download
-                "call_time": date_added,
-                "contact_number": msg.get("to", ""),
-                "contact_name": "",
-                "source": "ghl",
-            })
+                found_target_date = True
 
-        if not cursor or not messages:
+                # Fetch messages for this conversation
+                try:
+                    r2 = requests.get(f"{GHL_BASE}/conversations/{conv_id}/messages",
+                                      params={"locationId": GHL_LOCATION, "limit": 30},
+                                      headers=GHL_HEADERS, timeout=15)
+                    if r2.status_code != 200:
+                        continue
+                    raw = r2.json().get("messages", {})
+                    if isinstance(raw, dict):
+                        raw = raw.get("messages", [])
+
+                    for msg in raw:
+                        if not isinstance(msg, dict):
+                            continue
+                        if msg.get("messageType") != "TYPE_CALL":
+                            continue
+
+                        date_added = msg.get("dateAdded", "")
+                        if date_added[:10] != target_date:
+                            continue
+
+                        msg_id = msg.get("id", "")
+                        if msg_id in seen_ids:
+                            continue
+                        seen_ids.add(msg_id)
+
+                        meta_call = msg.get("meta", {}).get("call", {}) if isinstance(msg.get("meta"), dict) else {}
+                        duration = meta_call.get("duration") or 0
+
+                        contact_name = conv.get("contactName", "")
+                        contact_number = conv.get("phone", "") or msg.get("to", "")
+
+                        # Include ALL calls (even short) for funnel stats, filter later
+                        ghl_calls.append({
+                            "id": msg_id,
+                            "duration": duration,
+                            "recording_url": f"__GHL__{msg_id}" if duration >= MIN_DURATION_SEC else "",
+                            "call_time": date_added,
+                            "contact_number": contact_number,
+                            "contact_name": contact_name,
+                            "direction": "1" if msg.get("direction") == "inbound" else "0",
+                            "source": "ghl",
+                        })
+                except Exception as e:
+                    log.warning("  GHL conv %s messages failed: %s", conv_id[:8], e)
+
+                time.sleep(0.15)
+
+            # If no conversations found for target date, stop
+            if not found_target_date:
+                break
+
+        except Exception as exc:
+            log.warning("GHL conversation search failed: %s", exc)
             break
-        time.sleep(0.3)
 
-    log.info("GHL fallback: %d qualifying Heidys calls for %s", len(ghl_calls), date_str)
+    log.info("GHL: %d Heidys calls for %s (%d with recording)", len(ghl_calls), date_str,
+             len([c for c in ghl_calls if c.get("recording_url")]))
     return ghl_calls
 
 
@@ -664,22 +698,24 @@ def main():
         if len(dates_to_sync) > 1:
             log.info("CATCH-UP: %d days to sync — %s", len(dates_to_sync), ", ".join(dates_to_sync))
 
-        # 2. Fetch calls for all dates (JustCall primary + GHL fallback)
+        # 2. Fetch calls — GHL PRIMARY (Heidys calls from GHL since March 2026)
+        #    JustCall agent 407715 is inactive since March 25 2026
         raw_calls = []
         ghl_calls = []
         for sync_date in dates_to_sync:
-            day_calls = fetch_justcall_calls(sync_date)
-            log.info("  %s: %d JustCall raw calls", sync_date, len(day_calls))
-            raw_calls.extend(day_calls)
-
-            # GHL fallback: check if Heidys also made calls via GHL
+            # GHL is the primary source now
             try:
                 day_ghl = fetch_ghl_calls_heidys(sync_date)
-                if day_ghl:
-                    log.info("  %s: ⚠️ %d GHL calls found (Heidys used GHL!)", sync_date, len(day_ghl))
-                    ghl_calls.extend(day_ghl)
+                log.info("  %s: %d GHL calls found", sync_date, len(day_ghl))
+                ghl_calls.extend(day_ghl)
             except Exception as exc:
-                log.warning("  GHL fallback check failed (non-fatal): %s", exc)
+                log.warning("  GHL fetch failed: %s", exc)
+
+            # JustCall as fallback (in case she switches back)
+            day_jc = fetch_justcall_calls(sync_date)
+            if day_jc:
+                log.info("  %s: %d JustCall calls found", sync_date, len(day_jc))
+                raw_calls.extend(day_jc)
 
         # 2b. Compute funnel stats from ALL calls (before filtering)
         funnel_total = len(raw_calls)
@@ -712,12 +748,14 @@ def main():
             except RuntimeError:
                 log.warning("Failed to push call_activity for %s (non-fatal)", sync_date)
 
-        calls = filter_calls(raw_calls)
+        # Combine JustCall + GHL calls, filter for transcription
+        all_raw = raw_calls + ghl_calls
+        calls = filter_calls(all_raw)
         calls_total = len(calls)
 
         if not calls:
             log.info("No qualifying calls. Nothing to do.")
-            push_coaching_data(today_str, len(raw_calls), 0, 0, 0, 0.0)
+            push_coaching_data(today_str, len(all_raw), 0, 0, 0, 0.0)
             push_cron_log("success", 0, 0, 0, 0, started_at, time.time() - t0, dates_synced=dates_to_sync)
             update_nitro_status("idle", 0, 0, False)
             return
@@ -754,6 +792,17 @@ def main():
             try:
                 log.info("[%d/%d] Transcribing call %s (%ds)…", idx, calls_total, call_id, duration)
                 recording_url = call.get("recording_url", "")
+
+                # GHL calls need special download
+                if recording_url.startswith("__GHL__"):
+                    ghl_msg_id = recording_url.replace("__GHL__", "")
+                    wav_path = download_ghl_recording(ghl_msg_id, WAV_DIR)
+                    if not wav_path:
+                        log.warning("  GHL recording unavailable for %s — skipping", call_id)
+                        calls_failed += 1
+                        continue
+                    recording_url = wav_path
+
                 transcript, word_count = transcribe_recording(model, recording_url)
                 save_transcript(call, transcript, word_count)
                 push_call(call, word_count)
