@@ -399,7 +399,15 @@ def _load_whisper_model():
 
 
 def transcribe_recording(model, recording_url: str) -> tuple[str, int]:
-    """Download a recording to a temp file, transcribe it, return (text, word_count)."""
+    """Download a recording to a temp file (or use local path), transcribe it, return (text, word_count)."""
+    # If it's a local file path (GHL recordings already downloaded), use directly
+    if os.path.isfile(recording_url):
+        segments, _info = model.transcribe(
+            recording_url, language=WHISPER_LANGUAGE, beam_size=WHISPER_BEAM_SIZE, vad_filter=True,
+        )
+        full_text = " ".join(seg.text for seg in segments).strip()
+        return full_text, len(full_text.split()) if full_text else 0
+
     resp = requests.get(recording_url, timeout=120)
     resp.raise_for_status()
 
