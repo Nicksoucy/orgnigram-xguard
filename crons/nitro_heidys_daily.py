@@ -157,7 +157,7 @@ def fetch_justcall_calls(date_str: str) -> list[dict]:
     all_calls: list[dict] = []
     page = 1
 
-    while True:
+    while page <= 3:  # Max 3 pages (300 calls) — Heidys does max ~70/day
         body = {
             "from_date": date_str,
             "to_date": date_str,
@@ -178,12 +178,11 @@ def fetch_justcall_calls(date_str: str) -> list[dict]:
         if len(calls) < 100:
             break
         page += 1
-        # Rate limit protection
         time.sleep(0.5)
 
-    # Safety: if agent_id is inactive, JustCall may return ALL calls. Cap at 500.
-    if len(all_calls) > 500:
-        log.warning("JustCall returned %d calls (likely all agents). Agent 407715 may be inactive. Returning empty.", len(all_calls))
+    # Safety: if agent_id is inactive, JustCall returns ALL calls
+    if len(all_calls) > 200:
+        log.warning("JustCall returned %d calls (agent 407715 inactive, returns all). Skipping.", len(all_calls))
         return []
     log.info("JustCall returned %d raw calls for %s", len(all_calls), date_str)
     return all_calls
