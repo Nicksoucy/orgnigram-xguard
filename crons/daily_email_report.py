@@ -18,6 +18,7 @@ sys.path.insert(0, str(Path(__file__).parent))
 from smart_stats import compute_smart_stats
 from sms_stats import fetch_sms_for_date, analyze_sms, sms_html_section
 from email_stats import fetch_email_stats, email_html_section
+from conversion_metrics import get_conversion_stats, conversion_html_section
 import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
@@ -60,7 +61,7 @@ def get_transcribed_calls(date_str):
     )
 
 
-def build_email_html(date_str, smart, transcribed_calls, sms_stats=None, email_stats=None):
+def build_email_html(date_str, smart, transcribed_calls, sms_stats=None, email_stats=None, conv_stats=None):
     dt = datetime.strptime(date_str, "%Y-%m-%d")
     day_name = DAYS_FR.get(dt.weekday(), "")
     s = smart["summary"]
@@ -72,6 +73,9 @@ def build_email_html(date_str, smart, transcribed_calls, sms_stats=None, email_s
 
     # Email section
     email_section = email_html_section(email_stats) if email_stats and email_stats.get("total_received", 0) > 0 else ""
+
+    # Conversion section
+    conv_section = conversion_html_section(conv_stats) if conv_stats and conv_stats.get("total", 0) > 0 else ""
 
     # Colors
     real_rate = s["taux_reel"]
@@ -364,6 +368,8 @@ def build_email_html(date_str, smart, transcribed_calls, sms_stats=None, email_s
 
 {email_section}
 
+{conv_section}
+
 </div>
 
 <div style="background:#f5f5f5;padding:10px;border-radius:0 0 8px 8px;text-align:center;border:1px solid #ddd;border-top:none;">
@@ -456,8 +462,18 @@ def main():
         log.warning("Email stats failed (non-critical): %s", em_err)
         em_stats = None
 
+    # Conversion stats (30 days)
+    log.info("Fetching conversion stats...")
+    try:
+        conv_stats = get_conversion_stats(days=30)
+        log.info("  Conversions (30d): %d | Rate: %s%% | Avg days: %s",
+                 conv_stats["total"], conv_stats["call_to_conversion_rate"], conv_stats["avg_days"])
+    except Exception as conv_err:
+        log.warning("Conversion stats failed (non-critical): %s", conv_err)
+        conv_stats = None
+
     # Build + send
-    html = build_email_html(date_str, smart, transcribed, sms_stats=sms, email_stats=em_stats)
+    html = build_email_html(date_str, smart, transcribed, sms_stats=sms, email_stats=em_stats, conv_stats=conv_stats)
     log.info("HTML built (%d chars)", len(html))
     send_email_smtp(date_str, html)
     log.info("DONE!")
