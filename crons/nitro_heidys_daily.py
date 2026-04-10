@@ -846,10 +846,10 @@ def main():
                         "recording_url": "",
                         "source": "ghl",
                     }
-                    tmp = ghl_transcript_path.with_suffix(".json.tmp")
+                    tmp = str(ghl_transcript_path) + ".tmp"
                     with open(tmp, "w", encoding="utf-8") as f:
                         json.dump(ghl_doc, f, ensure_ascii=False, indent=2)
-                    tmp.rename(ghl_transcript_path)
+                    os.replace(tmp, ghl_transcript_path)
                     ghl_new += 1
                     calls_success += 1
                     log.info("  GHL OK: %s (%d words)", ghl_msg_id, word_count)
