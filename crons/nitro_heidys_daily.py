@@ -791,6 +791,7 @@ def main():
                     if not wav_path:
                         log.warning("  GHL recording unavailable for %s — skipping", call_id)
                         calls_failed += 1
+                        # Don't count download failures as consecutive GPU failures
                         continue
                     recording_url = wav_path
 
@@ -802,61 +803,28 @@ def main():
                 new_durations.append(duration)
                 consecutive_failures = 0
                 log.info("  -> OK (%d words)", word_count)
+            except requests.exceptions.RequestException as exc:
+                # Network/download errors — NOT GPU issues, don't count as consecutive
+                log.warning("  !! Network error on call %s: %s", call_id, exc)
+                calls_failed += 1
+                continue
             except Exception as exc:
-                log.error("  !! Error on call %s: %s", call_id, exc, exc_info=True)
+                log.error("  !! Transcription error on call %s: %s", call_id, exc, exc_info=True)
                 calls_failed += 1
                 consecutive_failures += 1
 
-                # If too many consecutive failures, GPU is probably broken
                 if consecutive_failures >= MAX_CONSECUTIVE_FAILURES:
                     raise RuntimeError(
-                        f"ABORTING: {MAX_CONSECUTIVE_FAILURES} consecutive failures. "
+                        f"ABORTING: {MAX_CONSECUTIVE_FAILURES} consecutive TRANSCRIPTION failures. "
                         f"GPU may be in a bad state. Last error: {exc}"
                     )
                 continue
 
             update_nitro_status("running", idx, calls_total, gpu_active, last_file=f"{call_id}.json")
 
-        # 5b. Process GHL fallback calls (if Heidys used GHL)
-        ghl_new = 0
-        if ghl_calls:
-            log.info("=== Processing %d GHL fallback calls ===", len(ghl_calls))
-            for ghl_call in ghl_calls:
-                ghl_msg_id = ghl_call["id"]
-                ghl_transcript_path = os.path.join(TRANSCRIPT_DIR, f"ghl_{ghl_msg_id}.json")
-                if os.path.exists(ghl_transcript_path):
-                    log.info("  GHL call %s already transcribed", ghl_msg_id)
-                    continue
-                try:
-                    wav_path = download_ghl_recording(ghl_msg_id, WAV_DIR)
-                    if not wav_path:
-                        log.warning("  GHL recording unavailable for %s", ghl_msg_id)
-                        continue
-                    transcript_text, word_count = transcribe_recording(model, wav_path)
-                    # Save as GHL-sourced transcript
-                    ghl_doc = {
-                        "id": f"ghl_{ghl_msg_id}",
-                        "contact_name": ghl_call.get("contact_name", ""),
-                        "contact_number": ghl_call.get("contact_number", ""),
-                        "call_time": ghl_call.get("call_time", ""),
-                        "duration_s": ghl_call.get("duration", 0),
-                        "word_count": word_count,
-                        "language": "fr",
-                        "transcript": transcript_text,
-                        "recording_url": "",
-                        "source": "ghl",
-                    }
-                    tmp = str(ghl_transcript_path) + ".tmp"
-                    with open(tmp, "w", encoding="utf-8") as f:
-                        json.dump(ghl_doc, f, ensure_ascii=False, indent=2)
-                    os.replace(tmp, ghl_transcript_path)
-                    ghl_new += 1
-                    calls_success += 1
-                    log.info("  GHL OK: %s (%d words)", ghl_msg_id, word_count)
-                except Exception as exc:
-                    log.error("  GHL error on %s: %s", ghl_msg_id, exc)
-            log.info("GHL fallback done: %d new transcripts", ghl_new)
-            transcripts_new += ghl_new
+        # NOTE: GHL fallback section removed — main loop (step 5) already handles
+        # GHL calls via __GHL__ prefix + download_ghl_recording. The old fallback
+        # re-processed calls with different path patterns causing duplicates + crashes.
 
         # 6. Push summary to Supabase — FATAL if fails
         avg_dur = sum(new_durations) / len(new_durations) if new_durations else 0.0
