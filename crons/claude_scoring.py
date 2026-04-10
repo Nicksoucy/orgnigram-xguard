@@ -57,39 +57,43 @@ def call_claude(prompt: str, model: str = "haiku", max_turns: int = 1, timeout: 
     return ""
 
 
-def call_claude_json(prompt: str, model: str = "haiku", timeout: int = 120) -> dict:
-    """Call Claude CLI and parse JSON from response."""
+def call_claude_json(prompt: str, model: str = "haiku", timeout: int = 120):
+    """Call Claude CLI and parse JSON from response. Returns dict or list."""
     raw = call_claude(prompt, model=model, timeout=timeout)
     if not raw:
         return {}
 
     # Extract JSON from response (might have text around it)
+    parsed = None
     try:
-        # Try direct parse first
-        return json.loads(raw)
+        parsed = json.loads(raw)
     except json.JSONDecodeError:
-        pass
-
-    # Try to find JSON in the response — try array FIRST, then object
-    for start_char, end_char in [("[", "]"), ("{", "}")]:
-        start = raw.find(start_char)
-        if start == -1:
-            continue
-        # Find matching end
-        depth = 0
-        for i in range(start, len(raw)):
-            if raw[i] == start_char:
-                depth += 1
-            elif raw[i] == end_char:
-                depth -= 1
-                if depth == 0:
-                    try:
-                        return json.loads(raw[start:i + 1])
-                    except json.JSONDecodeError:
+        # Try to find JSON in the response — try object FIRST for scoring,
+        # but also check for arrays (aggregator needs arrays)
+        for start_char, end_char in [("{", "}"), ("[", "]")]:
+            start = raw.find(start_char)
+            if start == -1:
+                continue
+            depth = 0
+            for i in range(start, len(raw)):
+                if raw[i] == start_char:
+                    depth += 1
+                elif raw[i] == end_char:
+                    depth -= 1
+                    if depth == 0:
+                        try:
+                            parsed = json.loads(raw[start:i + 1])
+                        except json.JSONDecodeError:
+                            pass
                         break
+            if parsed is not None:
+                break
 
-    log.warning("Could not parse JSON from Claude response: %s", raw[:200])
-    return {}
+    if parsed is None:
+        log.warning("Could not parse JSON from Claude response: %s", raw[:200])
+        return {}
+
+    return parsed
 
 
 # ---------------------------------------------------------------------------
@@ -147,6 +151,11 @@ def score_call_haiku(call: dict) -> dict:
     result = call_claude_json(prompt, model="haiku", timeout=60)
 
     if not result:
+        return {}
+    # Unwrap if Haiku returned a single-element array
+    if isinstance(result, list):
+        result = result[0] if result and isinstance(result[0], dict) else {}
+    if not isinstance(result, dict):
         return {}
 
     # Extract scores
@@ -249,6 +258,10 @@ def score_heidys_call(call: dict) -> dict:
 
     if not result:
         return {}
+    if isinstance(result, list):
+        result = result[0] if result and isinstance(result[0], dict) else {}
+    if not isinstance(result, dict):
+        return {}
 
     dims = ["intro", "qualification", "objections", "closing", "empathie", "energie", "duree", "engagement"]
     scores = {}
@@ -319,6 +332,10 @@ def score_domingos_call(call: dict) -> dict:
     prompt = DOMINGOS_PROMPT_TEMPLATE.format(duration=duration, transcript=transcript)
     result = call_claude_json(prompt, model="haiku", timeout=90)
     if not result:
+        return {}
+    if isinstance(result, list):
+        result = result[0] if result and isinstance(result[0], dict) else {}
+    if not isinstance(result, dict):
         return {}
     dims = ["intro", "qualification", "objections", "closing", "empathie", "energie", "duree", "engagement"]
     scores = {}
