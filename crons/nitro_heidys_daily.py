@@ -181,6 +181,10 @@ def fetch_justcall_calls(date_str: str) -> list[dict]:
         # Rate limit protection
         time.sleep(0.5)
 
+    # Safety: if agent_id is inactive, JustCall may return ALL calls. Cap at 500.
+    if len(all_calls) > 500:
+        log.warning("JustCall returned %d calls (likely all agents). Agent 407715 may be inactive. Returning empty.", len(all_calls))
+        return []
     log.info("JustCall returned %d raw calls for %s", len(all_calls), date_str)
     return all_calls
 
@@ -215,7 +219,11 @@ def fetch_ghl_calls_heidys(date_str: str) -> list[dict]:
             found_target_date = False
             for conv in convs:
                 conv_id = conv.get("id", "")
-                last_msg = conv.get("lastMessageDate", "")
+                last_msg = str(conv.get("lastMessageDate", "") or "")
+
+                # Skip if no date or not parseable
+                if len(last_msg) < 10:
+                    continue
 
                 # Stop if conversations are older than target date
                 if last_msg[:10] < target_date:
