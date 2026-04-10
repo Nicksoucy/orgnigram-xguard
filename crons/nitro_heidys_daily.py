@@ -189,106 +189,105 @@ def fetch_justcall_calls(date_str: str) -> list[dict]:
     return all_calls
 
 
+def _ts_to_date(ts):
+    """Convert GHL timestamp (ms int or ISO string) to YYYY-MM-DD."""
+    if isinstance(ts, (int, float)):
+        return datetime.utcfromtimestamp(ts / 1000).strftime("%Y-%m-%d")
+    return str(ts)[:10] if ts else ""
+
+
 def fetch_ghl_calls_heidys(date_str: str) -> list[dict]:
     """Fetch Heidys's calls from GHL for a single date.
-    Uses conversations/search to find recent conversations, then checks messages for calls.
-    Returns list of dicts normalized to JustCall-like format."""
+    GHL lastMessageDate is a Unix timestamp in ms (int).
+    Paginates conversations assigned to Heidys, checks each for call messages."""
     ghl_calls = []
     target_date = date_str
     seen_ids = set()
 
-    # Strategy: search conversations assigned to Heidys, check for call messages on target date
-    for page in range(1, 10):
-        try:
-            params = {
-                "locationId": GHL_LOCATION,
-                "assignedTo": GHL_HEIDYS_USER_ID,
-                "limit": 50,
-                "sort": "desc",
-                "sortBy": "last_message_date",
-            }
-            resp = requests.get(f"{GHL_BASE}/conversations/search",
-                                params=params, headers=GHL_HEADERS, timeout=30)
-            if resp.status_code != 200:
-                log.warning("GHL conversations/search failed (%d)", resp.status_code)
-                break
-            convs = resp.json().get("conversations", [])
-            if not convs:
-                break
+    # Paginate conversations (GHL doesn't support offset, so we use limit + stop condition)
+    params = {
+        "locationId": GHL_LOCATION,
+        "assignedTo": GHL_HEIDYS_USER_ID,
+        "limit": 50,
+        "sort": "desc",
+        "sortBy": "last_message_date",
+    }
 
-            found_target_date = False
-            for conv in convs:
-                conv_id = conv.get("id", "")
-                last_msg = str(conv.get("lastMessageDate", "") or "")
+    try:
+        resp = requests.get(f"{GHL_BASE}/conversations/search",
+                            params=params, headers=GHL_HEADERS, timeout=30)
+        if resp.status_code != 200:
+            log.warning("GHL conversations/search failed (%d): %s", resp.status_code, resp.text[:200])
+            return ghl_calls
+        convs = resp.json().get("conversations", [])
+    except Exception as exc:
+        log.warning("GHL conversation search failed: %s", exc)
+        return ghl_calls
 
-                # Skip if no date or not parseable
-                if len(last_msg) < 10:
-                    continue
+    log.info("  GHL: %d conversations returned for Heidys", len(convs))
 
-                # Stop if conversations are older than target date
-                if last_msg[:10] < target_date:
-                    break
+    for conv in convs:
+        conv_id = conv.get("id", "")
+        last_msg_ts = conv.get("lastMessageDate")
+        conv_date = _ts_to_date(last_msg_ts)
 
-                if last_msg[:10] != target_date:
-                    continue
-
-                found_target_date = True
-
-                # Fetch messages for this conversation
-                try:
-                    r2 = requests.get(f"{GHL_BASE}/conversations/{conv_id}/messages",
-                                      params={"locationId": GHL_LOCATION, "limit": 30},
-                                      headers=GHL_HEADERS, timeout=15)
-                    if r2.status_code != 200:
-                        continue
-                    raw = r2.json().get("messages", {})
-                    if isinstance(raw, dict):
-                        raw = raw.get("messages", [])
-
-                    for msg in raw:
-                        if not isinstance(msg, dict):
-                            continue
-                        if msg.get("messageType") != "TYPE_CALL":
-                            continue
-
-                        date_added = msg.get("dateAdded", "")
-                        if date_added[:10] != target_date:
-                            continue
-
-                        msg_id = msg.get("id", "")
-                        if msg_id in seen_ids:
-                            continue
-                        seen_ids.add(msg_id)
-
-                        meta_call = msg.get("meta", {}).get("call", {}) if isinstance(msg.get("meta"), dict) else {}
-                        duration = meta_call.get("duration") or 0
-
-                        contact_name = conv.get("contactName", "")
-                        contact_number = conv.get("phone", "") or msg.get("to", "")
-
-                        # Include ALL calls (even short) for funnel stats, filter later
-                        ghl_calls.append({
-                            "id": msg_id,
-                            "duration": duration,
-                            "recording_url": f"__GHL__{msg_id}" if duration >= MIN_DURATION_SEC else "",
-                            "call_time": date_added,
-                            "contact_number": contact_number,
-                            "contact_name": contact_name,
-                            "direction": "1" if msg.get("direction") == "inbound" else "0",
-                            "source": "ghl",
-                        })
-                except Exception as e:
-                    log.warning("  GHL conv %s messages failed: %s", conv_id[:8], e)
-
-                time.sleep(0.15)
-
-            # If no conversations found for target date, stop
-            if not found_target_date:
-                break
-
-        except Exception as exc:
-            log.warning("GHL conversation search failed: %s", exc)
+        # Stop if conversations are older than target date
+        if conv_date and conv_date < target_date:
             break
+
+        # Skip if not target date (could be future)
+        # But check messages anyway — conv might have older calls on target date
+        # Only skip if more than 1 day ahead
+        if conv_date and conv_date > target_date:
+            # Still check — the conversation may have calls from target_date
+            pass
+
+        # Fetch messages for this conversation
+        try:
+            r2 = requests.get(f"{GHL_BASE}/conversations/{conv_id}/messages",
+                              params={"locationId": GHL_LOCATION, "limit": 30},
+                              headers=GHL_HEADERS, timeout=15)
+            if r2.status_code != 200:
+                continue
+            raw = r2.json().get("messages", {})
+            if isinstance(raw, dict):
+                raw = raw.get("messages", [])
+
+            for msg in raw:
+                if not isinstance(msg, dict):
+                    continue
+                if msg.get("messageType") != "TYPE_CALL":
+                    continue
+
+                date_added = msg.get("dateAdded", "")
+                if date_added[:10] != target_date:
+                    continue
+
+                msg_id = msg.get("id", "")
+                if msg_id in seen_ids:
+                    continue
+                seen_ids.add(msg_id)
+
+                meta_call = msg.get("meta", {}).get("call", {}) if isinstance(msg.get("meta"), dict) else {}
+                duration = meta_call.get("duration") or 0
+
+                contact_name = conv.get("contactName", "")
+                contact_number = conv.get("phone", "") or msg.get("to", "")
+
+                ghl_calls.append({
+                    "id": msg_id,
+                    "duration": duration,
+                    "recording_url": f"__GHL__{msg_id}" if duration >= MIN_DURATION_SEC else "",
+                    "call_time": date_added,
+                    "contact_number": contact_number,
+                    "contact_name": contact_name,
+                    "direction": "1" if msg.get("direction") == "inbound" else "0",
+                    "source": "ghl",
+                })
+        except Exception as e:
+            log.warning("  GHL conv %s messages failed: %s", conv_id[:8], e)
+
+        time.sleep(0.12)
 
     log.info("GHL: %d Heidys calls for %s (%d with recording)", len(ghl_calls), date_str,
              len([c for c in ghl_calls if c.get("recording_url")]))
@@ -1049,4 +1048,13 @@ def main():
 
 
 if __name__ == "__main__":
+    # Support --dates 2026-04-07,2026-04-08,2026-04-09 to force specific dates
+    if "--dates" in sys.argv:
+        idx = sys.argv.index("--dates")
+        if idx + 1 < len(sys.argv):
+            forced_dates = sys.argv[idx + 1].split(",")
+            # Monkey-patch compute_dates_to_sync to return forced dates
+            _orig = compute_dates_to_sync
+            compute_dates_to_sync = lambda today: forced_dates
+            log.info("FORCED DATES: %s", forced_dates)
     main()
