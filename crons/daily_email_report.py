@@ -61,12 +61,182 @@ def get_transcribed_calls(date_str):
     )
 
 
+def score_html_section(indicators):
+    """Build the 7-dimension score card + non-rappeles list HTML."""
+    if not indicators:
+        return ""
+
+    global_score = indicators.get("global_score", 0)
+    dims = indicators.get("dimensions", {})
+
+    # Score color
+    if global_score >= 75:
+        score_color = "#2E7D32"
+        score_bg = "#E8F5E9"
+    elif global_score >= 50:
+        score_color = "#E65100"
+        score_bg = "#FFF3E0"
+    else:
+        score_color = "#C62828"
+        score_bg = "#FFEBEE"
+
+    # Dimension rows
+    DIM_LABELS = [
+        ("reponse_disponibilite", "Reponse & Disponibilite", "25%"),
+        ("taux_rappel", "Taux de Rappel", "25%"),
+        ("qualite_traitement", "Qualite de Traitement", "20%"),
+        ("file_attente_saturation", "File d'Attente", "8%"),
+        ("conformite_tracabilite", "Conformite", "10%"),
+        ("efficacite_charge", "Efficacite & Charge", "12%"),
+    ]
+
+    dim_rows = ""
+    for dim_key, label, pct in DIM_LABELS:
+        v = dims.get(dim_key)
+        if v is None:
+            dim_rows += f"""
+            <tr>
+              <td style="padding:6px 8px;font-size:12px;">{label}</td>
+              <td style="padding:6px;text-align:center;color:#999;">N/A</td>
+              <td style="padding:6px;"><div style="background:#eee;height:14px;border-radius:7px;overflow:hidden;"></div></td>
+              <td style="padding:6px;text-align:center;font-size:11px;color:#999;">x{pct}</td>
+            </tr>"""
+            continue
+
+        bar_pct = min(100, max(0, v * 10))
+        if v >= 7:
+            bar_color = "#2E7D32"
+        elif v >= 4:
+            bar_color = "#E65100"
+        else:
+            bar_color = "#C62828"
+
+        dim_rows += f"""
+        <tr>
+          <td style="padding:6px 8px;font-size:12px;font-weight:bold;">{label}</td>
+          <td style="padding:6px;text-align:center;color:{bar_color};font-weight:bold;font-size:13px;">{v}/10</td>
+          <td style="padding:6px;"><div style="background:#eee;height:14px;border-radius:7px;overflow:hidden;"><div style="background:{bar_color};height:100%;width:{bar_pct}%;border-radius:7px;"></div></div></td>
+          <td style="padding:6px;text-align:center;font-size:11px;color:#777;">x{pct}</td>
+        </tr>"""
+
+    # Key indicators summary
+    ind = indicators
+    key_stats = f"""
+    <table style="width:100%;border-collapse:collapse;margin:8px 0;font-size:11px;">
+      <tr>
+        <td style="padding:4px 8px;">Taux rappel:</td>
+        <td style="padding:4px;font-weight:bold;">{ind.get('taux_rappel_corrige', 0)}%</td>
+        <td style="padding:4px 8px;">Delai rappel:</td>
+        <td style="padding:4px;font-weight:bold;">{ind.get('delai_moyen_min', 0)} min</td>
+      </tr>
+      <tr>
+        <td style="padding:4px 8px;">Conformite signature:</td>
+        <td style="padding:4px;font-weight:bold;">{ind.get('conformite_signature', 0)}%</td>
+        <td style="padding:4px 8px;">Occupation:</td>
+        <td style="padding:4px;font-weight:bold;">{ind.get('taux_occupation', 0)}%</td>
+      </tr>
+      <tr>
+        <td style="padding:4px 8px;">Duree dans cible:</td>
+        <td style="padding:4px;font-weight:bold;">{ind.get('duree_dans_cible_pct', 0)}%</td>
+        <td style="padding:4px 8px;">Rush horaire:</td>
+        <td style="padding:4px;font-weight:bold;">{ind.get('facteur_rush', 0)}x</td>
+      </tr>
+    </table>"""
+
+    # Non-rappeles section
+    nr_section = ""
+    non_rappeles = ind.get("non_rappeles", [])
+    if non_rappeles:
+        nr_rows = ""
+        for nr in non_rappeles[:10]:
+            name = nr.get("name") or nr.get("number", "?")
+            miss_time = nr.get("miss_time", "")[-8:] if nr.get("miss_time") else "?"
+            att = nr.get("attempts", 0)
+            att_txt = f"{att} tentative(s)" if att > 0 else "aucune tentative"
+            nr_rows += f"""
+            <tr>
+              <td style="padding:4px 8px;font-size:11px;">{name}</td>
+              <td style="padding:4px;text-align:center;font-size:11px;">{miss_time}</td>
+              <td style="padding:4px;font-size:11px;color:#777;">{att_txt}</td>
+            </tr>"""
+        nr_section = f"""
+        <div style="background:#FFEBEE;border-left:4px solid #C62828;padding:8px 12px;margin:8px 0;">
+          <strong style="color:#C62828;font-size:12px;">Non rappeles: {len(non_rappeles)} contact(s)</strong>
+          <table style="width:100%;margin-top:4px;">
+            <tr style="font-size:10px;color:#999;"><th style="text-align:left;padding:2px 8px;">Contact</th><th>Heure manque</th><th style="text-align:left;">Tentatives</th></tr>
+            {nr_rows}
+          </table>
+        </div>"""
+
+    return f"""
+    <div style="background:{score_bg};border:2px solid {score_color};border-radius:8px;padding:15px;margin:0 0 15px;">
+      <div style="text-align:center;margin-bottom:10px;">
+        <div style="font-size:11px;color:#777;text-transform:uppercase;letter-spacing:1px;">Score Qualite SAC</div>
+        <div style="font-size:42px;font-weight:bold;color:{score_color};">{global_score}<span style="font-size:18px;color:#999;">/100</span></div>
+      </div>
+      <table style="width:100%;border-collapse:collapse;">
+        <tr style="font-size:10px;color:#999;">
+          <th style="text-align:left;padding:3px 8px;">Dimension</th>
+          <th style="width:50px;">Score</th>
+          <th style="width:40%;">Barre</th>
+          <th style="width:40px;">Poids</th>
+        </tr>
+        {dim_rows}
+      </table>
+      {key_stats}
+      {nr_section}
+    </div>"""
+
+
+def build_alerts_html(smart):
+    """Build alert sections for frustrated clients and bad hours."""
+    sections = ""
+
+    # Frustrated clients (5+ calls)
+    frustrated = smart.get("frustrated_clients", [])
+    if frustrated:
+        rows = ""
+        for fc in frustrated[:5]:
+            name = fc.get("name") or fc.get("number", "?")
+            rows += f'<tr><td style="padding:4px 8px;font-size:12px;">{name}</td>'
+            rows += f'<td style="padding:4px;text-align:center;font-weight:bold;color:#C62828;">{fc["calls"]}x</td>'
+            rows += f'<td style="padding:4px;text-align:center;">{fc["missed"]} manques</td></tr>'
+        sections += f"""
+        <div style="background:#FFEBEE;border-left:4px solid #C62828;padding:10px 15px;margin:0 0 10px;font-size:12px;">
+          <strong style="color:#C62828;">Clients frustres ({len(frustrated)} contacts avec 5+ appels)</strong>
+          <table style="margin-top:5px;width:100%;">
+            <tr style="font-size:10px;color:#999;"><th style="text-align:left;padding:3px 8px;">Contact</th><th>Appels</th><th>Manques</th></tr>
+            {rows}
+          </table>
+        </div>"""
+
+    # Hourly miss alerts
+    alerts = smart.get("alert_hours", [])
+    if alerts:
+        items = ", ".join(f"{a['hour']}h ({a['missed']}/{a['total_in']} = {a['miss_rate']}%)" for a in alerts[:3])
+        sections += f"""
+        <div style="background:#FFF3E0;border-left:4px solid #E65100;padding:8px 15px;margin:0 0 10px;font-size:12px;">
+          <strong style="color:#E65100;">Heures critiques (>70% manques):</strong> {items}
+        </div>"""
+
+    return sections
+
+
 def build_email_html(date_str, smart, transcribed_calls, sms_stats=None, email_stats=None, conv_stats=None):
     dt = datetime.strptime(date_str, "%Y-%m-%d")
     day_name = DAYS_FR.get(dt.weekday(), "")
     s = smart["summary"]
     raw = smart["raw"]
     dedup = smart["dedup"]
+    is_weekend = smart.get("is_weekend", False)
+    agent_du_jour = smart.get("agent_du_jour", "SAC")
+
+    # Score section (39 indicators)
+    ind = smart.get("indicators", {})
+    score_section = score_html_section(ind) if ind else ""
+
+    # Alerts section
+    alerts_section = build_alerts_html(smart)
 
     # SMS section
     sms_section = sms_html_section(sms_stats) if sms_stats and sms_stats.get("total", 0) > 0 else ""
@@ -250,8 +420,8 @@ def build_email_html(date_str, smart, transcribed_calls, sms_stats=None, email_s
     html = f"""<html><body style="font-family:Arial,sans-serif;color:#333;max-width:750px;margin:0 auto;">
 
 <div style="background:#1B3A5C;padding:20px;border-radius:8px 8px 0 0;text-align:center;">
-  <h1 style="color:white;margin:0;font-size:22px;">Rapport Quotidien SAC</h1>
-  <p style="color:#ccc;margin:5px 0 0;">{day_name} {date_str} | Heures de travail (8h-18h)</p>
+  <h1 style="color:white;margin:0;font-size:22px;">Rapport Quotidien SAC — {agent_du_jour}</h1>
+  <p style="color:#ccc;margin:5px 0 0;">{day_name} {date_str} | {'8h-17h (weekend, formateur@ exclu)' if is_weekend else 'Heures de travail (8h-18h)'}</p>
 </div>
 
 <div style="padding:20px;border:1px solid #ddd;border-top:none;">
@@ -281,6 +451,10 @@ def build_email_html(date_str, smart, transcribed_calls, sms_stats=None, email_s
     </td>
   </tr>
 </table>
+
+{score_section}
+
+{alerts_section}
 
 <!-- Analyse des manques -->
 <div style="background:#FFF8E1;border-left:4px solid #F57F17;padding:12px 15px;margin:0 0 15px;font-size:12px;">
@@ -382,7 +556,7 @@ def build_email_html(date_str, smart, transcribed_calls, sms_stats=None, email_s
     return html
 
 
-def send_email_smtp(date_str, html_body):
+def send_email_smtp(date_str, html_body, global_score=None):
     """Send email directly via Gmail SMTP — no Claude CLI needed."""
     dt = datetime.strptime(date_str, "%Y-%m-%d")
     day_name = DAYS_FR.get(dt.weekday(), "")
@@ -391,7 +565,10 @@ def send_email_smtp(date_str, html_body):
     msg["From"] = GMAIL_USER
     msg["To"] = "hmaghraoui65@gmail.com"
     msg["Cc"] = "nick@darkhorseads.com"
-    msg["Subject"] = f"SAC {day_name} {date_str} — Rapport Quotidien"
+    if global_score is not None:
+        msg["Subject"] = f"SAC {day_name} {date_str} — {global_score}/100 — Rapport Quotidien"
+    else:
+        msg["Subject"] = f"SAC {day_name} {date_str} — Rapport Quotidien"
 
     msg.attach(MIMEText(html_body, "html", "utf-8"))
 
@@ -475,7 +652,15 @@ def main():
     # Build + send
     html = build_email_html(date_str, smart, transcribed, sms_stats=sms, email_stats=em_stats, conv_stats=conv_stats)
     log.info("HTML built (%d chars)", len(html))
-    send_email_smtp(date_str, html)
+
+    # Extract global score for subject line
+    global_score = None
+    ind = smart.get("indicators", {})
+    if ind:
+        global_score = ind.get("global_score")
+        log.info("  Score global: %s/100", global_score)
+
+    send_email_smtp(date_str, html, global_score=global_score)
     log.info("DONE!")
 
 

@@ -3,3 +3,9 @@ scripts/
 *.sql
 index.html.bak
 js/views/schedule.js
+.obsidian/
+__pycache__/
+*.pyc
+crons/_*.py
+crons/test_*.py
+smart_stats_*.json

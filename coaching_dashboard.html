@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>XGuard — Coaching Dashboard</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/dayjs@1/dayjs.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'DM Sans',sans-serif;background:#0c0c0f;color:#e0ddd5;min-height:100vh}
+.header{background:linear-gradient(135deg,#1a1a2e,#16213e);padding:24px 32px;border-bottom:1px solid #2a2a32}
+.header h1{font-size:22px;color:#ff6b35}
+.header p{font-size:12px;color:#8b8a87;margin-top:4px}
+.tabs{display:flex;gap:8px;padding:12px 32px;background:#111;border-bottom:1px solid #2a2a32}
+.tab{padding:8px 16px;border-radius:6px;cursor:pointer;font-size:13px;color:#8b8a87;transition:.2s}
+.tab:hover{background:#1a1a2e;color:#e0ddd5}
+.tab.active{background:#ff6b35;color:#fff}
+.container{max-width:1200px;margin:0 auto;padding:24px}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:16px;margin-bottom:24px}
+.card{background:#1a1a2e;border:1px solid #2a2a32;border-radius:10px;padding:20px}
+.card h3{font-size:13px;color:#8b8a87;text-transform:uppercase;letter-spacing:1px;margin-bottom:12px}
+.big-number{font-size:42px;font-weight:700;line-height:1}
+.big-number.green{color:#2ecc71}
+.big-number.orange{color:#ff6b35}
+.big-number.red{color:#e74c3c}
+.sub{font-size:11px;color:#8b8a87;margin-top:4px}
+.chart-card{background:#1a1a2e;border:1px solid #2a2a32;border-radius:10px;padding:20px;margin-bottom:16px}
+.chart-card h3{font-size:14px;color:#e0ddd5;margin-bottom:12px}
+canvas{max-height:300px}
+table{width:100%;border-collapse:collapse;font-size:12px}
+th{text-align:left;padding:8px;color:#8b8a87;border-bottom:1px solid #2a2a32}
+td{padding:8px;border-bottom:1px solid #1a1a2e}
+.status-ok{color:#2ecc71}
+.status-err{color:#e74c3c}
+.agent-btn{padding:6px 14px;border-radius:6px;border:1px solid #2a2a32;background:transparent;color:#e0ddd5;cursor:pointer;font-size:12px;font-family:inherit}
+.agent-btn.active{background:#ff6b35;color:#fff;border-color:#ff6b35}
+.loading{text-align:center;padding:40px;color:#8b8a87}
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>Coaching Dashboard</h1>
+  <p>Scores IA, tendances, cron status — donnees en temps reel depuis Supabase</p>
+</div>
+
+<div class="tabs">
+  <div class="tab active" data-agent="L3">Hamza (SAC)</div>
+  <div class="tab" data-agent="s2">Lilia (SAC)</div>
+  <div class="tab" data-agent="s3">Sekou (SAC)</div>
+  <div class="tab" data-agent="v1">Heidys (Ventes)</div>
+  <div class="tab" data-agent="t11">Domingos (Drone)</div>
+  <div class="tab" data-agent="crons">Cron Status</div>
+</div>
+
+<div class="container">
+  <div id="content"><div class="loading">Chargement...</div></div>
+</div>
+
+<script>
+const SB_URL = 'https://ctjsdpfegpsfpwjgusyi.supabase.co';
+const SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImN0anNkcGZlZ3BzZnB3amd1c3lpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM2MDU2NDQsImV4cCI6MjA4OTE4MTY0NH0.Uv2pbxbmvcbXhyDa7Y_M0HqkLuV7uJaNxl1N01q5wMo';
+const HEADERS = {'apikey': SB_KEY, 'Authorization': `Bearer ${SB_KEY}`};
+
+const AGENT_NAMES = {L3:'Hamza', s2:'Lilia', s3:'Sekou', v1:'Heidys', t11:'Domingos'};
+const DIM_LABELS = ['Reponse','Rappel','Qualite','File attente','Conformite','Efficacite'];
+
+let charts = {};
+
+async function sbGet(path) {
+  const r = await fetch(`${SB_URL}/rest/v1/${path}`, {headers: HEADERS});
+  return r.ok ? r.json() : [];
+}
+
+// ===== AGENT VIEW =====
+async function showAgent(pid) {
+  const el = document.getElementById('content');
+  el.innerHTML = '<div class="loading">Chargement...</div>';
+
+  const [reports, dailyData, cronLogs] = await Promise.all([
+    sbGet(`coaching_reports?person_id=eq.${pid}&order=week_start.desc&limit=12`),
+    sbGet(`coaching_data?person_id=eq.${pid}&order=sync_date.desc&limit=30`),
+    sbGet(`cron_logs?person_id=eq.${pid}&order=started_at.desc&limit=10`),
+  ]);
+
+  const name = AGENT_NAMES[pid] || pid;
+  const latest = reports[0] || {};
+  const scores = latest.scores || {};
+  const globalScore = scores.global_score || 0;
+  const scoreColor = globalScore >= 75 ? 'green' : globalScore >= 50 ? 'orange' : 'red';
+
+  // KPI cards
+  const avgCalls = dailyData.length ? Math.round(dailyData.reduce((s,d)=> s+(d.calls_total||0), 0)/dailyData.length) : 0;
+  const avgTranscribed = dailyData.length ? Math.round(dailyData.reduce((s,d)=> s+(d.calls_transcribed||0), 0)/dailyData.length) : 0;
+  const lastSync = dailyData[0] ? dailyData[0].sync_date : 'N/A';
+
+  el.innerHTML = `
+    <div class="grid">
+      <div class="card">
+        <h3>Score Global (dernier rapport)</h3>
+        <div class="big-number ${scoreColor}">${globalScore}<span style="font-size:18px;color:#8b8a87">/100</span></div>
+        <div class="sub">Semaine du ${latest.week_start || 'N/A'}</div>
+      </div>
+      <div class="card">
+        <h3>Appels/jour (moy. 30j)</h3>
+        <div class="big-number" style="color:#3498db">${avgCalls}</div>
+        <div class="sub">${avgTranscribed} transcrits/jour</div>
+      </div>
+      <div class="card">
+        <h3>Derniere sync</h3>
+        <div class="big-number" style="font-size:24px;color:#e0ddd5">${lastSync}</div>
+        <div class="sub">${dailyData.length} jours de donnees</div>
+      </div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+      <div class="chart-card">
+        <h3>Score /100 — Tendance hebdomadaire</h3>
+        <canvas id="chartTrend"></canvas>
+      </div>
+      <div class="chart-card">
+        <h3>7 Dimensions (dernier rapport)</h3>
+        <canvas id="chartRadar"></canvas>
+      </div>
+    </div>
+
+    <div class="chart-card">
+      <h3>Volume d'appels quotidien (30 derniers jours)</h3>
+      <canvas id="chartDaily"></canvas>
+    </div>
+
+    <div class="chart-card">
+      <h3>Historique cron (10 derniers)</h3>
+      <table>
+        <tr><th>Date</th><th>Type</th><th>Status</th><th>Appels</th><th>Transcrits</th><th>Duree</th></tr>
+        ${cronLogs.map(l => `
+          <tr>
+            <td>${(l.started_at||'').slice(0,16).replace('T',' ')}</td>
+            <td>${l.cron_type||''}</td>
+            <td class="${l.status==='success'?'status-ok':'status-err'}">${l.status||'?'}</td>
+            <td>${l.calls_processed||0}</td>
+            <td>${l.transcripts_new||0}</td>
+            <td>${l.duration_sec ? Math.round(l.duration_sec)+'s' : '-'}</td>
+          </tr>
+        `).join('')}
+      </table>
+    </div>
+  `;
+
+  // Destroy old charts
+  Object.values(charts).forEach(c => c.destroy());
+  charts = {};
+
+  // Trend chart
+  const trendData = reports.slice().reverse();
+  if (trendData.length) {
+    charts.trend = new Chart(document.getElementById('chartTrend'), {
+      type: 'line',
+      data: {
+        labels: trendData.map(r => r.week_start),
+        datasets: [{
+          label: 'Score /100',
+          data: trendData.map(r => (r.scores||{}).global_score || 0),
+          borderColor: '#ff6b35',
+          backgroundColor: 'rgba(255,107,53,0.1)',
+          fill: true,
+          tension: 0.3,
+          pointRadius: 4,
+        }]
+      },
+      options: {
+        responsive: true,
+        scales: {
+          y: {min:0, max:100, grid:{color:'#2a2a32'}, ticks:{color:'#8b8a87'}},
+          x: {grid:{display:false}, ticks:{color:'#8b8a87', maxRotation:45}}
+        },
+        plugins: {legend:{display:false}}
+      }
+    });
+  }
+
+  // Radar chart
+  const dims = (latest.scores||{}).dimensions || {};
+  const dimKeys = ['reponse_disponibilite','taux_rappel','qualite_traitement','file_attente_saturation','conformite_tracabilite','efficacite_charge'];
+  const dimValues = dimKeys.map(k => dims[k] || 0);
+  charts.radar = new Chart(document.getElementById('chartRadar'), {
+    type: 'radar',
+    data: {
+      labels: DIM_LABELS,
+      datasets: [{
+        label: name,
+        data: dimValues,
+        borderColor: '#ff6b35',
+        backgroundColor: 'rgba(255,107,53,0.2)',
+        pointBackgroundColor: '#ff6b35',
+      }]
+    },
+    options: {
+      responsive: true,
+      scales: {r: {min:0, max:10, grid:{color:'#2a2a32'}, angleLines:{color:'#2a2a32'}, pointLabels:{color:'#e0ddd5',font:{size:11}}, ticks:{display:false}}},
+      plugins: {legend:{display:false}}
+    }
+  });
+
+  // Daily volume chart
+  const dailyReversed = dailyData.slice().reverse();
+  if (dailyReversed.length) {
+    charts.daily = new Chart(document.getElementById('chartDaily'), {
+      type: 'bar',
+      data: {
+        labels: dailyReversed.map(d => d.sync_date),
+        datasets: [
+          {label:'Total', data: dailyReversed.map(d=>d.calls_total||0), backgroundColor:'rgba(52,152,219,0.6)'},
+          {label:'Transcrits', data: dailyReversed.map(d=>d.calls_transcribed||0), backgroundColor:'rgba(255,107,53,0.6)'},
+        ]
+      },
+      options: {
+        responsive: true,
+        scales: {
+          y: {grid:{color:'#2a2a32'}, ticks:{color:'#8b8a87'}},
+          x: {grid:{display:false}, ticks:{color:'#8b8a87', maxRotation:45, maxTicksLimit:15}}
+        },
+        plugins: {legend:{labels:{color:'#e0ddd5'}}}
+      }
+    });
+  }
+}
+
+// ===== CRON STATUS VIEW =====
+async function showCrons() {
+  const el = document.getElementById('content');
+  el.innerHTML = '<div class="loading">Chargement...</div>';
+
+  const [allStatus, allLogs, heartbeat] = await Promise.all([
+    sbGet('nitro_status?order=person_id'),
+    sbGet('cron_logs?order=started_at.desc&limit=30'),
+    sbGet('watchdog_heartbeat?id=eq.nitro'),
+  ]);
+
+  const hb = heartbeat[0] || {};
+  const hbAge = hb.last_seen ? Math.round((Date.now() - new Date(hb.last_seen).getTime())/60000) : 999;
+  const hbColor = hbAge < 10 ? 'green' : hbAge < 30 ? 'orange' : 'red';
+
+  el.innerHTML = `
+    <div class="grid">
+      <div class="card">
+        <h3>Nitro Watchdog</h3>
+        <div class="big-number ${hbColor}">${hbAge < 999 ? hbAge+'min' : 'OFF'}</div>
+        <div class="sub">Dernier heartbeat: ${hb.last_seen ? new Date(hb.last_seen).toLocaleString('fr-CA') : 'jamais'}</div>
+      </div>
+      <div class="card">
+        <h3>Crons aujourd'hui</h3>
+        <div class="big-number" style="color:#3498db">${allLogs.filter(l => l.started_at && l.started_at.startsWith(dayjs().format('YYYY-MM-DD'))).length}</div>
+        <div class="sub">executions</div>
+      </div>
+      <div class="card">
+        <h3>Erreurs (7 derniers jours)</h3>
+        <div class="big-number ${allLogs.filter(l=>l.status==='error').length ? 'red' : 'green'}">${allLogs.filter(l=>l.status==='error').length}</div>
+        <div class="sub">sur ${allLogs.length} executions</div>
+      </div>
+    </div>
+
+    <div class="chart-card">
+      <h3>Statut Transcription en Temps Reel</h3>
+      <table>
+        <tr><th>Agent</th><th>Task</th><th>Status</th><th>Progress</th><th>GPU</th><th>Speed</th><th>Dernier fichier</th></tr>
+        ${allStatus.map(s => `
+          <tr>
+            <td>${AGENT_NAMES[s.person_id]||s.person_id}</td>
+            <td>${s.task_type||''}</td>
+            <td class="${s.status==='done'?'status-ok':s.status==='error'?'status-err':''}">${s.status||'?'}</td>
+            <td>${s.done||0}/${s.total||0} (${s.pct||0}%)</td>
+            <td>${s.gpu_active?'ON':'off'}</td>
+            <td>${s.avg_speed_sec ? s.avg_speed_sec+'s/call' : '-'}</td>
+            <td style="font-size:10px;max-width:200px;overflow:hidden;text-overflow:ellipsis">${s.last_file||'-'}</td>
+          </tr>
+        `).join('')}
+      </table>
+    </div>
+
+    <div class="chart-card">
+      <h3>Historique des 30 derniers crons</h3>
+      <table>
+        <tr><th>Date</th><th>Agent</th><th>Type</th><th>Status</th><th>Appels</th><th>Transcrits</th><th>Duree</th><th>Erreur</th></tr>
+        ${allLogs.map(l => `
+          <tr>
+            <td>${(l.started_at||'').slice(0,16).replace('T',' ')}</td>
+            <td>${AGENT_NAMES[l.person_id]||l.person_id||''}</td>
+            <td>${l.cron_type||''}</td>
+            <td class="${l.status==='success'?'status-ok':'status-err'}">${l.status||'?'}</td>
+            <td>${l.calls_processed||0}</td>
+            <td>${l.transcripts_new||0}</td>
+            <td>${l.duration_sec ? Math.round(l.duration_sec)+'s' : '-'}</td>
+            <td style="color:#e74c3c;font-size:10px;max-width:200px;overflow:hidden;text-overflow:ellipsis">${l.error_msg||''}</td>
+          </tr>
+        `).join('')}
+      </table>
+    </div>
+  `;
+}
+
+// ===== TAB SWITCHING =====
+document.querySelectorAll('.tab').forEach(tab => {
+  tab.addEventListener('click', () => {
+    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+    tab.classList.add('active');
+    const agent = tab.dataset.agent;
+    if (agent === 'crons') showCrons();
+    else showAgent(agent);
+  });
+});
+
+// Load default
+showAgent('L3');
+</script>
+</body>
+</html>

@@ -37,15 +37,17 @@ GMAIL_USER = "nick@darkhorseads.com"
 GMAIL_APP_PASSWORD = "kjaqmxuewwzkxcif"
 
 LOG_DIR = Path(r"C:\Users\user\sac_logs")
-LOG_DIR.mkdir(parents=True, exist_ok=True)
+_handlers = [logging.StreamHandler()]
+try:
+    LOG_DIR.mkdir(parents=True, exist_ok=True)
+    _handlers.append(logging.FileHandler(str(LOG_DIR / f"hot_leads_{datetime.now():%Y-%m-%d}.log"), encoding="utf-8"))
+except (PermissionError, OSError):
+    pass  # Running locally, skip file log
 
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(message)s",
-    handlers=[
-        logging.StreamHandler(),
-        logging.FileHandler(str(LOG_DIR / f"hot_leads_{datetime.now():%Y-%m-%d}.log"), encoding="utf-8"),
-    ]
+    handlers=_handlers,
 )
 log = logging.getLogger("hot_leads")
 
