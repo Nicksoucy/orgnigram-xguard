@@ -25,6 +25,8 @@ Tous les scripts sont sur [[Nitro-GPU]] a `C:\Users\user\crons\`
 | **KB_Analyzer** | kb_email_analyzer.py | 23h00 daily | Emails |
 | **KB_Aggregator** | kb_topic_aggregator.py | 06h00 daily | KB |
 | **KB_ApprovalEmail** | kb_approval_email.py | 07h30 daily | Nick |
+| **XGuard_HotList_17h** | hot_leads.py | 17h00 daily | [[../Personnes/Hamza\|Hamza]] |
+| **XGuard_HealthCheck** | health_check.py | 20h00 daily | [[../Personnes/Nick\|Nick]] (alerte email si probleme) |
 
 ## Services Permanents
 | Nom | Script | Demarrage |

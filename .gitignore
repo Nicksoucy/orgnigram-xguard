@@ -7,5 +7,4 @@ js/views/schedule.js
 __pycache__/
 *.pyc
 crons/_*.py
-crons/test_*.py
 smart_stats_*.json
