@@ -166,7 +166,9 @@ def ghl_post(endpoint, payload=None):
 
 
 def fetch_conversations_for_date(date_str: str):
-    """Search GHL conversations for a single date (YYYY-MM-DD) with cursor pagination."""
+    """Search GHL conversations for a single date (YYYY-MM-DD) with cursor pagination.
+    NOTE: conversations/search is a GET endpoint, not POST (404 if POST).
+    """
     start = f"{date_str}T00:00:00Z"
     end = f"{date_str}T23:59:59Z"
 
@@ -174,22 +176,32 @@ def fetch_conversations_for_date(date_str: str):
     cursor = None
 
     while True:
-        payload = {
+        params = {
             "locationId": GHL_LOCATION,
-            "startDate": start,
-            "endDate": end,
+            "startAfterDate": start,
             "limit": 100,
         }
         if cursor:
-            payload["cursor"] = cursor
+            params["startAfterId"] = cursor
 
-        data = ghl_post("/conversations/search", payload)
+        data = ghl_get("/conversations/search", params=params)
         convos = data.get("conversations", [])
-        conversations.extend(convos)
-        log.info("  %s: fetched %d conversations (total so far: %d)", date_str, len(convos), len(conversations))
+        # Filter to target date only
+        for c in convos:
+            last_msg = c.get("lastMessageDate", 0)
+            if isinstance(last_msg, int):
+                from datetime import timezone
+                msg_dt = datetime.fromtimestamp(last_msg / 1000, tz=timezone.utc)
+                if msg_dt.strftime("%Y-%m-%d") == date_str:
+                    conversations.append(c)
+            else:
+                conversations.append(c)
+        log.info("  %s: fetched %d conversations (filtered: %d)", date_str, len(convos), len(conversations))
 
-        cursor = data.get("nextCursor") or data.get("cursor")
-        if not cursor or not convos:
+        # Pagination: use last conversation ID as cursor
+        if convos and len(convos) >= 100:
+            cursor = convos[-1].get("id")
+        else:
             break
 
     return conversations
