@@ -84,19 +84,23 @@ def check_coaching_data(date_str):
         issues.append(("CRITICAL", "Supabase", f"Cannot reach coaching_data: {rows['error']}"))
         return issues
 
-    expected_weekday = {"L3", "s2"}  # Hamza + Lilia
-    expected_weekend = {"s3"}  # Sekou
     dt = datetime.strptime(date_str, "%Y-%m-%d")
-    expected = expected_weekend if dt.weekday() >= 5 else expected_weekday
+    is_weekend = dt.weekday() >= 5
+
+    # Only check agents expected to work that day
+    if is_weekend:
+        expected = {"s3"}  # Sekou only
+    else:
+        expected = {"L3", "s2"}  # Hamza + Lilia
 
     found = {r["person_id"] for r in rows}
     missing = expected - found
     if missing:
         issues.append(("WARNING", "coaching_data", f"Agents manquants pour {date_str}: {', '.join(missing)}"))
 
-    # Check for zero calls
+    # Check for zero calls (only for agents expected to work)
     for r in rows:
-        if r.get("calls_total", 0) == 0:
+        if r["person_id"] in expected and r.get("calls_total", 0) == 0:
             issues.append(("WARNING", "coaching_data", f"{r['person_id']}: 0 appels total pour {date_str}"))
 
     return issues
