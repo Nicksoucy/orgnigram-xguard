@@ -166,42 +166,60 @@ def ghl_post(endpoint, payload=None):
 
 
 def fetch_conversations_for_date(date_str: str):
-    """Search GHL conversations for a single date (YYYY-MM-DD) with cursor pagination.
+    """Search GHL conversations for a single date (YYYY-MM-DD).
     NOTE: conversations/search is a GET endpoint, not POST (404 if POST).
+    API doesn't support date filtering in query params — we fetch pages sorted
+    by lastMessageDate DESC and stop once we pass the target date (midnight).
     """
-    start = f"{date_str}T00:00:00Z"
-    end = f"{date_str}T23:59:59Z"
+    from datetime import timezone
+
+    target_dt = datetime.strptime(date_str, "%Y-%m-%d").replace(tzinfo=timezone.utc)
+    target_start_ms = int(target_dt.timestamp() * 1000)
+    target_end_ms = int((target_dt + timedelta(days=1)).timestamp() * 1000)
 
     conversations = []
     cursor = None
+    pages = 0
+    MAX_PAGES = 50  # Safety cap (50 * 100 = 5000 convos = ~2-3 days of activity)
 
-    while True:
+    while pages < MAX_PAGES:
         params = {
             "locationId": GHL_LOCATION,
-            "startAfterDate": start,
             "limit": 100,
+            "sort": "desc",
+            "sortBy": "last_message_date",
         }
         if cursor:
-            params["startAfterId"] = cursor
+            params["startAfterDate"] = cursor
+            params["startAfter"] = cursor
 
         data = ghl_get("/conversations/search", params=params)
         convos = data.get("conversations", [])
-        # Filter to target date only
+        if not convos:
+            break
+
+        pages += 1
+        went_past_target = False
+
         for c in convos:
             last_msg = c.get("lastMessageDate", 0)
-            if isinstance(last_msg, int):
-                from datetime import timezone
-                msg_dt = datetime.fromtimestamp(last_msg / 1000, tz=timezone.utc)
-                if msg_dt.strftime("%Y-%m-%d") == date_str:
-                    conversations.append(c)
-            else:
+            if not isinstance(last_msg, int):
+                continue
+            if target_start_ms <= last_msg < target_end_ms:
                 conversations.append(c)
-        log.info("  %s: fetched %d conversations (filtered: %d)", date_str, len(convos), len(conversations))
+            elif last_msg < target_start_ms:
+                # We've paginated past the target date — stop
+                went_past_target = True
+                break
 
-        # Pagination: use last conversation ID as cursor
-        if convos and len(convos) >= 100:
-            cursor = convos[-1].get("id")
-        else:
+        log.info("  %s: page %d — %d convos, %d matching target", date_str, pages, len(convos), len(conversations))
+
+        if went_past_target or len(convos) < 100:
+            break
+
+        # Next page: use the last conversation's date as cursor
+        cursor = convos[-1].get("lastMessageDate")
+        if not cursor:
             break
 
     return conversations
