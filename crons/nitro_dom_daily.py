@@ -167,61 +167,40 @@ def ghl_post(endpoint, payload=None):
 
 def fetch_conversations_for_date(date_str: str):
     """Search GHL conversations for a single date (YYYY-MM-DD).
-    NOTE: conversations/search is a GET endpoint, not POST (404 if POST).
-    API doesn't support date filtering in query params — we fetch pages sorted
-    by lastMessageDate DESC and stop once we pass the target date (midnight).
+
+    GHL conversations/search is GET-only. Pagination params (startAfter,
+    startAfterId, page, offset) are all broken — they return the same
+    first page every time. So we fetch limit=100 (API max) and filter
+    client-side by lastMessageDate. This covers 1 day easily since
+    Domingos handles ~20-50 calls/day.
     """
     from datetime import timezone
 
-    target_dt = datetime.strptime(date_str, "%Y-%m-%d").replace(tzinfo=timezone.utc)
-    target_start_ms = int(target_dt.timestamp() * 1000)
-    target_end_ms = int((target_dt + timedelta(days=1)).timestamp() * 1000)
+    # GHL timestamps are UTC. Montreal is UTC-4 (EDT).
+    # When cron asks for "2026-04-15", we want local-day = 04:00 UTC to 04:00 UTC next day.
+    UTC_OFFSET_HOURS = -4  # Montreal EDT
+    target_dt = datetime.strptime(date_str, "%Y-%m-%d")
+    # Local midnight in UTC = midnight - offset (e.g., midnight EDT = 04:00 UTC)
+    target_start_utc = target_dt - timedelta(hours=UTC_OFFSET_HOURS)
+    target_start_ms = int(target_start_utc.replace(tzinfo=timezone.utc).timestamp() * 1000)
+    target_end_ms = int((target_start_utc + timedelta(days=1)).replace(tzinfo=timezone.utc).timestamp() * 1000)
 
+    params = {
+        "locationId": GHL_LOCATION,
+        "limit": 100,
+    }
+
+    data = ghl_get("/conversations/search", params=params)
+    all_convos = data.get("conversations", [])
+
+    # Filter to target date only
     conversations = []
-    cursor = None
-    pages = 0
-    MAX_PAGES = 50  # Safety cap (50 * 100 = 5000 convos = ~2-3 days of activity)
+    for c in all_convos:
+        last_msg = c.get("lastMessageDate", 0)
+        if isinstance(last_msg, int) and target_start_ms <= last_msg < target_end_ms:
+            conversations.append(c)
 
-    while pages < MAX_PAGES:
-        params = {
-            "locationId": GHL_LOCATION,
-            "limit": 100,
-            "sort": "desc",
-            "sortBy": "last_message_date",
-        }
-        if cursor:
-            params["startAfterDate"] = cursor
-            params["startAfter"] = cursor
-
-        data = ghl_get("/conversations/search", params=params)
-        convos = data.get("conversations", [])
-        if not convos:
-            break
-
-        pages += 1
-        went_past_target = False
-
-        for c in convos:
-            last_msg = c.get("lastMessageDate", 0)
-            if not isinstance(last_msg, int):
-                continue
-            if target_start_ms <= last_msg < target_end_ms:
-                conversations.append(c)
-            elif last_msg < target_start_ms:
-                # We've paginated past the target date — stop
-                went_past_target = True
-                break
-
-        log.info("  %s: page %d — %d convos, %d matching target", date_str, pages, len(convos), len(conversations))
-
-        if went_past_target or len(convos) < 100:
-            break
-
-        # Next page: use the last conversation's date as cursor
-        cursor = convos[-1].get("lastMessageDate")
-        if not cursor:
-            break
-
+    log.info("  %s: fetched %d convos, %d matching target date", date_str, len(all_convos), len(conversations))
     return conversations
 
 
