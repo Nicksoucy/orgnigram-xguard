@@ -122,8 +122,13 @@ def check_sac_calls(date_str):
         # Not critical — might be weekend or no transcribable calls
         return issues
 
-    # Check score range
+    # CRITICAL: Check if Haiku scoring ran (0% scored = Haiku is broken)
     scored = [r for r in rows if r.get("ai_global_score") is not None]
+    scored_pct = (len(scored) / len(rows) * 100) if rows else 0
+    if len(rows) >= 10 and scored_pct < 50:
+        issues.append(("CRITICAL", "Haiku", f"Seulement {len(scored)}/{len(rows)} appels scored ({scored_pct:.0f}%) — Haiku CLI casse?"))
+
+    # Check score range
     if scored:
         avg_score = sum(r["ai_global_score"] for r in scored) / len(scored)
         if avg_score > 9.5:

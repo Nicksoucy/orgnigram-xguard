@@ -7,14 +7,53 @@ Supports Haiku (per-call scoring) and Opus (weekly report).
 import json
 import logging
 import os
+import re
 import subprocess
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from pathlib import Path
 
 log = logging.getLogger("claude_scoring")
 
-CLAUDE_EXE = r"C:\Users\User\AppData\Local\Packages\Claude_pzs8sxrjxfjjc\LocalCache\Roaming\Claude\claude-code\2.1.63\claude.exe"
 GIT_BASH = r"C:\Program Files\Git\bin\bash.exe"
+
+
+def _find_claude_exe():
+    """Auto-detect claude.exe — picks the highest version installed.
+    Avoids hardcoded paths that break when Claude Code updates.
+    """
+    base = Path(r"C:\Users\User\AppData\Local\Packages\Claude_pzs8sxrjxfjjc\LocalCache\Roaming\Claude\claude-code")
+    if not base.exists():
+        # Fallback: try current user
+        alt = Path(os.path.expandvars(r"%LOCALAPPDATA%\Packages\Claude_pzs8sxrjxfjjc\LocalCache\Roaming\Claude\claude-code"))
+        if alt.exists():
+            base = alt
+        else:
+            return None
+
+    # Find all version directories (e.g., "2.1.111") and pick the highest
+    versions = []
+    for d in base.iterdir():
+        if d.is_dir() and re.match(r'^\d+\.\d+\.\d+$', d.name):
+            exe = d / "claude.exe"
+            if exe.exists():
+                # Parse version as tuple for sorting
+                ver_tuple = tuple(int(x) for x in d.name.split("."))
+                versions.append((ver_tuple, exe))
+
+    if not versions:
+        return None
+
+    # Sort by version desc, return highest
+    versions.sort(reverse=True)
+    return str(versions[0][1])
+
+
+CLAUDE_EXE = _find_claude_exe()
+if CLAUDE_EXE:
+    log.info("Detected Claude CLI: %s", CLAUDE_EXE)
+else:
+    log.error("claude.exe not found! Haiku scoring will fail.")
 
 # ---------------------------------------------------------------------------
 # Low-level call
@@ -22,6 +61,10 @@ GIT_BASH = r"C:\Program Files\Git\bin\bash.exe"
 
 def call_claude(prompt: str, model: str = "haiku", max_turns: int = 1, timeout: int = 120) -> str:
     """Call Claude CLI in print mode. Returns raw text output. Retries once on refusal."""
+    if not CLAUDE_EXE:
+        log.error("Claude CLI not available (binary not found)")
+        return ""
+
     env = os.environ.copy()
     env["CLAUDE_CODE_GIT_BASH_PATH"] = GIT_BASH
 
