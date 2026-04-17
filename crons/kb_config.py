@@ -33,7 +33,12 @@ NICK_EMAIL = "nick@darkhorseads.com"
 # ---------------------------------------------------------------------------
 # Claude CLI (on Nitro)
 # ---------------------------------------------------------------------------
-CLAUDE_EXE = r"C:\Users\User\AppData\Local\Packages\Claude_pzs8sxrjxfjjc\LocalCache\Roaming\Claude\claude-code\2.1.63\claude.exe"
+# Claude CLI — use claude_scoring.CLAUDE_EXE (auto-detected) instead of hardcoded path
+# This hardcoded value is kept for backwards compat but should NOT be used (will break on updates)
+try:
+    from claude_scoring import CLAUDE_EXE
+except ImportError:
+    CLAUDE_EXE = None  # will be detected at runtime by claude_scoring
 GIT_BASH = r"C:\Program Files\Git\bin\bash.exe"
 
 # ---------------------------------------------------------------------------
