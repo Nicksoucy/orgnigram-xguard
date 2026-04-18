@@ -274,22 +274,8 @@ def check_and_run_missed_jobs():
         else:
             log.info("OK: %s already ran today", job_id)
 
-    # Check weekly report — if it's Friday and past 15:00 and hasn't run this week
-    if now.weekday() == 4 and now.hour >= 15:
-        monday = now - __import__("datetime").timedelta(days=now.weekday())
-        monday_str = monday.strftime("%Y-%m-%d")
-        rows = supabase_get("cron_logs", {
-            "person_id": "eq.v1",
-            "cron_type": "eq.weekly_report",
-            "status": "eq.success",
-            "started_at": f"gte.{monday_str}T00:00:00Z",
-            "limit": "1",
-        })
-        if not rows:
-            log.info("CATCH-UP: weekly_report missed this Friday — triggering now")
-            run_job_safe("weekly_report")
-        else:
-            log.info("OK: weekly_report already ran this week")
+    # Weekly report catch-up DISABLED — sac_weekly_v3 scheduled task runs
+    # Monday 07:00. Old nitro_weekly_report.py has schema mismatches.
 
     log.info("Missed job check complete.")
 
@@ -420,10 +406,12 @@ def _fallback_loop():
                 for job_id in ["dom_daily", "heidys_daily", "sac_daily"]:
                     run_job_safe(job_id)
 
-            # Weekly report: Friday after 15:00
-            if now.weekday() == 4 and hhmm >= "15:00" and last_weekly_run != today_str:
-                last_weekly_run = today_str
-                run_job_safe("weekly_report")
+            # Weekly report: DISABLED — sac_weekly_v3 scheduled task handles this
+            # on Monday 07:00. Old nitro_weekly_report.py has schema mismatches
+            # with current Supabase tables. Keep commented for historical ref.
+            # if now.weekday() == 4 and hhmm >= "15:00" and last_weekly_run != today_str:
+            #     last_weekly_run = today_str
+            #     run_job_safe("weekly_report")
 
             time.sleep(HEARTBEAT_INTERVAL_SEC)
 
