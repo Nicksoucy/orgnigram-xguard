@@ -32,7 +32,9 @@ Tous les scripts sont sur [[Nitro-GPU]] a `C:\Users\user\crons\`
 | Nom | Script | Demarrage |
 |-----|--------|-----------|
 | XGuard_ProgressServer | nitro_progress_server.py | ONLOGON |
-| XGuard_Watchdog | nitro_watchdog.py | ONLOGON |
+| XGuard_Heartbeat | nitro_heartbeat.py | ONLOGON |
+
+**Note:** `XGuard_Watchdog` (nitro_watchdog.py) est DISABLED depuis le 18 avril 2026. Remplace par `XGuard_Heartbeat` (plus simple, pas de catch-up dangereux). Le scheduler APScheduler doublonnait Windows Task Scheduler et causait des bugs ([[../Decisions/index|voir decision log]]).
 
 ## Scripts Principaux
 
