@@ -59,11 +59,15 @@ SCHEDULE = {
         "description": "Heidys daily sync",
     },
     "sac_daily": {
+        # DISABLED — XGuard_SAC_Daily_v2 scheduled task (19:00 daily) handles
+        # this. The watchdog catch-up was causing false triggers when run
+        # early in the morning (would re-sync with only partial data).
         "module": "nitro_sac_daily",
         "func": "main",
         "cron": {"hour": 23, "minute": 30},
         "person_ids": ["L3", "s2", "s3"],
-        "description": "SAC daily sync (Hamza, Lilia, Sekou)",
+        "description": "SAC daily sync (Hamza, Lilia, Sekou) — DISABLED",
+        "disabled": True,
     },
     "weekly_report": {
         "module": "nitro_weekly_report",
@@ -245,34 +249,49 @@ def check_and_run_missed_jobs():
         if job_id == "weekly_report":
             continue
 
+        # Skip explicitly disabled jobs
+        if config.get("disabled"):
+            log.info("SKIP: %s is disabled in SCHEDULE", job_id)
+            continue
+
         cron = config["cron"]
         scheduled_hour = cron.get("hour", 23)
         scheduled_minute = cron.get("minute", 0)
 
-        # Only trigger catch-up if we're past the scheduled time
+        # SAFETY: Never trigger catch-up before the scheduled time.
+        # Also never trigger between 00:00-18:00 — if a cron missed
+        # yesterday's run, we DO NOT want to re-run it with partial
+        # data from the current morning. Catch-up window = scheduled
+        # hour until end of day only.
         if now.hour < scheduled_hour or (now.hour == scheduled_hour and now.minute < scheduled_minute):
             continue
 
-        # Check if any person_id in this job has a successful run today
-        has_run_today = False
+        # Check if any person_id in this job has a successful run
+        # in the LAST 6 HOURS (not just today). This prevents false
+        # triggers early in the morning when "today" has no data yet
+        # but yesterday's run was recent enough.
+        from datetime import timezone as _tz, timedelta as _td
+        six_hours_ago = (now - _td(hours=6)).astimezone(_tz.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+        has_recent_run = False
         for pid in config["person_ids"]:
             rows = supabase_get("cron_logs", {
                 "person_id": f"eq.{pid}",
                 "cron_type": "eq.daily_sync",
                 "status": "eq.success",
-                "started_at": f"gte.{today_str}T00:00:00Z",
+                "started_at": f"gte.{six_hours_ago}",
                 "order": "started_at.desc",
                 "limit": "1",
             })
             if rows:
-                has_run_today = True
+                has_recent_run = True
                 break
 
-        if not has_run_today:
+        if not has_recent_run:
             log.info("CATCH-UP: %s missed today's run — triggering now", job_id)
             run_job_safe(job_id)
         else:
-            log.info("OK: %s already ran today", job_id)
+            log.info("OK: %s already ran in last 6h", job_id)
 
     # Weekly report catch-up DISABLED — sac_weekly_v3 scheduled task runs
     # Monday 07:00. Old nitro_weekly_report.py has schema mismatches.
@@ -401,10 +420,13 @@ def _fallback_loop():
             heartbeat()
 
             # Daily jobs: run once per day after 23:00
+            # SKIP sac_daily — XGuard_SAC_Daily_v2 scheduled task handles it
+            # at 19:00. Including it here was causing duplicate/early runs.
             if hhmm >= "23:00" and last_daily_run != today_str:
                 last_daily_run = today_str
-                for job_id in ["dom_daily", "heidys_daily", "sac_daily"]:
-                    run_job_safe(job_id)
+                for job_id in ["dom_daily", "heidys_daily"]:
+                    if not SCHEDULE.get(job_id, {}).get("disabled"):
+                        run_job_safe(job_id)
 
             # Weekly report: DISABLED — sac_weekly_v3 scheduled task handles this
             # on Monday 07:00. Old nitro_weekly_report.py has schema mismatches

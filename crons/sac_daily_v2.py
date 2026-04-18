@@ -728,18 +728,31 @@ def main():
         # Send daily email report via SMTP
         if total_new > 0:
             try:
-                log.info("")
-                log.info("--- Sending daily email report ---")
-                import subprocess as _sp
-                _result = _sp.run(
-                    [sys.executable, str(Path(__file__).parent / "daily_email_report.py"), date_str],
-                    capture_output=True, text=True, timeout=300,
-                    cwd=str(Path(__file__).parent)
-                )
-                if _result.returncode == 0:
-                    log.info("Daily email sent!")
+                # SAFETY: Only send daily email if we're past 17h local time.
+                # If the script runs earlier (e.g. watchdog catch-up in the
+                # morning), we'd send a report with only partial data. This
+                # prevents incomplete reports from being emailed to Hamza.
+                now_local = datetime.now()
+                if now_local.hour < 17:
+                    log.warning("")
+                    log.warning("--- Email SKIPPED: current hour is %d:%02d (< 17:00)",
+                                now_local.hour, now_local.minute)
+                    log.warning("    Daily reports should only be sent at end of day.")
+                    log.warning("    Transcription + scoring done, but email not sent.")
+                    log.warning("    The 19:00 cron will re-score any new calls and send the real email.")
                 else:
-                    log.warning("Daily email failed: %s", _result.stderr[:200])
+                    log.info("")
+                    log.info("--- Sending daily email report ---")
+                    import subprocess as _sp
+                    _result = _sp.run(
+                        [sys.executable, str(Path(__file__).parent / "daily_email_report.py"), date_str],
+                        capture_output=True, text=True, timeout=300,
+                        cwd=str(Path(__file__).parent)
+                    )
+                    if _result.returncode == 0:
+                        log.info("Daily email sent!")
+                    else:
+                        log.warning("Daily email failed: %s", _result.stderr[:200])
             except Exception as email_err:
                 log.warning("Daily email failed (non-critical): %s", email_err)
 
