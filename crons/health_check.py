@@ -220,6 +220,35 @@ def check_sheets_sync(date_str):
     return issues
 
 
+def check_prospects_intelligence():
+    """Check the prospects_intelligence table is fresh."""
+    issues = []
+    # Count total prospects
+    total = sb_get("prospects_intelligence?select=id&limit=1")
+    if isinstance(total, dict) and "error" in total:
+        return issues  # Table doesn't exist yet
+
+    # Check latest update — should be recent (aggregator runs 4am daily)
+    rows = sb_get("prospects_intelligence?select=updated_at&order=updated_at.desc&limit=1")
+    if not rows or isinstance(rows, dict):
+        issues.append(("WARNING", "ProspectsIntel", "Table prospects_intelligence vide"))
+        return issues
+
+    latest = rows[0].get("updated_at")
+    if latest:
+        try:
+            from datetime import datetime as _dt, timezone as _tz
+            last_dt = _dt.fromisoformat(latest.replace("Z", "+00:00"))
+            now = _dt.now(_tz.utc) if last_dt.tzinfo else _dt.now()
+            hours_old = (now - last_dt).total_seconds() / 3600
+            if hours_old > 30:  # aggregator runs daily, so > 30h = stale
+                issues.append(("WARNING", "ProspectsIntel", f"Table stale: {hours_old:.0f}h sans update"))
+        except Exception:
+            pass
+
+    return issues
+
+
 def run_all_checks(date_str):
     """Run all health checks and return issues list."""
     all_issues = []
@@ -253,6 +282,11 @@ def run_all_checks(date_str):
 
     log.info("6. Google Sheets sync...")
     issues = check_sheets_sync(date_str)
+    all_issues.extend(issues)
+    log.info("   %d issues", len(issues))
+
+    log.info("7. Prospects intelligence freshness...")
+    issues = check_prospects_intelligence()
     all_issues.extend(issues)
     log.info("   %d issues", len(issues))
 

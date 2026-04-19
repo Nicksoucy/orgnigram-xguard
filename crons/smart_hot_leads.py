@@ -56,6 +56,7 @@ from kb_config import (
 )
 from ghl_helpers import ghl_find_contact_by_phone, ghl_has_tag, ghl_log_action
 from prospects_helpers import get_prospect_full_context
+from sms_validator import validate_sms
 from claude_scoring import call_claude
 
 # JustCall SMS send config
@@ -625,6 +626,19 @@ def main():
             continue
 
         log.info("  Generated SMS: %s", sms_body[:100])
+
+        # VALIDATE the SMS before any send/dry-run logging
+        is_valid, reason = validate_sms(sms_body, recipient_name=name)
+        if not is_valid:
+            log.warning("  SMS REJECTED by validator: %s", reason)
+            track(phone, name, ghl_id, sms_body, context_summary, priority, "error",
+                  error=f"Validator rejected: {reason}")
+            results.append({
+                "phone": phone, "name": name, "priority": priority,
+                "context_summary": context_summary, "sms_body": sms_body,
+                "status": "error",
+            })
+            continue
 
         # Send or dry-run
         if args.dry_run:
