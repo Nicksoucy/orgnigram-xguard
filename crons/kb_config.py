@@ -31,6 +31,31 @@ GMAIL_APP_PASSWORD = "kjaqmxuewwzkxcif"
 NICK_EMAIL = "nick@darkhorseads.com"
 
 # ---------------------------------------------------------------------------
+# GoHighLevel (GHL) API
+# ---------------------------------------------------------------------------
+GHL_BASE = "https://services.leadconnectorhq.com"
+GHL_PIT_TOKEN = "pit-7de455ab-c46e-47a4-af9e-0b07a6c3a1ee"
+GHL_LOCATION = "dfkLurZY2ADWAUZl4zYc"
+GHL_API_VERSION = "2021-07-28"
+GHL_HEADERS = {
+    "Authorization": f"Bearer {GHL_PIT_TOKEN}",
+    "Version": GHL_API_VERSION,
+    "Content-Type": "application/json",
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/124.0.0.0 Safari/537.36",
+}
+
+# ---------------------------------------------------------------------------
+# Google Sheets — Jessica's inscription tracking sheet
+# ---------------------------------------------------------------------------
+import os as _os
+_BASE_DIR = _os.path.dirname(_os.path.abspath(__file__))
+GOOGLE_OAUTH_JSON = _os.path.join(_BASE_DIR, "secrets", "google_oauth.json")
+GOOGLE_TOKEN_JSON = _os.path.join(_BASE_DIR, "secrets", "google_token.json")
+GOOGLE_SHEETS_SCOPES = ["https://www.googleapis.com/auth/spreadsheets.readonly"]
+JESSICA_SHEET_ID = "11lHzYWzRJXsDWCk9soYu2uKwOFPSqqKe3QfyHzq0AKc"
+XGUARD_PAID_TAG = "xguard paid"
+
+# ---------------------------------------------------------------------------
 # Claude CLI (on Nitro)
 # ---------------------------------------------------------------------------
 # Claude CLI — use claude_scoring.CLAUDE_EXE (auto-detected) instead of hardcoded path

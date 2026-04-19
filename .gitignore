@@ -8,3 +8,5 @@ __pycache__/
 *.pyc
 crons/_*.py
 smart_stats_*.json
+crons/secrets/
+crons/secrets/*.json
