@@ -97,6 +97,40 @@ def ghl_find_contact_by_email(email):
     return exact[0]
 
 
+def ghl_find_contact_by_phone(phone):
+    """Find a GHL contact by phone number. Returns contact dict or None.
+    Uses the /contacts/search/duplicate endpoint (same as nitro_heidys_daily).
+    """
+    if not phone:
+        return None
+
+    # Normalize: keep only digits, ensure +1 prefix
+    digits = "".join(c for c in str(phone) if c.isdigit())
+    if len(digits) == 10:
+        clean = f"+1{digits}"
+    elif len(digits) == 11 and digits.startswith("1"):
+        clean = f"+{digits}"
+    else:
+        clean = f"+{digits}" if digits else ""
+
+    if not clean:
+        return None
+
+    r = _request("GET", "/contacts/search/duplicate", params={
+        "locationId": GHL_LOCATION,
+        "number": clean,
+    })
+
+    if r.status_code != 200:
+        # 404 is normal (not found), don't warn
+        if r.status_code != 404:
+            log.warning("GHL phone search %s -> %d", clean, r.status_code)
+        return None
+
+    data = r.json()
+    return data.get("contact") or data
+
+
 def ghl_get_contact(contact_id):
     """Get full contact details by ID."""
     r = _request("GET", f"/contacts/{contact_id}")
