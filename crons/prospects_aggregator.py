@@ -70,8 +70,34 @@ log = logging.getLogger("prospects_agg")
 # Supabase helpers with pagination
 # ---------------------------------------------------------------------------
 
+def _request_with_retry(method, url, max_retries=3, **kwargs):
+    """Make an HTTP request with exponential backoff on transient failures.
+    Retries on: connection errors, timeouts, 429/500/502/503/504.
+    """
+    import time as _time
+    last_exc = None
+    for attempt in range(max_retries):
+        try:
+            r = requests.request(method, url, **kwargs)
+            if r.status_code in (429, 500, 502, 503, 504):
+                backoff = 2 ** attempt
+                log.warning("Transient HTTP %d on %s — retry in %ds", r.status_code, url[:80], backoff)
+                _time.sleep(backoff)
+                continue
+            return r
+        except (requests.exceptions.ConnectionError, requests.exceptions.Timeout) as e:
+            last_exc = e
+            backoff = 2 ** attempt
+            log.warning("Network error on %s (attempt %d/%d): %s — retry in %ds",
+                        url[:80], attempt + 1, max_retries, e, backoff)
+            _time.sleep(backoff)
+    if last_exc:
+        raise last_exc
+    return r  # Last response even if it was a retryable failure
+
+
 def sb_select_all(path, batch_size=1000):
-    """Fetch all rows with automatic pagination."""
+    """Fetch all rows with automatic pagination + retry."""
     all_rows = []
     offset = 0
     while True:
@@ -79,7 +105,11 @@ def sb_select_all(path, batch_size=1000):
         sep = "&" if "?" in path else "?"
         url += f"{sep}limit={batch_size}&offset={offset}"
         headers = {"apikey": SUPABASE_KEY, "Authorization": f"Bearer {SUPABASE_KEY}"}
-        r = requests.get(url, headers=headers, timeout=60)
+        try:
+            r = _request_with_retry("GET", url, headers=headers, timeout=60)
+        except Exception as e:
+            log.error("sb_select_all failed permanently on %s: %s", path, e)
+            break
         if r.status_code != 200:
             log.warning("Fetch failed (%d): %s", r.status_code, r.text[:200])
             break
@@ -94,7 +124,7 @@ def sb_select_all(path, batch_size=1000):
 
 
 def sb_exec_insert(table, rows):
-    """Bulk insert rows (not upsert) — used for timeline."""
+    """Bulk insert rows (not upsert) — used for timeline. With retry."""
     if not rows:
         return
     url = f"{SUPABASE_URL}/rest/v1/{table}"
@@ -104,12 +134,19 @@ def sb_exec_insert(table, rows):
         "Content-Type": "application/json",
         "Prefer": "return=minimal,resolution=ignore-duplicates",
     }
-    # Chunks of 500
+    failed_chunks = 0
     for i in range(0, len(rows), 500):
         chunk = rows[i:i + 500]
-        r = requests.post(url, headers=headers, json=chunk, timeout=60)
-        if r.status_code not in (200, 201, 204):
-            log.warning("Timeline insert failed (%d): %s", r.status_code, r.text[:300])
+        try:
+            r = _request_with_retry("POST", url, headers=headers, json=chunk, timeout=90)
+            if r.status_code not in (200, 201, 204):
+                log.warning("Timeline insert chunk %d failed (%d): %s", i, r.status_code, r.text[:300])
+                failed_chunks += 1
+        except Exception as e:
+            log.error("Timeline insert chunk %d exception: %s", i, e)
+            failed_chunks += 1
+    if failed_chunks:
+        log.warning("%d timeline chunks failed out of %d", failed_chunks, (len(rows) + 499) // 500)
 
 
 # ---------------------------------------------------------------------------
@@ -553,7 +590,7 @@ def upsert_prospects(registry, dry_run=False):
     for i in range(0, len(rows), 500):
         chunk = rows[i:i + 500]
         try:
-            r = requests.post(url, headers=headers, json=chunk, timeout=90)
+            r = _request_with_retry("POST", url, headers=headers, json=chunk, timeout=90)
             if r.status_code in (200, 201, 204):
                 saved += len(chunk)
                 log.info("  Batch %d-%d saved", i, i + len(chunk))

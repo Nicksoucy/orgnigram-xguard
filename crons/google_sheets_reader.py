@@ -85,18 +85,23 @@ def _find_column(headers, patterns):
 
 
 def _is_paid(value):
-    """Check if a cell value indicates paid status."""
+    """Check if a cell value indicates paid status.
+    Uses word boundaries for TRUTHY matching to avoid false positives
+    like 'no' matching because 'o' is a truthy keyword.
+    """
     if value is None or value == "":
         return False
     v = str(value).lower().strip()
     if not v:
         return False
-    # Truthy keywords
+    # Truthy keywords — exact match OR word-boundary match (not substring)
     if v in TRUTHY:
         return True
-    # Contains truthy
     for t in TRUTHY:
-        if t in v:
+        # Skip very short keywords (1-2 chars) for substring match — too risky
+        if len(t) < 3:
+            continue
+        if re.search(rf'\b{re.escape(t)}\b', v):
             return True
     # Has a date format (likely payment date)
     if re.search(r'\d{4}-\d{2}-\d{2}|\d{1,2}/\d{1,2}/\d{2,4}', v):
