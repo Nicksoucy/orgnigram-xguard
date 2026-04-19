@@ -32,9 +32,13 @@ class TestBuildContextPrompt(unittest.TestCase):
             "priority": "MEDIUM",
         }
         prompt = self.build(lead)
-        self.assertIn("Jean Dupont", prompt)
+        # New prompt uses first_name for greeting, not full name
+        self.assertIn("Jean", prompt)
         self.assertIn("1 fois AUJOURD'HUI", prompt)
         self.assertIn("(438) 802-0475", prompt)
+        # Verify service-not-sales tone
+        self.assertIn("SUIVI SERVICE", prompt)
+        self.assertIn("PAS un message de ventes", prompt)
 
     @patch("smart_hot_leads.get_prospect_full_context")
     def test_lead_with_full_history(self, mock_ctx):
