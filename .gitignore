@@ -10,3 +10,6 @@ crons/_*.py
 smart_stats_*.json
 crons/secrets/
 crons/secrets/*.json
+
+# Node (for any web dashboard work)
+node_modules/

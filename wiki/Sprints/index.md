@@ -28,5 +28,6 @@ updated: 2026-04-12
 | Sprint | Titre | Priorite | Notes |
 |--------|-------|----------|-------|
 | 7 | Telegram sur Nitro | Moyenne | Bloque — besoin Claude Code v2.1.80+ sur Nitro |
+| 13 | [[Sprint-13-Auto-Reply-Real-Context\|Auto-Reply avec vrai contexte]] | Haute | PAUSE — analyser vraies reponses Hamza d'abord |
 
 Voir: [[../Decisions/index]]
