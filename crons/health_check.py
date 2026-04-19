@@ -196,6 +196,30 @@ def check_disk_space():
     return issues
 
 
+def check_sheets_sync(date_str):
+    """Check if Google Sheets -> GHL sync ran today and had reasonable success rate."""
+    issues = []
+    rows = sb_get(f"google_sheets_sync_log?run_date=eq.{date_str}&select=status")
+
+    if isinstance(rows, dict) and "error" in rows:
+        # Table might not exist yet — silent skip
+        return issues
+
+    if not rows:
+        # Sync hasn't run today yet — only flag if after 22h (cron is 21h)
+        now = datetime.now()
+        if now.hour >= 22:
+            issues.append(("WARNING", "SheetsSync", f"Aucun sync du Google Sheet pour {date_str}"))
+        return issues
+
+    total = len(rows)
+    errors = sum(1 for r in rows if r.get("status") == "error")
+    if total > 0 and errors / total > 0.2:
+        issues.append(("CRITICAL", "SheetsSync", f"{errors}/{total} erreurs dans le sync Google Sheet ({errors/total*100:.0f}%)"))
+
+    return issues
+
+
 def run_all_checks(date_str):
     """Run all health checks and return issues list."""
     all_issues = []
@@ -224,6 +248,11 @@ def run_all_checks(date_str):
 
     log.info("5. Disk space...")
     issues = check_disk_space()
+    all_issues.extend(issues)
+    log.info("   %d issues", len(issues))
+
+    log.info("6. Google Sheets sync...")
+    issues = check_sheets_sync(date_str)
     all_issues.extend(issues)
     log.info("   %d issues", len(issues))
 
