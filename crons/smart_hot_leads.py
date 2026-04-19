@@ -371,28 +371,50 @@ def build_context_prompt(lead):
 
     context = "\n".join(context_parts) if context_parts else "Aucun contexte disponible."
 
-    prompt = f"""Tu rediges un SMS personnalise pour un PROSPECT (pas encore inscrit a la formation XGuard Academie).
+    prompt = f"""Tu rediges un SMS de SUIVI SERVICE a la clientele pour une personne qui a essaye de nous joindre.
 
-CONTEXTE SUR {name or 'ce prospect'}:
+L'ANGLE CRITIQUE:
+Ce message est un geste de service, PAS un message de ventes. On veut juste s'assurer qu'elle a eu les infos qu'elle cherchait. Si elle en a besoin de plus, elle peut rappeler. Sinon c'est parfait.
+
+NE PAS:
+- Pousser pour qu'elle s'inscrive ("on aimerait discuter", "reserver votre place")
+- Parler de "formation XGuard" ou "Academie XGuard" comme un pitch
+- Demander quand elle veut commencer, s'inscrire, etc.
+- Dire "on n'a pas eu le temps de repondre" ou "on a manque votre appel"
+- Mentionner le paiement, les prix, les dates specifiques
+- Donner l'impression qu'on la chase
+
+OUI:
+- Ton chaleureux, humain, comme un ami qui prend des nouvelles
+- Focus sur ELLE ("vos questions", "ce que vous cherchiez")
+- Message court, genre "juste pour etre sur que..."
+- Laisser la porte ouverte sans pression
+
+EXEMPLES du ton exact qu'on veut:
+
+Exemple 1 (appel manque):
+"Bonjour Marie, merci de ton appel de ce matin. Ceci est juste un petit message pour etre sur que tu as eu toutes les informations que tu cherchais. Si tu as d'autres questions, nous sommes disponibles au (438) 802-0475."
+
+Exemple 2 (SMS sans reponse):
+"Bonjour Jean, merci de ton message. On voulait juste verifier si tu as recu toutes les reponses a tes questions. Sinon, on est la au (438) 802-0475."
+
+Exemple 3 (a envoye un email):
+"Bonjour Sophie, merci pour ton courriel de la semaine derniere. On voulait s'assurer que tu as bien eu l'info dont tu avais besoin. Sinon, n'hesite pas au (438) 802-0475."
+
+CONTEXTE DE CETTE PERSONNE:
 {context}
 
-OBJECTIF: Redige un SMS court (max 320 caracteres, idealement 160) qui:
-1. Commence par "Bonjour {first_name or '[prenom]'}," (ou juste "Bonjour," si pas de nom)
-2. Fait reference a CE QU'IL A DEMANDE specifiquement (si on sait — utilise le contexte ci-dessus)
-3. Offre de l'aide ou une reponse a son interet precis
-4. Termine par "Appelez-nous au (438) 802-0475 — Academie XGuard"
+REGLES TECHNIQUES:
+- Max 320 caracteres, idealement 160
+- Commence par "Bonjour {first_name or '[prenom]'}," ou juste "Bonjour,"
+- Tutoiement (tu/ton/te) — c'est le Quebec, ton chaleureux, pas formel
+- Termine avec "(438) 802-0475" quelque part dans le message
+- Pas d'emojis, pas de guillemets, pas de markdown
+- Si on lui a DEJA envoye un SMS recemment, trouve une autre angle (ne repete pas)
+- Mentionne seulement des faits verifiables du contexte
+- Pas de "XGuard" "formation" "inscription" comme accroche — on vend pas
 
-RULES STRICTES:
-- Francais du Quebec, naturel, pas trop formel
-- Ne pas dire "vous n'avez pas repondu" ou "on vous a manque" — ton positif
-- Ne pas mentionner qu'il n'a pas paye, que c'est urgent, etc.
-- Pas d'emojis
-- Pas de guillemets dans le SMS
-- Mentionne seulement des faits qu'on sait vraiment
-- Si on lui a deja envoye un SMS, DIFFERENCIE (pas la meme chose 2 fois)
-- Si aucun contexte utile: message generique mais chaleureux
-
-Retourne UNIQUEMENT le texte du SMS (aucune explication, aucune markup)."""
+Retourne UNIQUEMENT le texte du SMS, rien d'autre."""
 
     return prompt
 
@@ -651,33 +673,60 @@ def main():
             sent_count += 1
             continue
 
-        # Real send
-        ok, resp = send_sms(phone, sms_body)
-        if ok:
-            log.info("  SMS SENT")
-            track(phone, name, ghl_id, sms_body, context_summary, priority, "sent")
+        # Production mode: create pending approval + send to Telegram
+        # NO longer auto-send. User must approve via Telegram buttons.
+        try:
+            from telegram_bot import send_approval_request
 
-            # Log to GHL as a note (so Hamza sees it in contact profile)
-            if ghl_id:
-                try:
-                    ghl_log_action(
-                        ghl_id,
-                        action=f"SMS envoye automatique — Smart Hot Leads ({priority})",
-                        details=f"Contexte: {context_summary}\n\nMessage:\n{sms_body}",
-                    )
-                except Exception as e:
-                    log.warning("  GHL note add failed (non-critical): %s", e)
+            # Insert pending approval
+            approval_data = {
+                "phone_number": phone,
+                "contact_name": name,
+                "ghl_contact_id": ghl_id,
+                "sms_body": sms_body,
+                "context_summary": context_summary,
+                "priority": priority,
+                "status": "pending",
+                "run_date": date.today().isoformat(),
+            }
+            sb_upsert("pending_sms_approvals", approval_data)
 
-            results.append({
-                "phone": phone, "name": name, "priority": priority,
-                "context_summary": context_summary, "sms_body": sms_body,
-                "status": "sent",
-            })
-            sent_count += 1
-            time.sleep(1.5)  # JustCall rate limit
-        else:
-            log.error("  SMS FAILED: %s", resp[:200])
-            track(phone, name, ghl_id, sms_body, context_summary, priority, "error", error=resp)
+            # Find the ID we just inserted
+            approvals = sb_get(
+                f"pending_sms_approvals?phone_number=eq.{phone}"
+                f"&run_date=eq.{date.today().isoformat()}"
+                f"&order=id.desc&limit=1"
+            )
+            if approvals and not isinstance(approvals, dict):
+                approval_id = approvals[0]["id"]
+                # Send to Telegram for approval
+                telegram_ok = send_approval_request(approval_id)
+                if telegram_ok:
+                    log.info("  SMS PENDING APPROVAL (approval_id=%s, sent to Telegram)", approval_id)
+                    track(phone, name, ghl_id, sms_body, context_summary, priority, "would_send")
+                    results.append({
+                        "phone": phone, "name": name, "priority": priority,
+                        "context_summary": context_summary, "sms_body": sms_body,
+                        "status": "pending_approval",
+                    })
+                    sent_count += 1
+                else:
+                    log.error("  Telegram send failed — approval created but not notified")
+                    results.append({
+                        "phone": phone, "name": name, "priority": priority,
+                        "context_summary": context_summary, "sms_body": sms_body,
+                        "status": "telegram_failed",
+                    })
+            else:
+                log.error("  Approval insert failed")
+                results.append({
+                    "phone": phone, "name": name, "priority": priority,
+                    "context_summary": context_summary, "sms_body": sms_body,
+                    "status": "error",
+                })
+        except Exception as e:
+            log.error("  Approval workflow error: %s", e, exc_info=True)
+            track(phone, name, ghl_id, sms_body, context_summary, priority, "error", error=str(e))
             results.append({
                 "phone": phone, "name": name, "priority": priority,
                 "context_summary": context_summary, "sms_body": sms_body,
