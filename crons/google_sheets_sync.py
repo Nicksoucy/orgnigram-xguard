@@ -38,7 +38,7 @@ from kb_config import (
 from google_sheets_reader import read_sheet
 from ghl_helpers import (
     ghl_find_contact_by_email, ghl_create_contact,
-    ghl_add_tag, ghl_has_tag,
+    ghl_add_tag, ghl_has_tag, ghl_log_action,
 )
 
 # Logging setup
@@ -105,6 +105,15 @@ def process_row(row, dry_run=False):
             ok = ghl_add_tag(contact_id, XGUARD_PAID_TAG)
             if ok:
                 track(row, "tagged", contact_id=contact_id, tag_added=True)
+                # Log to GHL as a note
+                try:
+                    ghl_log_action(
+                        contact_id,
+                        action=f"Tag '{XGUARD_PAID_TAG}' ajoute — Sync Google Sheet",
+                        details=f"Source: {row['source_tab']} ligne {row['source_row']}\nPaiement: {row.get('paid_indicator','')}",
+                    )
+                except Exception as e:
+                    log.warning("GHL note failed for %s: %s", email, e)
                 return "tagged"
             else:
                 track(row, "error", contact_id=contact_id, error="ghl_add_tag failed")
@@ -125,6 +134,15 @@ def process_row(row, dry_run=False):
 
         if created and created.get("id"):
             track(row, "created_and_tagged", contact_id=created["id"], tag_added=True)
+            # Log to GHL as a note
+            try:
+                ghl_log_action(
+                    created["id"],
+                    action=f"Contact cree + tag '{XGUARD_PAID_TAG}' ajoute — Sync Google Sheet",
+                    details=f"Source: {row['source_tab']} ligne {row['source_row']}\nPaiement: {row.get('paid_indicator','')}",
+                )
+            except Exception as e:
+                log.warning("GHL note failed for %s: %s", email, e)
             return "created_and_tagged"
         else:
             track(row, "error", error="ghl_create_contact returned None")

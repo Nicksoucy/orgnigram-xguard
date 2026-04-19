@@ -215,6 +215,57 @@ def ghl_has_tag(contact, tag):
     return any((t or "").lower().strip() == tag_lower for t in tags)
 
 
+def ghl_add_note(contact_id, body, user_id=None):
+    """Add a note to a contact's profile in GHL.
+    Returns True on success.
+
+    Format we use (consistent prefix so Hamza can spot IA-generated notes):
+      [IA-automation] <action> @ <timestamp>
+      <details>
+    """
+    if not contact_id or not body:
+        return False
+
+    payload = {"body": body}
+    if user_id:
+        payload["userId"] = user_id
+
+    r = _request("POST", f"/contacts/{contact_id}/notes", json=payload)
+
+    if r.status_code in (200, 201):
+        return True
+
+    log.warning("GHL add_note %s -> %d: %s", contact_id, r.status_code, r.text[:200])
+    return False
+
+
+def ghl_log_action(contact_id, action, details=None):
+    """Log a standardized IA-automation action note to GHL.
+
+    Args:
+      contact_id: GHL contact ID
+      action: Short verb, e.g. "SMS envoye", "Email envoye", "Tag ajoute"
+      details: Additional context (SMS body, etc.)
+
+    Creates a note like:
+      [IA-automation 2026-04-19 14:23]
+      SMS envoye — Hot Leads auto
+
+      Bonjour Jean, merci pour votre appel...
+    """
+    if not contact_id:
+        return False
+
+    from datetime import datetime
+    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M")
+
+    body = f"[IA-automation {timestamp}]\n{action}"
+    if details:
+        body += f"\n\n{details}"
+
+    return ghl_add_note(contact_id, body)
+
+
 if __name__ == "__main__":
     # Quick test
     logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
