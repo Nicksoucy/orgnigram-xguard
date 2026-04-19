@@ -156,6 +156,22 @@ def ghl_add_tag(contact_id, tag):
     return False
 
 
+def ghl_remove_tag(contact_id, tag):
+    """Remove a tag from a contact.
+    Returns True on success.
+    """
+    if not contact_id or not tag:
+        return False
+
+    r = _request("DELETE", f"/contacts/{contact_id}/tags", json={"tags": [tag]})
+
+    if r.status_code in (200, 201, 204):
+        return True
+
+    log.warning("GHL remove_tag %s/%s -> %d: %s", contact_id, tag, r.status_code, r.text[:200])
+    return False
+
+
 def ghl_has_tag(contact, tag):
     """Check if a contact dict has a tag (case-insensitive)."""
     if not contact or not tag:

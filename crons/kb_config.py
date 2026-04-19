@@ -53,7 +53,7 @@ GOOGLE_OAUTH_JSON = _os.path.join(_BASE_DIR, "secrets", "google_oauth.json")
 GOOGLE_TOKEN_JSON = _os.path.join(_BASE_DIR, "secrets", "google_token.json")
 GOOGLE_SHEETS_SCOPES = ["https://www.googleapis.com/auth/spreadsheets.readonly"]
 JESSICA_SHEET_ID = "11lHzYWzRJXsDWCk9soYu2uKwOFPSqqKe3QfyHzq0AKc"
-XGUARD_PAID_TAG = "xguard paid"
+XGUARD_PAID_TAG = "gard paid"  # real tag used by Jessica's workflow in GHL
 
 # ---------------------------------------------------------------------------
 # Claude CLI (on Nitro)
