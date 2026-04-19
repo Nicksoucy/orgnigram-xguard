@@ -55,6 +55,7 @@ from kb_config import (
     XGUARD_PAID_TAG,  # 'gard paid'
 )
 from ghl_helpers import ghl_find_contact_by_phone, ghl_has_tag, ghl_log_action
+from prospects_helpers import get_prospect_full_context
 from claude_scoring import call_claude
 
 # JustCall SMS send config
@@ -249,7 +250,24 @@ def build_leads(date_str):
 def recently_sms_sent(phone):
     """Check if we SMS'd this number in the last THROTTLE_DAYS days.
     Returns True if yes (should skip).
+    Uses prospects_intelligence (which is aggregated nightly) for speed.
     """
+    # Primary check: prospects_intelligence.last_our_sms_at
+    try:
+        from prospects_helpers import get_prospect
+        p = get_prospect(phone=phone)
+        if p and p.get("last_our_sms_at"):
+            last_sms = datetime.fromisoformat(p["last_our_sms_at"].replace("Z", "+00:00"))
+            if last_sms.tzinfo:
+                now = datetime.now(last_sms.tzinfo)
+            else:
+                now = datetime.now()
+            if (now - last_sms).days < THROTTLE_DAYS:
+                return True
+    except Exception as e:
+        log.debug("prospects_intelligence check failed: %s — falling back", e)
+
+    # Fallback: direct query on hot_sms_sent
     since = (datetime.now() - timedelta(days=THROTTLE_DAYS)).isoformat()
     rows = sb_get(
         f"hot_sms_sent?phone_number=eq.{phone}&status=in.(sent,would_send)"
@@ -263,51 +281,114 @@ def recently_sms_sent(phone):
 # ---------------------------------------------------------------------------
 
 def build_context_prompt(lead):
-    """Build a context-rich prompt for Haiku to generate a personalized SMS."""
+    """Build a context-rich prompt for Haiku to generate a personalized SMS.
+    Uses the full prospect history from prospects_intelligence if available.
+    Falls back to today's data only if prospect not in the intelligence base.
+    """
     name = lead.get("name") or ""
     first_name = name.split()[0] if name else ""
+    phone = lead["number"]
 
+    # Try to get full prospect history from prospects_intelligence
+    full_context = None
+    try:
+        full_context = get_prospect_full_context(phone=phone, timeline_limit=10)
+    except Exception as e:
+        log.warning("  Could not fetch prospect intelligence: %s", e)
+
+    # Build context
     context_parts = []
 
+    # Today's activity (always include)
+    today_parts = []
     if lead["missed_count"] > 0:
         times_str = ", ".join(lead["call_times"][:3])
-        context_parts.append(
-            f"- Le prospect a appele {lead['missed_count']} fois aujourd'hui a {times_str} "
-            f"mais nous n'avons pas repondu."
+        today_parts.append(
+            f"- A appele {lead['missed_count']} fois AUJOURD'HUI a {times_str}, sans reponse."
         )
-
     if lead["sms_count"] > 0 and lead["sms_messages"]:
-        sms_text = "\n".join(f'  "{m[:300]}"' for m in lead["sms_messages"] if m)
-        context_parts.append(
-            f"- Le prospect a envoye {lead['sms_count']} SMS sans reponse. Derniers messages:\n{sms_text}"
+        sms_text = "\n".join(f'  "{m[:250]}"' for m in lead["sms_messages"] if m)
+        today_parts.append(
+            f"- A envoye {lead['sms_count']} SMS AUJOURD'HUI sans reponse. Messages:\n{sms_text}"
         )
 
-    if lead.get("email_subject"):
-        context_parts.append(
-            f"- Il a aussi envoye un email avec le sujet: \"{lead['email_subject']}\""
-        )
+    if today_parts:
+        context_parts.append("CE QUI S'EST PASSE AUJOURD'HUI:")
+        context_parts.extend(today_parts)
+
+    # Full history from prospects_intelligence
+    if full_context:
+        p = full_context["prospect"]
+        timeline = full_context.get("timeline", [])
+
+        context_parts.append("")
+        context_parts.append("HISTORIQUE COMPLET DE CE PROSPECT:")
+
+        # Interested programs
+        if p.get("program_interested"):
+            context_parts.append(f"- Interesse par: {p['program_interested']}")
+        elif p.get("programs_mentioned"):
+            context_parts.append(f"- Programmes mentionnes: {', '.join(p['programs_mentioned'][:3])}")
+
+        # Prior activity
+        prior_calls = (p.get("total_calls", 0) or 0) - (lead["missed_count"] or 0)
+        prior_sms = (p.get("total_sms_received", 0) or 0) - (lead["sms_count"] or 0)
+        prior_emails = p.get("total_emails_received", 0) or 0
+
+        if prior_calls > 0:
+            answered = p.get("answered_calls", 0) or 0
+            context_parts.append(f"- Historique appels (avant aujourd'hui): {prior_calls} appels ({answered} repondus)")
+        if prior_sms > 0:
+            context_parts.append(f"- Historique SMS: {prior_sms} SMS envoyes par lui avant aujourd'hui")
+        if prior_emails > 0:
+            context_parts.append(f"- Historique emails: {prior_emails} emails envoyes par lui")
+
+        # Our prior outreach (to avoid repeating ourselves)
+        times_we = p.get("times_we_contacted", 0) or 0
+        if times_we > 0:
+            last_sms_at = p.get("last_our_sms_at", "")[:10]
+            last_body = (p.get("last_our_sms_body") or "")[:150]
+            context_parts.append(
+                f"- ATTENTION: on lui a DEJA envoye {times_we} SMS (dernier: {last_sms_at}). "
+                f"Son dernier message de notre part etait: \"{last_body}\". "
+                f"NE PAS repeter la meme chose."
+            )
+
+        # Last few timeline events (for context on what they asked)
+        relevant_events = [e for e in timeline if e.get("event_type") in (
+            "sms_inbound", "email_inbound", "call_inbound"
+        )][:3]
+        if relevant_events:
+            context_parts.append("")
+            context_parts.append("DERNIERES INTERACTIONS (inbound):")
+            for ev in relevant_events:
+                etype = ev.get("event_type", "").replace("_", " ")
+                dt = (ev.get("event_date") or "")[:10]
+                content = (ev.get("content_excerpt") or "").strip()[:200]
+                if content:
+                    context_parts.append(f"  [{dt}] {etype}: {content}")
 
     context = "\n".join(context_parts) if context_parts else "Aucun contexte disponible."
 
-    prompt = f"""Tu rediges un SMS personnalise pour un PROSPECT (pas encore inscrit a la formation XGuard).
+    prompt = f"""Tu rediges un SMS personnalise pour un PROSPECT (pas encore inscrit a la formation XGuard Academie).
 
-CONTEXTE SUR CE PROSPECT:
-Nom: {name or 'Inconnu'}
+CONTEXTE SUR {name or 'ce prospect'}:
 {context}
 
 OBJECTIF: Redige un SMS court (max 320 caracteres, idealement 160) qui:
 1. Commence par "Bonjour {first_name or '[prenom]'}," (ou juste "Bonjour," si pas de nom)
-2. Fait reference a ce qu'il a demande/fait (si on sait) — personnalise
-3. Offre de l'aide ou une reponse a son interet
+2. Fait reference a CE QU'IL A DEMANDE specifiquement (si on sait — utilise le contexte ci-dessus)
+3. Offre de l'aide ou une reponse a son interet precis
 4. Termine par "Appelez-nous au (438) 802-0475 — Academie XGuard"
 
-RULES:
+RULES STRICTES:
 - Francais du Quebec, naturel, pas trop formel
 - Ne pas dire "vous n'avez pas repondu" ou "on vous a manque" — ton positif
 - Ne pas mentionner qu'il n'a pas paye, que c'est urgent, etc.
 - Pas d'emojis
 - Pas de guillemets dans le SMS
 - Mentionne seulement des faits qu'on sait vraiment
+- Si on lui a deja envoye un SMS, DIFFERENCIE (pas la meme chose 2 fois)
 - Si aucun contexte utile: message generique mais chaleureux
 
 Retourne UNIQUEMENT le texte du SMS (aucune explication, aucune markup)."""

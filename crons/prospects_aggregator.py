@@ -223,69 +223,63 @@ class Prospect:
         })
 
     def to_dict(self):
-        d = {}
-        if self.phone:
-            d["phone_normalized"] = self.phone
-        if self.email:
-            d["email_normalized"] = self.email
-        if self.ghl_id:
-            d["ghl_contact_id"] = self.ghl_id
-        if self.first_name:
-            d["first_name"] = self.first_name
-        if self.last_name:
-            d["last_name"] = self.last_name
-        if self.full_name:
-            d["full_name"] = self.full_name
-
-        d["has_gard_paid_tag"] = self.has_paid
-        if self.paid_date:
-            d["paid_date"] = self.paid_date.isoformat() if hasattr(self.paid_date, "isoformat") else self.paid_date
-        if self.paid_amount:
-            d["paid_amount"] = float(self.paid_amount)
-        if self.paid_source:
-            d["paid_source"] = self.paid_source
-
-        if self.program:
-            d["program_interested"] = self.program
-        if self.programs:
-            d["programs_mentioned"] = list(self.programs)
-
-        d["total_calls"] = self.total_calls
-        d["missed_calls"] = self.missed_calls
-        d["answered_calls"] = self.answered_calls
-        d["total_call_seconds"] = self.total_call_seconds
-        d["total_sms_received"] = self.total_sms_received
-        d["total_sms_sent"] = self.total_sms_sent
-        d["total_emails_received"] = self.total_emails_received
-        d["total_emails_sent"] = self.total_emails_sent
-
-        if self.first_contact:
-            d["first_contact_date"] = self.first_contact.isoformat()
-        if self.last_contact:
-            d["last_contact_date"] = self.last_contact.isoformat()
-            days_ago = (datetime.now(timezone.utc) - self.last_contact).days if self.last_contact.tzinfo else (datetime.now() - self.last_contact).days
-            d["days_since_last_inbound"] = days_ago
-        if self.last_inbound:
-            d["last_inbound_date"] = self.last_inbound.isoformat()
-        if self.last_outbound:
-            d["last_outbound_date"] = self.last_outbound.isoformat()
-
-        if self.last_our_sms_at:
-            d["last_our_sms_at"] = self.last_our_sms_at.isoformat()
-        if self.last_our_sms_body:
-            d["last_our_sms_body"] = self.last_our_sms_body[:500]
-        d["times_we_contacted"] = self.times_we_contacted
+        """Return a dict with ALL columns (None for missing) so bulk insert works.
+        PostgREST requires all rows in a batch to have identical keys.
+        """
+        # identity_key: COALESCE(phone, email, ghl_id) — never NULL, unique
+        identity_key = self.phone or self.email or self.ghl_id
 
         # Determine stage
         if self.has_paid:
-            d["stage"] = "paid"
+            stage = "paid"
         elif self.answered_calls > 0 or self.total_sms_received >= 2:
-            d["stage"] = "engaged"
+            stage = "engaged"
         else:
-            d["stage"] = "prospect"
+            stage = "prospect"
 
-        d["updated_at"] = datetime.now().isoformat()
-        return d
+        days_ago = None
+        if self.last_contact:
+            delta = (datetime.now(timezone.utc) - self.last_contact) if self.last_contact.tzinfo else (datetime.now() - self.last_contact)
+            days_ago = delta.days
+
+        def _iso(v):
+            if v is None:
+                return None
+            return v.isoformat() if hasattr(v, "isoformat") else v
+
+        return {
+            "identity_key": identity_key,
+            "phone_normalized": self.phone,
+            "email_normalized": self.email,
+            "ghl_contact_id": self.ghl_id,
+            "first_name": self.first_name,
+            "last_name": self.last_name,
+            "full_name": self.full_name,
+            "has_gard_paid_tag": self.has_paid,
+            "paid_date": _iso(self.paid_date),
+            "paid_amount": float(self.paid_amount) if self.paid_amount else None,
+            "paid_source": self.paid_source,
+            "program_interested": self.program,
+            "programs_mentioned": list(self.programs) if self.programs else None,
+            "stage": stage,
+            "total_calls": self.total_calls,
+            "missed_calls": self.missed_calls,
+            "answered_calls": self.answered_calls,
+            "total_call_seconds": self.total_call_seconds,
+            "total_sms_received": self.total_sms_received,
+            "total_sms_sent": self.total_sms_sent,
+            "total_emails_received": self.total_emails_received,
+            "total_emails_sent": self.total_emails_sent,
+            "first_contact_date": _iso(self.first_contact),
+            "last_contact_date": _iso(self.last_contact),
+            "last_inbound_date": _iso(self.last_inbound),
+            "last_outbound_date": _iso(self.last_outbound),
+            "days_since_last_inbound": days_ago,
+            "last_our_sms_at": _iso(self.last_our_sms_at),
+            "last_our_sms_body": (self.last_our_sms_body or "")[:500] if self.last_our_sms_body else None,
+            "times_we_contacted": self.times_we_contacted,
+            "updated_at": datetime.now().isoformat(),
+        }
 
 
 class ProspectRegistry:
@@ -537,30 +531,37 @@ def ingest_our_sms(registry):
 # ---------------------------------------------------------------------------
 
 def upsert_prospects(registry, dry_run=False):
-    """Upsert all prospects to the database."""
-    log.info("Writing %d prospects...", len(registry.all))
-    saved = 0
+    """Bulk upsert prospects (batches of 500 for speed)."""
+    rows = []
     for p in registry.all:
         if not (p.phone or p.email or p.ghl_id):
             continue
-        d = p.to_dict()
-        if dry_run:
-            saved += 1
-            continue
-        # Upsert by the most specific key we have
-        if p.phone:
-            conflict = "phone_normalized"
-        elif p.email:
-            conflict = "email_normalized"
-        else:
-            conflict = "ghl_contact_id"
+        rows.append(p.to_dict())
+
+    log.info("Writing %d prospects (bulk, batches of 500)...", len(rows))
+    if dry_run:
+        return len(rows)
+
+    saved = 0
+    url = f"{SUPABASE_URL}/rest/v1/prospects_intelligence?on_conflict=identity_key"
+    headers = {
+        "apikey": SUPABASE_KEY,
+        "Authorization": f"Bearer {SUPABASE_KEY}",
+        "Content-Type": "application/json",
+        "Prefer": "resolution=merge-duplicates,return=minimal",
+    }
+    for i in range(0, len(rows), 500):
+        chunk = rows[i:i + 500]
         try:
-            sb_upsert("prospects_intelligence", d, on_conflict=conflict)
-            saved += 1
-            if saved % 100 == 0:
-                log.info("  Saved %d prospects...", saved)
+            r = requests.post(url, headers=headers, json=chunk, timeout=90)
+            if r.status_code in (200, 201, 204):
+                saved += len(chunk)
+                log.info("  Batch %d-%d saved", i, i + len(chunk))
+            else:
+                log.warning("  Batch %d failed (%d): %s", i, r.status_code, r.text[:300])
         except Exception as e:
-            log.warning("Upsert failed (%s): %s", p.phone or p.email, e)
+            log.warning("  Batch %d exception: %s", i, e)
+
     log.info("Saved %d prospects total", saved)
     return saved
 
