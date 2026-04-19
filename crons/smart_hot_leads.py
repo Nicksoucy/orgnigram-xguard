@@ -54,7 +54,7 @@ from kb_config import (
     GMAIL_USER, GMAIL_APP_PASSWORD, NICK_EMAIL,
     XGUARD_PAID_TAG,  # 'gard paid'
 )
-from ghl_helpers import ghl_find_contact_by_phone, ghl_has_tag
+from ghl_helpers import ghl_find_contact_by_phone, ghl_has_tag, ghl_log_action
 from claude_scoring import call_claude
 
 # JustCall SMS send config
@@ -561,6 +561,18 @@ def main():
         if ok:
             log.info("  SMS SENT")
             track(phone, name, ghl_id, sms_body, context_summary, priority, "sent")
+
+            # Log to GHL as a note (so Hamza sees it in contact profile)
+            if ghl_id:
+                try:
+                    ghl_log_action(
+                        ghl_id,
+                        action=f"SMS envoye automatique — Smart Hot Leads ({priority})",
+                        details=f"Contexte: {context_summary}\n\nMessage:\n{sms_body}",
+                    )
+                except Exception as e:
+                    log.warning("  GHL note add failed (non-critical): %s", e)
+
             results.append({
                 "phone": phone, "name": name, "priority": priority,
                 "context_summary": context_summary, "sms_body": sms_body,
