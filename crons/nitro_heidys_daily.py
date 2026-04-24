@@ -708,19 +708,24 @@ def main():
                 log.info("  %s: %d JustCall calls found", sync_date, len(day_jc))
                 raw_calls.extend(day_jc)
 
-        # 2b. Compute funnel stats from ALL calls (before filtering)
-        funnel_total = len(raw_calls)
-        funnel_answered = sum(1 for c in raw_calls if int(c.get("duration", 0) or 0) > 0)
+        # 2b. Compute funnel stats from ALL calls (JustCall + GHL, before filtering)
+        combined_raw = raw_calls + ghl_calls
+        funnel_total = len(combined_raw)
+        funnel_answered = sum(1 for c in combined_raw if int(c.get("duration", 0) or 0) > 0)
         funnel_not_answered = funnel_total - funnel_answered
-        funnel_short = sum(1 for c in raw_calls if 0 < int(c.get("duration", 0) or 0) < MIN_DURATION_SEC)
-        funnel_qualified = sum(1 for c in raw_calls if int(c.get("duration", 0) or 0) >= MIN_DURATION_SEC)
-        funnel_durations = [int(c.get("duration", 0) or 0) for c in raw_calls if int(c.get("duration", 0) or 0) >= MIN_DURATION_SEC]
+        funnel_short = sum(1 for c in combined_raw if 0 < int(c.get("duration", 0) or 0) < MIN_DURATION_SEC)
+        funnel_qualified = sum(1 for c in combined_raw if int(c.get("duration", 0) or 0) >= MIN_DURATION_SEC)
+        funnel_durations = [int(c.get("duration", 0) or 0) for c in combined_raw if int(c.get("duration", 0) or 0) >= MIN_DURATION_SEC]
         funnel_avg_dur = sum(funnel_durations) / len(funnel_durations) if funnel_durations else 0
-        log.info("Funnel: %d dials, %d answered, %d short, %d qualified", funnel_total, funnel_answered, funnel_short, funnel_qualified)
+        log.info("Funnel (JustCall+GHL): %d dials, %d answered, %d short, %d qualified", funnel_total, funnel_answered, funnel_short, funnel_qualified)
 
-        # Push funnel per date
+        # Helper: extract date from a call (handles JustCall "time"/"time_utc" and GHL "call_time"/"dateAdded")
+        def _call_date(c):
+            return (c.get("time_utc") or c.get("time") or c.get("call_time") or c.get("dateAdded") or "")[:10]
+
+        # Push funnel per date — combines JustCall + GHL
         for sync_date in dates_to_sync:
-            day_raw = [c for c in raw_calls if (c.get("time") or c.get("time_utc") or "")[:10] == sync_date]
+            day_raw = [c for c in combined_raw if _call_date(c) == sync_date]
             if not day_raw:
                 # Even 0-call days get a row so the dashboard shows the gap
                 try:
