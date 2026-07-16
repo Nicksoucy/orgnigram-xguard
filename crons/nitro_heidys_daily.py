@@ -646,21 +646,26 @@ def get_last_successful_sync_date() -> str | None:
 
 
 def compute_dates_to_sync(today_str: str) -> list[str]:
-    """Return list of dates to sync, catching up missed days (max 14)."""
+    """Return the dates to sync. ALWAYS re-checks a rolling 3-day window, PLUS
+    catches up any longer gap since the last successful sync.
+
+    Fix 2026-07-16: the old logic advanced last_sync even on runs that captured
+    0 calls, so it only ever synced "today" in UTC — and Heidys's evening calls
+    roll into the next UTC day, so they were systematically missed (~95% loss).
+    The rolling window self-heals timezone skew and any missed day. Safe to
+    re-run: already_transcribed() + Supabase upsert dedupe, so re-checking
+    recent days costs nothing and never duplicates."""
+    today_dt = datetime.strptime(today_str, "%Y-%m-%d")
+    dates = set()
+    for i in range(3):  # rolling window: today, -1, -2 (covers tz skew + misses)
+        dates.add((today_dt - timedelta(days=i)).strftime("%Y-%m-%d"))
     last_sync = get_last_successful_sync_date()
     if last_sync:
-        last_dt = datetime.strptime(last_sync, "%Y-%m-%d")
-        today_dt = datetime.strptime(today_str, "%Y-%m-%d")
-        start_dt = last_dt + timedelta(days=1)
-        dates = []
-        d = start_dt
+        d = datetime.strptime(last_sync, "%Y-%m-%d") + timedelta(days=1)
         while d <= today_dt:
-            dates.append(d.strftime("%Y-%m-%d"))
+            dates.add(d.strftime("%Y-%m-%d"))
             d += timedelta(days=1)
-        dates = dates[-14:]
-    else:
-        dates = [today_str]
-    return dates
+    return sorted(dates)[-14:]  # cap at 14 days
 
 
 # ---------------------------------------------------------------------------
