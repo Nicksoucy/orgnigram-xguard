@@ -37,23 +37,34 @@ def _rate_limit():
     _last_call[0] = time.time()
 
 
+# Retries on 429/5xx AND on transient network errors (DNS resolution failures,
+# connection drops, timeouts). The Nitro box's connection blips mid-run, so we
+# use MORE attempts + exponential backoff to ride out a multi-second outage
+# instead of failing the row (fix 2026-07-16 — was 3 tries / fixed 2s ~= 4s).
+MAX_ATTEMPTS = 5
+
+
 def _request(method, path, **kwargs):
-    """Make a GHL API request with rate limiting + retries on 429/500."""
+    """Make a GHL API request with rate limiting + retries (429/5xx + network),
+    exponential backoff. Raises only if every attempt fails."""
     _rate_limit()
     url = f"{GHL_BASE}{path}"
-    for attempt in range(3):
+    r = None
+    for attempt in range(MAX_ATTEMPTS):
+        backoff = min(2 * (2 ** attempt), 20)  # 2, 4, 8, 16, 20…
         try:
             r = requests.request(method, url, headers=GHL_HEADERS, timeout=30, **kwargs)
-            if r.status_code in (429, 500, 502, 503):
-                backoff = (attempt + 1) * 2
-                log.warning("GHL %s %s -> %d (retry in %ds)", method, path, r.status_code, backoff)
+            if r.status_code in (429, 500, 502, 503) and attempt < MAX_ATTEMPTS - 1:
+                log.warning("GHL %s %s -> %d (retry %d/%d in %ds)",
+                            method, path, r.status_code, attempt + 1, MAX_ATTEMPTS, backoff)
                 time.sleep(backoff)
                 continue
             return r
         except requests.exceptions.RequestException as e:
-            log.warning("GHL %s %s network error (attempt %d): %s", method, path, attempt + 1, e)
-            if attempt < 2:
-                time.sleep(2)
+            log.warning("GHL %s %s network error (attempt %d/%d): %s",
+                        method, path, attempt + 1, MAX_ATTEMPTS, e)
+            if attempt < MAX_ATTEMPTS - 1:
+                time.sleep(backoff)
                 continue
             raise
     return r  # last response even if failed
