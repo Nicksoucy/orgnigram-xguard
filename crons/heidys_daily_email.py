@@ -432,6 +432,13 @@ def send_email(date_str, html_body):
 
 
 def main():
+    # === RETIRED 2026-07-16 (Nick) — Coaching Heidys morning email disabled.
+    #     Disabled in code because the Nitro box was unreachable (Tailscale down)
+    #     to turn off the Windows scheduled task directly. Once the box is back,
+    #     disable the task in Task Scheduler and delete these 3 lines to restore. ===
+    log.info("Coaching Heidys email RETIRED 2026-07-16 — exiting without sending.")
+    return
+
     log.info("=== Heidys Daily Email ===")
     today_str = datetime.now().strftime("%Y-%m-%d")
     yesterday_str = (datetime.now() - timedelta(days=1)).strftime("%Y-%m-%d")
