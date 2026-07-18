@@ -584,10 +584,8 @@ banderouge: { name:'Bande Rouge', build:(f,fm)=>{
     T({tmpl:'NO DE CARTE', x:760, y:478, size:15, bold:true, color:gr, track:2}),
     T({field:'carte', x:760, y:502, size:26, bold:true, color:RED}),
     LN({x:300, y:562, w:672, h:2, color:RED}),
-    T({tmpl:fm.program, x:300, y:576, size:18, bold:true, color:ink, maxw:560}),
-    T({tmpl:ACAD.recognition, x:300, y:604, size:15, color:gr, maxw:560}),
-    R({x:880,y:544,w:90,h:90, r:6, color:'#FFFFFF', stroke:'#DAD5CC', strokeW:1}),
-    QR({x:880,y:544,w:90,h:90, r:6, tile:'#FFFFFF', fg:ink})
+    T({tmpl:fm.program, x:300, y:576, size:18, bold:true, color:ink, maxw:672}),
+    T({tmpl:ACAD.recognition, x:300, y:604, size:15, color:gr, maxw:672})
   ],
   verso:[
     BG({x:0,y:0,w:1012,h:638, color:cream}),
