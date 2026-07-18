@@ -560,16 +560,62 @@ badge: { name:'Badge de Service — ID', build:(f,fm)=>{
     R({x:0,y:564,w:1012,h:2, color:accent}),
     T({tmpl:ACAD.phone+'  ·  '+ACAD.email+'  ·  '+ACAD.site, x:506, y:592, size:14, align:'center', color:'#FFFFFF', maxw:920})
   ]};
+}},
+
+/* -------- 6. BANDE ROUGE — red spine, real logo (rotated white on band) -------- */
+banderouge: { name:'Bande Rouge', build:(f,fm)=>{
+  const RED='#B23A24', cream='#FAF7F1', ink='#1A1A1A', gr='#8A8A8A';
+  return {
+  recto:[
+    BG({x:0,y:0,w:1012,h:638, color:cream}),
+    BG({x:0,y:0,w:255,h:638, color:RED}),
+    IM({img:'xg', x:-23, y:300, w:300, h:70, rot:-90, tint:'#FFFFFF'}),
+    IM({img:'sw', x:62, y:486, w:130, h:130, tint:'#FFFFFF'}),
+    T({tmpl:'CERTIFICATION DE FORMATION', x:300, y:150, size:20, bold:true, color:RED, track:3}),
+    T({tmpl:'TITULAIRE', x:300, y:214, size:16, bold:true, color:gr, track:3}),
+    T({field:'nom', x:300, y:238, size:72, bold:true, color:ink, maxw:672}),
+    T({field:'prenom', x:300, y:322, size:34, color:'#4A4A4A', maxw:672}),
+    T({tmpl:'QUALIFICATION', x:300, y:388, size:16, bold:true, color:gr, track:3}),
+    T({field:'qualif', x:300, y:414, size:28, bold:true, color:ink, maxw:672}),
+    T({tmpl:'ÉMISE LE', x:300, y:478, size:15, bold:true, color:gr, track:2}),
+    T({field:'emise', x:300, y:502, size:26, bold:true, color:ink}),
+    T({tmpl:'EXPIRE LE', x:520, y:478, size:15, bold:true, color:gr, track:2}),
+    T({field:'expire', x:520, y:502, size:26, bold:true, color:ink}),
+    T({tmpl:'NO DE CARTE', x:760, y:478, size:15, bold:true, color:gr, track:2}),
+    T({field:'carte', x:760, y:502, size:26, bold:true, color:RED}),
+    LN({x:300, y:562, w:672, h:2, color:RED}),
+    T({tmpl:fm.program, x:300, y:576, size:18, bold:true, color:ink, maxw:560}),
+    T({tmpl:ACAD.recognition, x:300, y:604, size:15, color:gr, maxw:560}),
+    R({x:880,y:544,w:90,h:90, r:6, color:'#FFFFFF', stroke:'#DAD5CC', strokeW:1}),
+    QR({x:880,y:544,w:90,h:90, r:6, tile:'#FFFFFF', fg:ink})
+  ],
+  verso:[
+    BG({x:0,y:0,w:1012,h:638, color:cream}),
+    BG({x:0,y:0,w:20,h:638, color:RED}),
+    IM({img:'xg', x:72, y:66, w:300, h:70}),
+    T({tmpl:ACAD.addr1+', '+ACAD.addr2, x:72, y:154, size:18, color:gr, maxw:900}),
+    LN({x:72, y:188, w:900, h:2, color:RED}),
+    T({tmpl:'La présente carte atteste que son titulaire a complété avec succès la formation', x:72, y:220, size:20, color:ink, maxw:900}),
+    T({tmpl:'indiquée au recto, dispensée par l’Académie XGuard conformément à ses normes', x:72, y:248, size:20, color:ink, maxw:900}),
+    T({tmpl:'de qualification et d’évaluation.', x:72, y:276, size:20, color:ink, maxw:900}),
+    T({tmpl:'Reconnue par Smith & Wesson Academy International et le Centre d’Entraînement National Tactique', x:72, y:320, size:16, italic:true, color:gr, maxw:900}),
+    T({tmpl:'Formateur certifié : {formateur} ({cent})', x:72, y:356, size:20, bold:true, color:ink, maxw:900}),
+    T({tmpl:'Cette carte demeure la propriété de l’Académie XGuard et doit être retournée sur demande. Si trouvée,', x:72, y:400, size:16, color:gr, maxw:900}),
+    T({tmpl:'veuillez la retourner à l’adresse ci-dessus.', x:72, y:424, size:16, color:gr, maxw:900}),
+    IM({img:'sw', x:828, y:430, w:130, h:130, tint:RED}),
+    LN({x:72, y:540, w:900, h:2, color:RED}),
+    T({tmpl:ACAD.phone+'    ·    '+ACAD.email+'    ·    '+ACAD.site, x:72, y:566, size:20, bold:true, color:ink, maxw:900})
+  ]};
 }}
 
 };
-const TEMPLATE_ORDER = ['classique','sentinelle','permis','honneur','repere','badge'];
+const TEMPLATE_ORDER = ['banderouge','classique','sentinelle','permis','honneur','repere','badge'];
 
 /* =========================================================================
    STATE
    ========================================================================= */
 let fields = defaultFields();
-let templateId = 'classique';
+let templateId = 'banderouge';
 let formation = 'menottage';
 let data = TEMPLATES[templateId].build(fields, FORMATIONS[formation]);
 let side = 'recto';
@@ -587,16 +633,28 @@ function resolveText(e){
   if (e.field!=null) return fields[e.field]!=null?String(fields[e.field]):'';
   return e.text!=null?String(e.text):'';
 }
+function fontStr(e,s){ return (e.italic?'italic ':'')+(e.bold?'bold ':'')+s+'px '+(e.font||'Arial, sans-serif'); }
 function effSize(c,e,txt){
   let s=e.size;
   if (e.maxw){
     const min=e.minSize||10;
     const ls = ('letterSpacing' in c);
-    c.font=(e.bold?'bold ':'')+s+'px '+(e.font||'Arial, sans-serif'); if(ls)c.letterSpacing=(e.track||0)+'px';
-    while (s>min && c.measureText(txt).width>e.maxw){ s--; c.font=(e.bold?'bold ':'')+s+'px '+(e.font||'Arial, sans-serif'); }
+    c.font=fontStr(e,s); if(ls)c.letterSpacing=(e.track||0)+'px';
+    while (s>min && c.measureText(txt).width>e.maxw){ s--; c.font=fontStr(e,s); }
     if(ls)c.letterSpacing='0px';
   }
   return s;
+}
+/* tinted (recolored) copies of embedded logos — cached */
+const _tintCache={};
+function tinted(imgKey,color){
+  const k=imgKey+'|'+color; if(_tintCache[k]) return _tintCache[k];
+  const src=imgs[imgKey]; if(!src) return null;
+  const w=src.naturalWidth||src.width||512, h=src.naturalHeight||src.height||512;
+  const cc=document.createElement('canvas'); cc.width=w; cc.height=h;
+  const x=cc.getContext('2d'); x.drawImage(src,0,0,w,h);
+  x.globalCompositeOperation='source-in'; x.fillStyle=color; x.fillRect(0,0,w,h);
+  _tintCache[k]=cc; return cc;
 }
 
 /* =========================================================================
@@ -705,7 +763,11 @@ function render(target, showSel){
         c.restore(); break;
       }
       case 'line': { c.fillStyle=e.color||'#000'; c.fillRect(e.x,e.y,e.w,e.h); break; }
-      case 'image': { const im=imgs[e.img]; if(im) c.drawImage(im,e.x,e.y,e.w,e.h); break; }
+      case 'image': {
+        const im = e.tint ? tinted(e.img,e.tint) : imgs[e.img];
+        if(im){ if(e.rot){ c.save(); c.translate(e.x+e.w/2,e.y+e.h/2); c.rotate(e.rot*Math.PI/180); c.drawImage(im,-e.w/2,-e.h/2,e.w,e.h); c.restore(); } else c.drawImage(im,e.x,e.y,e.w,e.h); }
+        break;
+      }
       case 'photo': drawPhoto(c,e); break;
       case 'qr': drawQR(c,e); break;
       case 'guilloche': drawGuilloche(c,e); break;
@@ -725,7 +787,7 @@ function render(target, showSel){
       case 'text': {
         const txt=resolveText(e); const s=effSize(c,e,txt);
         c.fillStyle=e.color||'#000';
-        c.font=(e.bold?'bold ':'')+s+'px '+(e.font||'Arial, sans-serif');
+        c.font=fontStr(e,s);
         c.textBaseline='top'; c.textAlign=e.align||'left';
         const ls=('letterSpacing' in c); if(ls)c.letterSpacing=(e.track||0)+'px';
         c.fillText(txt, e.x, e.y);
@@ -748,7 +810,7 @@ function draw(){ render(ctx,true); }
    ========================================================================= */
 function textMetrics(e){
   const txt=resolveText(e); const s=effSize(ctx,e,txt);
-  ctx.font=(e.bold?'bold ':'')+s+'px '+(e.font||'Arial, sans-serif');
+  ctx.font=fontStr(e,s);
   const ls=('letterSpacing' in ctx); if(ls)ctx.letterSpacing=(e.track||0)+'px';
   const w=ctx.measureText(txt).width; if(ls)ctx.letterSpacing='0px';
   const h=s*1.25;
@@ -760,6 +822,7 @@ function textMetrics(e){
 function bbox(e){
   if(e.type==='text'){ const m=textMetrics(e); return {x:m.left,y:m.top,w:m.w,h:m.h}; }
   if(e.type==='line') return {x:e.x,y:e.y,w:e.w,h:Math.max(e.h,6)};
+  if(e.type==='image' && (e.rot===90||e.rot===-90||e.rot===270)){ const cx=e.x+e.w/2, cy=e.y+e.h/2; return {x:cx-e.h/2, y:cy-e.w/2, w:e.h, h:e.w}; }
   if(e.type==='ring') return {x:e.x,y:e.y,w:e.w,h:e.w};
   if(e.type==='watermark' && e.text) return {x:e.x-100,y:e.y-40,w:200,h:80};
   return {x:e.x,y:e.y,w:e.w||10,h:e.h||10};
