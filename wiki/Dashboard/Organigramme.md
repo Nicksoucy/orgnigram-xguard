@@ -17,7 +17,7 @@ https://nicksoucy.github.io/orgnigram-xguard/
 - Hosting: GitHub Pages
 - Fonts: DM Sans + Space Mono
 
-## 8 Vues
+## 9 Vues
 1. **By Department** (dept.js) — grille par departement
 2. **Reporting Hierarchy** (tree.js) — arbre organigramme
 3. **Future State** (future.js) — planification
@@ -26,6 +26,7 @@ https://nicksoucy.github.io/orgnigram-xguard/
 6. **Rapports** (reports.js) — coaching scores par agent
 7. **Horaires** (horaires.js) — gestion des shifts
 8. **Schedule** (schedule/) — calendrier multi-mois
+9. **Cartes** (cards.js) — impression de cartes ID (HiTi CR-80)
 
 ## Auth
 - Magic link ou JWT via Supabase
@@ -38,4 +39,4 @@ https://nicksoucy.github.io/orgnigram-xguard/
 - `js/state.js` — REPORT_PEOPLE definit qui apparait dans sidebar
 - `js/views/reports.js` — grille scores 4x2, objections, call breakdown
 
-Voir: [[Rapports-Vue]], [[Horaires]], [[../Infrastructure/Supabase]]
+Voir: [[Rapports-Vue]], [[Horaires]], [[Cartes]], [[../Infrastructure/Supabase]]
