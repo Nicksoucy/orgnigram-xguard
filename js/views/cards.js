@@ -154,6 +154,7 @@ function renderCards(ct, cl) {
     <button class="btn" onclick="cardsSelectAll()">Tout sélectionner</button>
     <button class="btn" onclick="cardsClearSel()">Effacer</button>
     <span style="flex:1"></span>
+    ${typeof KIT_MODE === 'undefined' ? `<button class="btn" onclick="cardsExportForKit()" title="Personnes + options pour le kit portable (card-kit)">📦 Exporter pour le kit</button>` : ''}
     <button class="btn" onclick="cardsToggleSettings()">⚙️ Options carte</button>`;
 
   ct.innerHTML = `
@@ -199,8 +200,9 @@ function _cardSettingsHTML() {
 function _cardPickerHTML() {
   const people = _cardPeople();
   let h = `<h4>Sélection (${_cardSel.size}/${people.length})</h4>`;
-  // VP first
-  h += _cardPickerRows([VP]);
+  // VP first (the app's VP sentinel, or an imported 'vp' record in the portable kit)
+  const vp = people.find(p => p.id === 'vp');
+  if (vp) h += _cardPickerRows([vp]);
   departments.forEach(dept => {
     const members = data.filter(p => p.dept === dept.key);
     if (!members.length) return;
@@ -213,7 +215,7 @@ function _cardPickerHTML() {
     h += _cardPickerRows(members);
   });
   // Any people without a matching department bucket
-  const orphans = data.filter(p => !departments.some(d => d.key === p.dept));
+  const orphans = data.filter(p => p.id !== 'vp' && !departments.some(d => d.key === p.dept));
   if (orphans.length) { h += `<h4>Autres</h4>` + _cardPickerRows(orphans); }
   return h;
 }
@@ -335,4 +337,19 @@ async function cardsExportPDF() {
   } finally {
     document.body.removeChild(stage);
   }
+}
+
+// ---- Hand-off to the portable card kit (card-kit/): people + departments + card options ----
+function cardsExportForKit() {
+  const payload = {
+    format: 'xguard-cards-v1',
+    exportedAt: new Date().toISOString(),
+    vp: VP, team: data, departments, cardConfig: _cardCfg,
+  };
+  const b = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(b);
+  a.download = `xguard-cartes-personnes-${_cardToday()}.json`;
+  a.click();
+  showFlash(`${data.length + 1} personne(s) exportée(s) pour le kit.`);
 }

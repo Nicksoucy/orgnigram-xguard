@@ -1,0 +1,17 @@
+DOSSIER DES PILOTES HiTi
+========================
+
+Deposez ici l'installateur du pilote de VOTRE imprimante a cartes HiTi,
+tel que telecharge sur le site HiTi (Support -> Download -> Card Printer
+-> votre modele, ex. CS-200e / CS-220e / CS-290 / CS-320) :
+
+  Windows : le .exe, .msi ou .zip du pilote
+  macOS   : le .pkg, .dmg ou .zip du pilote
+
+Les installateurs (Installer-Windows.bat / Installer-Mac.command) l'utiliseront
+automatiquement -- l'installation marche alors SANS internet, sur n'importe
+quel ordinateur.
+
+Si ce dossier est vide, l'installateur ouvre le site HiTi pour le telecharger.
+
+(Le pilote HiTi est un logiciel du fabricant : il n'est pas inclus dans ce kit.)

@@ -36,6 +36,21 @@ the ISO **CR-80** standard (85.6 × 54 mm) used by every HiTi CS-series card pri
 
 Full driver install, ribbon/media, calibration and troubleshooting: **[docs/HITI_PRINTING.md](docs/HITI_PRINTING.md)**.
 
+### Portable card kit (another computer, offline)
+
+[`card-kit/`](card-kit/) packages the same card renderer as a standalone, offline app
+(no Supabase, no login) with its own people manager (import the org chart's
+**📦 Exporter pour le kit** JSON, or Excel/CSV), Windows/macOS installers that set up the
+app and the HiTi driver, and a Claude skill (`card-kit/skill/xguard-cartes`).
+
+```bash
+card-kit/build.sh   # → card-kit/dist/XGuard-Cartes.zip (copies js/views/cards.js + css/cards.css)
+```
+
+Re-run the build after changing the card design so the app and the kit stay identical.
+HiTi driver installers dropped in `card-kit/drivers/` are bundled into the zip but never
+committed (manufacturer software).
+
 ## Database Schema
 
 | Table | Purpose |
