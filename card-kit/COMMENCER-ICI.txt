@@ -1,0 +1,33 @@
+XGUARD CARTES - COMMENCER ICI
+=============================
+
+Ce dossier contient tout pour faire et imprimer les cartes d'identite XGuard
+sur une imprimante a cartes HiTi (format CR-80), sur Windows ou Mac.
+
+1. PILOTE HiTi (une fois)
+   Telechargez le pilote de votre modele sur le site HiTi
+   (Support > Download > Card Printer > ex. CS-200e) et mettez le fichier
+   dans le dossier "drivers".
+
+2. INSTALLER (une fois)
+   Branchez et allumez l'imprimante, puis double-cliquez :
+     Windows : Installer-Windows.bat
+     Mac     : Installer-Mac.command   (si bloque : clic droit > Ouvrir)
+   -> cree le raccourci "XGuard Cartes" sur le Bureau et installe le pilote.
+
+   Sans installer : Windows -> Ouvrir-Cartes.bat ; Mac -> ouvrir index.html.
+
+3. AJOUTER LES PERSONNES
+   Dans XGuard Cartes, onglet Personnes > Importer :
+     - le fichier .json exporte de l'organigramme
+       (onglet Cartes > "Exporter pour le kit"), ou
+     - un fichier Excel/CSV (modele : exemple-personnes.csv), ou
+     - a la main avec le formulaire.
+
+4. IMPRIMER
+   Onglet Cartes > cocher les personnes > Imprimer
+   -> imprimante HiTi, echelle 100 %, marges : aucune.
+
+Exemples de cartes : dossier "exemples" (personnes fictives).
+Guide complet : GUIDE-HITI.md   -   Details du kit : LISEZMOI.md
+Claude : dossier claude-skill (voir LISEZMOI.md).

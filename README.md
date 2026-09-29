@@ -20,6 +20,36 @@ Internal organizational chart tool for XGuard's Training Division (Formation Gar
 - Notes per person
 - Drag-to-pan canvas with zoom
 - Real-time sync via Supabase
+- **ID card printing** — print-ready staff/trainer badges at exact CR-80 size for HiTi card printers ([setup guide](docs/HITI_PRINTING.md))
+
+## Card Printing (HiTi)
+
+The **Cartes** tab turns any people in the org chart into print-ready ID badges sized to
+the ISO **CR-80** standard (85.6 × 54 mm) used by every HiTi CS-series card printer.
+
+- **🖨 Imprimer** — browser print, one physical card per page (`@page` locked to card size).
+- **📄 Export PDF** — one card per page, rasterized at ≥300 dpi (the printer's native resolution).
+- Options: recto or recto+verso, bleed (for edge-to-edge / over-the-edge printing), light or
+  dark theme, QR (profile link or vCard), accent colour, and per-field toggles.
+- QR/print rendering uses the vendored MIT [`qrcode-generator`](js/vendor/qrcode.js) plus the
+  `html2canvas` + `jsPDF` libraries already loaded by the app — no new runtime CDN dependency.
+
+Full driver install, ribbon/media, calibration and troubleshooting: **[docs/HITI_PRINTING.md](docs/HITI_PRINTING.md)**.
+
+### Portable card kit (another computer, offline)
+
+[`card-kit/`](card-kit/) packages the same card renderer as a standalone, offline app
+(no Supabase, no login) with its own people manager (import the org chart's
+**📦 Exporter pour le kit** JSON, or Excel/CSV), Windows/macOS installers that set up the
+app and the HiTi driver, and a Claude skill (`card-kit/skill/xguard-cartes`).
+
+```bash
+card-kit/build.sh   # → card-kit/dist/XGuard-Cartes.zip (copies js/views/cards.js + css/cards.css)
+```
+
+Re-run the build after changing the card design so the app and the kit stay identical.
+HiTi driver installers dropped in `card-kit/drivers/` are bundled into the zip but never
+committed (manufacturer software).
 
 ## Database Schema
 

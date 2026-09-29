@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>XGuard — Cartes</title>
+<!-- Portable, offline card maker. Everything is local: no internet, no login. -->
+<link rel="stylesheet" href="kit.css">
+<link rel="stylesheet" href="app/cards.css">
+<script src="lib/qrcode.js"></script>
+<script src="lib/jspdf.umd.min.js"></script>
+<script src="lib/html2canvas.min.js"></script>
+<script src="lib/xlsx.full.min.js"></script>
+</head>
+<body>
+<header>
+  <div class="tag">Kit portable — Impression HiTi CR-80</div>
+  <h1>XGuard — Cartes</h1>
+  <p id="hdrSub">Fonctionne hors ligne. Les personnes sont gardées sur cet ordinateur.</p>
+</header>
+
+<div class="view-tabs">
+  <button class="vtab active" data-view="people" onclick="kitSwitch('people',this)"><span class="tab-icon">👥</span>Personnes</button>
+  <button class="vtab" data-view="cards" onclick="kitSwitch('cards',this)"><span class="tab-icon">🪪</span>Cartes</button>
+  <button class="vtab" data-view="help" onclick="kitSwitch('help',this)"><span class="tab-icon">❓</span>Aide</button>
+</div>
+
+<div class="controls" id="controls"></div>
+<div class="content" id="content"></div>
+
+<input type="file" id="kitFile" accept=".json,.csv,.xlsx,.xls" style="display:none" onchange="kitImportFile(this.files[0]);this.value='';">
+
+<script src="kit.js"></script>
+<script src="app/cards.js"></script>
+<script>kitInit();</script>
+</body>
+</html>
