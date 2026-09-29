@@ -1,0 +1,121 @@
+/* ============================================================
+   VIEW: CARTES (ID CARD PRINTING — HiTi CS-series / CR-80)
+   ------------------------------------------------------------
+   Cards are laid out in real physical units (mm / pt) so that
+   both browser print and the jsPDF export land at exact size on
+   a HiTi card printer. Do NOT introduce px sizing inside a
+   .print-card — it breaks physical calibration.
+   ============================================================ */
+
+/* ---- Layout: picker + preview ---- */
+.cards-wrap{display:flex;gap:20px;align-items:flex-start;flex-wrap:wrap;}
+.cards-picker{flex:0 0 300px;max-width:340px;background:var(--s);border:1px solid var(--b);border-radius:12px;padding:14px;}
+.cards-preview{flex:1;min-width:360px;}
+
+.cards-picker h4{font-size:11px;text-transform:uppercase;letter-spacing:1px;color:var(--td);
+  font-family:'Space Mono',monospace;margin:14px 0 6px;}
+.cards-picker h4:first-child{margin-top:0;}
+.cp-dept-h{display:flex;align-items:center;gap:8px;margin:10px 0 4px;}
+.cp-dept-h .dept-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0;}
+.cp-dept-h span{flex:1;font-size:12px;font-weight:600;color:var(--t);}
+.cp-dept-h .cp-all{font-size:10px;color:var(--a);cursor:pointer;font-family:'Space Mono',monospace;}
+.cp-dept-h .cp-all:hover{text-decoration:underline;}
+.cp-row{display:flex;align-items:center;gap:8px;padding:4px 6px;border-radius:6px;cursor:pointer;font-size:12px;}
+.cp-row:hover{background:var(--sh);}
+.cp-row input{accent-color:var(--a);cursor:pointer;}
+.cp-row .cp-name{flex:1;color:var(--t);}
+.cp-row .cp-role{font-size:10px;color:var(--td);}
+
+/* ---- Settings panel ---- */
+.cards-settings{background:var(--s);border:1px solid var(--b);border-radius:12px;padding:16px 18px;margin-bottom:18px;
+  display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:14px 24px;}
+.cards-settings.hidden{display:none;}
+.cs-field{display:flex;flex-direction:column;gap:5px;}
+.cs-field label{font-size:10px;text-transform:uppercase;letter-spacing:1px;color:var(--td);font-family:'Space Mono',monospace;}
+.cs-field select,.cs-field input{font-family:'DM Sans',sans-serif;font-size:12px;padding:6px 8px;border-radius:6px;
+  border:1px solid var(--b);background:var(--bg);color:var(--t);}
+.cs-field.inline{flex-direction:row;align-items:center;gap:8px;}
+.cs-field.inline label{text-transform:none;letter-spacing:0;font-family:'DM Sans',sans-serif;font-size:12px;color:var(--t);}
+.cs-field.inline input[type=checkbox]{accent-color:var(--a);width:16px;height:16px;}
+
+.cards-empty{padding:60px 20px;text-align:center;color:var(--td);font-size:13px;border:1px dashed var(--b);border-radius:12px;}
+
+/* Preview surface (light so cards read against the dark app) */
+.cards-sheet{display:flex;flex-wrap:wrap;gap:14px;padding:20px;background:#e9e9ee;border-radius:12px;
+  border:1px solid var(--b);align-items:flex-start;}
+.card-pair{display:flex;flex-direction:column;gap:8px;align-items:center;}
+.card-pair .cp-label{font-size:9px;text-transform:uppercase;letter-spacing:1px;color:#6b6b72;font-family:'Space Mono',monospace;}
+
+/* ============================================================
+   THE CARD (physical). Width/height are set inline in mm by JS.
+   ============================================================ */
+.print-card{
+  box-sizing:border-box;position:relative;overflow:hidden;
+  background:#ffffff;color:#1a1a1f;border-radius:3mm;
+  font-family:'DM Sans','Segoe UI',sans-serif;
+  box-shadow:0 2px 10px rgba(0,0,0,0.18);
+  -webkit-print-color-adjust:exact;print-color-adjust:exact;
+}
+/* Bleed guides only show on screen, never printed */
+.print-card .pc-trim{position:absolute;pointer-events:none;border:0.2mm dashed rgba(0,0,0,0.25);inset:var(--bleed,0mm);z-index:5;}
+
+/* ---- FRONT ---- */
+.pc-topbar{height:11mm;background:var(--accent,#ff6b35);color:#fff;display:flex;align-items:center;
+  justify-content:space-between;padding:0 4mm;}
+.pc-org{font-weight:700;font-size:15pt;letter-spacing:0.4pt;line-height:1;}
+.pc-tag{font-family:'Space Mono',monospace;font-size:6pt;text-transform:uppercase;letter-spacing:1.2pt;opacity:0.95;text-align:right;}
+.pc-body{display:flex;align-items:center;gap:3.5mm;padding:3mm 4mm 2mm;}
+.pc-avatar{width:18mm;height:18mm;border-radius:50%;flex-shrink:0;display:flex;align-items:center;justify-content:center;
+  color:#fff;font-weight:700;font-size:15pt;letter-spacing:0.5pt;box-shadow:inset 0 0 0 0.5mm rgba(255,255,255,0.5);}
+.pc-info{flex:1;min-width:0;}
+.pc-name{font-weight:700;font-size:12.5pt;line-height:1.1;color:#141419;}
+.pc-role{font-size:8pt;color:#55555c;margin-top:0.5mm;line-height:1.15;}
+.pc-chips{display:flex;flex-wrap:wrap;gap:1.2mm;margin-top:1.6mm;}
+.pc-dept{font-family:'Space Mono',monospace;font-size:5.6pt;text-transform:uppercase;letter-spacing:0.6pt;
+  color:#fff;padding:0.5mm 1.6mm;border-radius:1mm;font-weight:700;}
+.pc-prog{font-family:'Space Mono',monospace;font-size:5.6pt;letter-spacing:0.4pt;color:#333;background:#ededf2;
+  border:0.15mm solid #d5d5dd;padding:0.5mm 1.4mm;border-radius:1mm;}
+.pc-qr{width:15mm;height:15mm;flex-shrink:0;display:flex;align-items:flex-end;justify-content:flex-end;}
+.pc-qr img{width:15mm;height:15mm;image-rendering:pixelated;background:#fff;}
+.pc-footer{position:absolute;left:0;right:0;bottom:0;height:6.5mm;background:#141419;color:#d7d7dd;
+  display:flex;align-items:center;gap:3mm;padding:0 4mm;font-family:'Space Mono',monospace;font-size:5.6pt;letter-spacing:0.5pt;}
+.pc-footer .pc-id{color:#fff;}
+.pc-footer .pc-type{margin-left:auto;color:var(--accent,#ff6b35);font-weight:700;}
+.pc-footer .pc-accent{width:1.5mm;height:1.5mm;border-radius:50%;background:var(--accent,#ff6b35);}
+
+/* ---- BACK ---- */
+.print-card.back{display:flex;flex-direction:column;background:#141419;color:#e8e6e3;}
+.pc-back-head{height:9mm;display:flex;align-items:center;padding:0 4mm;border-bottom:0.3mm solid #2a2a32;}
+.pc-back-head .pc-org{color:#fff;font-size:12pt;}
+.pc-back-head .pc-sub{margin-left:auto;font-family:'Space Mono',monospace;font-size:5.6pt;text-transform:uppercase;
+  letter-spacing:1pt;color:var(--accent,#ff6b35);}
+.pc-back-body{flex:1;display:flex;gap:4mm;padding:3mm 4mm;align-items:center;}
+.pc-back-qr{width:24mm;height:24mm;background:#fff;padding:1.2mm;border-radius:1.5mm;flex-shrink:0;}
+.pc-back-qr img{width:100%;height:100%;image-rendering:pixelated;}
+.pc-back-text{font-size:6.4pt;line-height:1.4;color:#b6b5b2;}
+.pc-back-text strong{color:#fff;display:block;font-size:7pt;margin-bottom:0.8mm;}
+.pc-back-foot{height:8mm;border-top:0.3mm solid #2a2a32;display:flex;align-items:center;padding:0 4mm;gap:2mm;
+  font-family:'Space Mono',monospace;font-size:5.4pt;color:#8b8a87;letter-spacing:0.4pt;}
+.pc-back-foot .pc-sig{flex:1;border-bottom:0.2mm solid #3d3d48;height:3.5mm;margin-left:2mm;}
+
+/* Portrait variant: stack vertically */
+.print-card.portrait .pc-body{flex-direction:column;text-align:center;padding-top:4mm;}
+.print-card.portrait .pc-info{text-align:center;}
+.print-card.portrait .pc-chips{justify-content:center;}
+.print-card.portrait .pc-qr{margin:2mm auto 0;}
+
+/* ============================================================
+   PRINT — only the staged cards, one physical card per page.
+   ============================================================ */
+#card-print-area{display:none;}
+@media print{
+  html,body{background:#fff !important;}
+  body > *{display:none !important;}
+  #card-print-area{display:block !important;}
+  #card-print-area .print-card{
+    box-shadow:none !important;border-radius:0 !important;margin:0 !important;
+    page-break-after:always;break-after:page;page-break-inside:avoid;break-inside:avoid;
+  }
+  #card-print-area .print-card:last-child{page-break-after:auto;break-after:auto;}
+  #card-print-area .pc-trim{display:none !important;}
+}

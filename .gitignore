@@ -13,3 +13,9 @@ crons/secrets/*.json
 
 # Node (for any web dashboard work)
 node_modules/
+
+# Card kit build output + manufacturer driver installers (not redistributed)
+card-kit/dist/
+card-kit/drivers/*
+!card-kit/drivers/LISEZMOI.txt
+card-kit/exemples/

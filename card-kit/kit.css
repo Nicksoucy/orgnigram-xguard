@@ -1,0 +1,74 @@
+/* Portable card kit — base styles (subset of the org chart's css/app.css,
+   with fonts served locally so the kit works offline). */
+@font-face{font-family:'DM Sans';font-weight:400;font-style:normal;src:url(lib/fonts/dm-sans-latin-400-normal.woff2) format('woff2');}
+@font-face{font-family:'DM Sans';font-weight:500;font-style:normal;src:url(lib/fonts/dm-sans-latin-500-normal.woff2) format('woff2');}
+@font-face{font-family:'DM Sans';font-weight:700;font-style:normal;src:url(lib/fonts/dm-sans-latin-700-normal.woff2) format('woff2');}
+@font-face{font-family:'Space Mono';font-weight:400;font-style:normal;src:url(lib/fonts/space-mono-latin-400-normal.woff2) format('woff2');}
+@font-face{font-family:'Space Mono';font-weight:700;font-style:normal;src:url(lib/fonts/space-mono-latin-700-normal.woff2) format('woff2');}
+
+:root{
+  --bg:#0c0c0f;--s:#16161a;--sh:#1e1e24;--b:#2a2a32;--ba:#3d3d48;
+  --t:#e8e6e3;--td:#8b8a87;--a:#ff6b35;--ag:rgba(255,107,53,0.15);
+  --g:#34d399;--r:#f87171;
+}
+*{margin:0;padding:0;box-sizing:border-box;}
+body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--t);min-height:100vh;}
+
+header{padding:24px 32px 12px;border-bottom:1px solid var(--b);}
+header .tag{font-family:'Space Mono',monospace;font-size:10px;text-transform:uppercase;letter-spacing:3px;color:var(--a);margin-bottom:5px;}
+header h1{font-size:24px;font-weight:700;}
+header p{color:var(--td);margin-top:3px;font-size:13px;}
+
+.view-tabs{padding:12px 32px;border-bottom:1px solid var(--b);display:flex;gap:4px;flex-wrap:wrap;}
+.vtab{font-family:'DM Sans',sans-serif;font-size:13px;font-weight:500;padding:8px 20px;border-radius:8px 8px 0 0;
+  border:1px solid transparent;border-bottom:none;background:transparent;color:var(--td);cursor:pointer;position:relative;bottom:-1px;}
+.vtab:hover{color:var(--t);}
+.vtab.active{background:var(--s);border-color:var(--b);color:var(--a);border-bottom:1px solid var(--s);}
+.vtab .tab-icon{margin-right:6px;}
+
+.controls{padding:12px 32px;display:flex;gap:8px;flex-wrap:wrap;align-items:center;}
+.btn{font-family:'DM Sans',sans-serif;font-size:12px;font-weight:500;padding:7px 16px;border-radius:6px;
+  border:1px solid var(--b);background:var(--s);color:var(--t);cursor:pointer;}
+.btn:hover{background:var(--sh);border-color:var(--ba);}
+.btn.primary{background:var(--a);border-color:var(--a);color:#fff;}
+.btn.danger{border-color:var(--r);color:var(--r);}
+.btn.small{font-size:11px;padding:3px 10px;}
+.content{padding:20px 32px 48px;}
+
+/* People manager */
+.kit-form{background:var(--s);border:1px solid var(--b);border-radius:12px;padding:16px 18px;margin-bottom:18px;
+  display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px 18px;align-items:end;}
+.kit-form .f{display:flex;flex-direction:column;gap:5px;}
+.kit-form label{font-size:10px;text-transform:uppercase;letter-spacing:1px;color:var(--td);font-family:'Space Mono',monospace;}
+.kit-form input,.kit-form select{font-family:'DM Sans',sans-serif;font-size:13px;padding:7px 9px;border-radius:6px;
+  border:1px solid var(--b);background:var(--bg);color:var(--t);}
+.kit-form .f.wide{grid-column:span 2;}
+.kit-form .actions{display:flex;gap:8px;}
+.kit-table{width:100%;border-collapse:collapse;background:var(--s);border:1px solid var(--b);border-radius:12px;overflow:hidden;font-size:13px;}
+.kit-table th{text-align:left;font-family:'Space Mono',monospace;font-size:10px;text-transform:uppercase;letter-spacing:1px;
+  color:var(--td);padding:10px 12px;border-bottom:1px solid var(--b);font-weight:400;}
+.kit-table td{padding:8px 12px;border-bottom:1px solid var(--b);vertical-align:middle;}
+.kit-table tr:last-child td{border-bottom:none;}
+.kit-table .av{width:26px;height:26px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;
+  color:#fff;font-size:10px;font-weight:700;margin-right:8px;vertical-align:middle;}
+.kit-table .dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:6px;}
+.kit-table .muted{color:var(--td);font-size:12px;}
+.kit-empty{padding:50px 20px;text-align:center;color:var(--td);font-size:13px;border:1px dashed var(--b);border-radius:12px;line-height:1.8;}
+.kit-help{max-width:820px;line-height:1.65;font-size:14px;color:#cfcdca;}
+.kit-help h2{font-size:17px;color:var(--t);margin:22px 0 8px;}
+.kit-help h2:first-child{margin-top:0;}
+.kit-help code{font-family:'Space Mono',monospace;font-size:12px;background:var(--s);border:1px solid var(--b);padding:1px 6px;border-radius:4px;}
+.kit-help ol,.kit-help ul{margin-left:22px;}
+.kit-help li{margin:3px 0;}
+
+/* Toast (same look as the org chart's showFlash) */
+.hor-flash{position:fixed;right:20px;bottom:20px;background:var(--s);border:1px solid var(--g);color:var(--t);
+  padding:10px 16px;border-radius:8px;font-size:13px;z-index:2000;box-shadow:0 6px 20px rgba(0,0,0,0.4);transition:opacity .4s;}
+.hor-flash.danger{border-color:var(--r);}
+.hor-flash.out{opacity:0;}
+
+@media (max-width:640px){
+  header,.view-tabs,.controls,.content{padding-left:16px;padding-right:16px;}
+  .kit-form .f.wide{grid-column:auto;}
+  .kit-table{font-size:12px;}
+}

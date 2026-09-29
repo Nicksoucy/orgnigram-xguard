@@ -7,6 +7,7 @@
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="css/app.css">
 <link rel="stylesheet" href="css/schedule.css">
+<link rel="stylesheet" href="css/cards.css">
 <script src="https://cdn.jsdelivr.net/npm/@daypilot/daypilot-lite-javascript@5.4.0/daypilot-all.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
@@ -37,6 +38,7 @@
   <button class="vtab" onclick="switchView('reports',this)"><span class="tab-icon">📊</span>Rapports</button>
   <button class="vtab" onclick="switchView('horaires',this)"><span class="tab-icon">📅</span>Horaires</button>
   <button class="vtab" onclick="switchView('schedule',this)"><span class="tab-icon">📆</span>Planning</button>
+  <button class="vtab" onclick="switchView('cards',this)"><span class="tab-icon">🪪</span>Cartes</button>
 </div>
 
 <div class="controls" id="controls"></div>
@@ -140,6 +142,7 @@
 (function() {
   var V = Date.now();
   var scripts = [
+    'js/vendor/qrcode.js',
     'js/config.js',
     'js/auth.js',
     'js/state.js',
@@ -153,6 +156,7 @@
     'js/views/tasks.js',
     'js/views/reports.js',
     'js/views/horaires.js',
+    'js/views/cards.js',
     'js/views/schedule/config.js',
     'js/views/schedule/cohortDates.js',
     'js/views/schedule/helpers.js',

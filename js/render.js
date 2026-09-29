@@ -10,6 +10,7 @@ function render(){
   else if(currentView==='reports') renderReports(ct,cl);
   else if(currentView==='horaires') renderHoraires(ct,cl);
   else if(currentView==='schedule') renderSchedule(ct,cl);
+  else if(currentView==='cards') renderCards(ct,cl);
   else renderFuture(ct,cl);
 
   renderSummary();
