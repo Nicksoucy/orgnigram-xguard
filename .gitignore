@@ -18,3 +18,4 @@ node_modules/
 card-kit/dist/
 card-kit/drivers/*
 !card-kit/drivers/LISEZMOI.txt
+card-kit/exemples/

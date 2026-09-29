@@ -28,6 +28,11 @@ cp "$HERE/drivers/LISEZMOI.txt" "$OUT/drivers/"
 # (they are git-ignored: they're the manufacturer's software).
 find "$HERE/drivers" -maxdepth 1 -type f ! -name 'LISEZMOI.txt' -exec cp {} "$OUT/drivers/" \;
 
+# Optional extras: sample cards (git-ignored, generated from exemple-personnes.csv)
+# and the start-here note.
+[ -d "$HERE/exemples" ] && cp -R "$HERE/exemples" "$OUT/exemples"
+sed 's/\r$//; s/$/\r/' "$HERE/COMMENCER-ICI.txt" > "$OUT/COMMENCER-ICI.txt"
+
 # Installers / launchers — Windows files need CRLF line endings
 for f in Installer-Windows.bat Ouvrir-Cartes.bat Ouvrir-Cartes.ps1; do
   sed 's/\r$//; s/$/\r/' "$HERE/$f" > "$OUT/$f"
